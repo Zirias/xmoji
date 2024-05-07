@@ -1,0 +1,3 @@
+[submodule "zimk"]
+	path = zimk
+	url = https://github.com/Zirias/zimk.git
