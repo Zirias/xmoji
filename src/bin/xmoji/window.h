@@ -19,19 +19,31 @@ C_CLASS_DECL(X11Adapter);
 Window *Window_create(X11Adapter *dpy)
     ATTR_NONNULL((1));
 
-X11Adapter *Window_dpy(Window *self)
+X11Adapter *Window_dpy(void *self)
     CMETHOD ATTR_RETNONNULL;
 
-xcb_window_t Window_id(Window *self)
+xcb_window_t Window_id(void *self)
     CMETHOD;
 
-PSC_Event *Window_closed(Window *self)
+PSC_Event *Window_closed(void *self)
     CMETHOD ATTR_RETNONNULL;
 
-void Window_show(Window *self)
+void Window_show(void *self)
     CMETHOD;
 
-void WIndow_hide(Window *self)
+void Window_hide(void *self)
+    CMETHOD;
+
+uint32_t Window_width(const void *self)
+    CMETHOD;
+uint32_t Window_height(const void *self)
+    CMETHOD;
+void Window_setSize(void *self, uint32_t width, uint32_t height)
+    CMETHOD;
+
+const char *Window_title(const void *self)
+    CMETHOD;
+void Window_setTitle(void *self, const char *title)
     CMETHOD;
 
 #endif

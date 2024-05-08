@@ -36,6 +36,7 @@ int MetaObject_register(void *meta);
 const void *MetaObject_get(uint32_t id);
 
 void *Object_create(uint32_t type, void *options);
+void *Object_instanceOf(void *self, uint32_t type);
 void Object_destroy(void *self);
 
 #endif

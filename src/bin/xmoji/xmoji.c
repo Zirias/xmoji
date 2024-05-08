@@ -41,6 +41,8 @@ SOLOCAL int Xmoji_run(void)
     if (!x11) goto done;
     win = Window_create(x11);
     if (!win) goto done;
+    Window_setSize(win, 640, 200);
+    Window_setTitle(win, "Xmoji test");
 
     PSC_RunOpts_init(0);
     PSC_RunOpts_foreground();

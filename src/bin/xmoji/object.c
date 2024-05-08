@@ -56,6 +56,17 @@ void *Object_create(uint32_t type, void *options)
     return m->create(options);
 }
 
+void *Object_instanceOf(void *self, uint32_t type)
+{
+    Object *obj = self;
+    while (obj)
+    {
+	if (obj->type == type) return obj;
+	obj = obj->base;
+    }
+    PSC_Service_panic("Bug: type error!");
+}
+
 void Object_destroy(void *self)
 {
     if (!self) return;
