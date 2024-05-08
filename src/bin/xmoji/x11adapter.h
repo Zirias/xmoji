@@ -33,6 +33,9 @@ xcb_atom_t X11Adapter_atom(X11Adapter *self, XAtomId id)
     CMETHOD;
 PSC_Event *X11Adapter_clientmsg(X11Adapter *self)
     CMETHOD ATTR_RETNONNULL;
+void X11Adapter_await(X11Adapter *self, void *cookie, void *ctx,
+	void (*handler)(void *ctx, void *reply, xcb_generic_error_t *error))
+    CMETHOD ATTR_NONNULL((3));
 
 void X11Adapter_destroy(X11Adapter *self);
 

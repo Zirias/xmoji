@@ -47,6 +47,23 @@ static void clientmsg(void *receiver, void *sender, void *args)
     }
 }
 
+static void create_window_cb(void *ctx, void *reply,
+	xcb_generic_error_t *error)
+{
+    (void)ctx;
+    (void)reply;
+    if (error) PSC_Service_panic("Error creating window");
+}
+
+static void set_protocol_cb(void *ctx, void *reply,
+	xcb_generic_error_t *error)
+{
+    (void)ctx;
+    (void)reply;
+    if (error) PSC_Service_panic(
+	    "Error setting supported window manager protocols");
+}
+
 static void *create(void *options)
 {
     if (!mo.base.id)
@@ -73,12 +90,15 @@ static void *create(void *options)
     uint32_t mask = XCB_CW_BACK_PIXEL | XCB_CW_EVENT_MASK;
     uint32_t values[] = { s->white_pixel, XCB_EVENT_MASK_STRUCTURE_NOTIFY };
 
-    xcb_create_window(c, XCB_COPY_FROM_PARENT, w, s->root, 0, 0,
-	    self->width, self->height, 2, XCB_WINDOW_CLASS_INPUT_OUTPUT,
+    xcb_void_cookie_t cookie;
+    cookie = xcb_create_window_checked(c, XCB_COPY_FROM_PARENT, w, s->root,
+	    0, 0, self->width, self->height, 2, XCB_WINDOW_CLASS_INPUT_OUTPUT,
 	    s->root_visual, mask, values);
+    X11Adapter_await(x11, &cookie, self, create_window_cb);
     xcb_atom_t delwin = A(WM_DELETE_WINDOW);
-    xcb_change_property(c, XCB_PROP_MODE_REPLACE, w, A(WM_PROTOCOLS),
-	    4, 32, 1, &delwin);
+    cookie = xcb_change_property_checked(c, XCB_PROP_MODE_REPLACE, w,
+	    A(WM_PROTOCOLS), 4, 32, 1, &delwin);
+    X11Adapter_await(x11, &cookie, self, set_protocol_cb);
 
     PSC_Event_register(X11Adapter_clientmsg(x11), self, clientmsg, w);
 
