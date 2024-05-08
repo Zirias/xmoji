@@ -1,12 +1,30 @@
-#include "mainwindow.h"
+#include "window.h"
 
 #include "x11adapter.h"
 
 #include <poser/core.h>
 #include <stdlib.h>
 
-struct MainWindow
+static void *create(void *options);
+static void destroy(void *obj);
+static int show(void *window);
+static int hide(void *window);
+
+static MetaWindow meta = {
+    .base = {
+	.id = 0,
+	.baseId = 0,
+	.name = "Window",
+	.create = create,
+	.destroy = destroy
+    },
+    .show = show,
+    .hide = hide
+};
+
+struct Window
 {
+    Object base;
     X11Adapter *x11;
     PSC_Event *closed;
     xcb_window_t w;
@@ -16,7 +34,7 @@ static void clientmsg(void *receiver, void *sender, void *args)
 {
     (void)sender;
 
-    MainWindow *self = receiver;
+    Window *self = receiver;
     xcb_client_message_event_t *ev = args;
     X11Adapter *x11 = self->x11;
     
@@ -26,13 +44,22 @@ static void clientmsg(void *receiver, void *sender, void *args)
     }
 }
 
-MainWindow *MainWindow_create(X11Adapter *x11)
+static void *create(void *options)
 {
+    if (!meta.base.id)
+    {
+	if (MetaObject_register(&meta) < 0) return 0;
+    }
+
+    X11Adapter *x11 = options;
     xcb_connection_t *c = X11Adapter_connection(x11);
     xcb_screen_t *s = X11Adapter_screen(x11);
     xcb_window_t w = xcb_generate_id(c);
     if (!w) return 0;
-    MainWindow *self = PSC_malloc(sizeof *self);
+
+    Window *self = PSC_malloc(sizeof *self);
+    self->base.base = Object_create(0, 0);
+    self->base.type = meta.base.id;
     self->x11 = x11;
     self->closed = PSC_Event_create(self);
     self->w = w;
@@ -51,24 +78,47 @@ MainWindow *MainWindow_create(X11Adapter *x11)
     return self;
 }
 
-PSC_Event *MainWindow_closed(MainWindow *self)
+static int show(void *window)
 {
-    return self->closed;
-}
-
-void MainWindow_show(MainWindow *self)
-{
+    Window *self = window;
     xcb_connection_t *c = X11Adapter_connection(self->x11);
     xcb_map_window(c, self->w);
     xcb_flush(c);
+    return 0;
 }
 
-void MainWindow_destroy(MainWindow *self)
+static int hide(void *window)
 {
-    if (!self) return;
+    (void)window;
+    return 0;
+}
+
+static void destroy(void *window)
+{
+    Window *self = window;
     PSC_Event_unregister(X11Adapter_clientmsg(self->x11), self,
 	    clientmsg, self->w);
     PSC_Event_destroy(self->closed);
     free(self);
+}
+
+Window *Window_create(X11Adapter *x11)
+{
+    return create(x11);
+}
+
+PSC_Event *Window_closed(Window *self)
+{
+    return self->closed;
+}
+
+void Window_show(Window *self)
+{
+    MetaObject_callvoid(Window, show, self);
+}
+
+void Window_hide(Window *self)
+{
+    MetaObject_callvoid(Window, hide, self);
 }
 

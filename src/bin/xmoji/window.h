@@ -1,0 +1,37 @@
+#ifndef XMOJI_WINDOW_H
+#define XMOJI_WINDOW_H
+
+#include "object.h"
+#include <poser/decl.h>
+#include <xcb/xproto.h>
+
+typedef struct MetaWindow
+{
+    MetaObject base;
+    int (*show)(void *window);
+    int (*hide)(void *window);
+} MetaWindow;
+
+C_CLASS_DECL(Window);
+C_CLASS_DECL(PSC_Event);
+C_CLASS_DECL(X11Adapter);
+
+Window *Window_create(X11Adapter *dpy)
+    ATTR_NONNULL((1));
+
+X11Adapter *Window_dpy(Window *self)
+    CMETHOD ATTR_RETNONNULL;
+
+xcb_window_t Window_id(Window *self)
+    CMETHOD;
+
+PSC_Event *Window_closed(Window *self)
+    CMETHOD ATTR_RETNONNULL;
+
+void Window_show(Window *self)
+    CMETHOD;
+
+void WIndow_hide(Window *self)
+    CMETHOD;
+
+#endif

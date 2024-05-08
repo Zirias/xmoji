@@ -1,5 +1,6 @@
 xmoji_MODULES=		main \
-			mainwindow \
+			object \
+			window \
 			x11adapter \
 			xmoji
 xmoji_PKGDEPS=		posercore \
