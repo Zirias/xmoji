@@ -22,7 +22,6 @@ static void destroy(void *obj)
 
 static MetaObject mo = {
     .id = 0,
-    .baseId = 0,
     .name = "Object",
     .create = create,
     .destroy = destroy

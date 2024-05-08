@@ -20,7 +20,6 @@
 typedef struct MetaObject
 {
     uint32_t id;
-    uint32_t baseId;
     const char *name;
     void *(*create)(void *options);
     void (*destroy)(void *obj);

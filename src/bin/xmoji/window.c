@@ -14,7 +14,6 @@ static int hide(void *window);
 static MetaWindow mo = {
     .base = {
 	.id = 0,
-	.baseId = 0,
 	.name = "Window",
 	.create = create,
 	.destroy = destroy
