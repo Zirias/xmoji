@@ -52,7 +52,13 @@ static void create_window_cb(void *ctx, void *reply,
 {
     (void)ctx;
     (void)reply;
-    if (error) PSC_Service_panic("Error creating window");
+
+    if (error)
+    {
+	PSC_Log_setAsync(0);
+	PSC_Log_msg(PSC_L_ERROR, "Cannot create window");
+	PSC_Service_quit();
+    }
 }
 
 static void set_protocol_cb(void *ctx, void *reply,
@@ -60,8 +66,14 @@ static void set_protocol_cb(void *ctx, void *reply,
 {
     (void)ctx;
     (void)reply;
-    if (error) PSC_Service_panic(
-	    "Error setting supported window manager protocols");
+
+    if (error)
+    {
+	PSC_Log_setAsync(0);
+	PSC_Log_msg(PSC_L_ERROR,
+		"Cannot set supported window manager protocols");
+	PSC_Service_quit();
+    }
 }
 
 static void *create(void *options)

@@ -4,6 +4,7 @@
 #include "window.h"
 
 #include <poser/core.h>
+#include <stdio.h>
 #include <stdlib.h>
 
 static X11Adapter *x11;
@@ -24,6 +25,7 @@ static void onstartup(void *receiver, void *sender, void *args)
     (void)sender;
     (void)args;
 
+    PSC_Log_setAsync(1);
     Window_show(win);
 }
 
@@ -32,11 +34,16 @@ static void onshutdown(void *receiver, void *sender, void *args)
     (void)receiver;
     (void)sender;
     (void)args;
+
+    PSC_Log_setAsync(0);
 }
 
 SOLOCAL int Xmoji_run(void)
 {
     int rc = EXIT_FAILURE;
+    PSC_Log_setFileLogger(stderr);
+    PSC_Log_setMaxLogLevel(PSC_L_DEBUG);
+
     x11 = X11Adapter_create();
     if (!x11) goto done;
     win = Window_create(x11);

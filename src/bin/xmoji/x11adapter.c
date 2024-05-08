@@ -91,7 +91,14 @@ static void readEvents(void *receiver, void *sender, void *args)
 SOLOCAL X11Adapter *X11Adapter_create(void)
 {
     xcb_connection_t *c = xcb_connect(0, 0);
-    if (!c) return 0;
+    if (xcb_connection_has_error(c))
+    {
+	xcb_disconnect(c);
+	PSC_Log_msg(PSC_L_ERROR,
+		"Error connecting to X server. This program requires X11. "
+		"If you're in an X session, check your DISPLAY variable.");
+	return 0;
+    }
 
     X11Adapter *self = PSC_malloc(sizeof *self);
     self->c = c;
