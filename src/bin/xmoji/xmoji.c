@@ -32,7 +32,7 @@ static void onprestartup(void *receiver, void *sender, void *args)
     }
 
     Window_setSize(win, 640, 200);
-    Window_setTitle(win, "Xmoji test");
+    Window_setTitle(win, "Xmoji 😀 äöüß");
     PSC_Event_register(Window_closed(win), 0, onclose, 0);
 }
 

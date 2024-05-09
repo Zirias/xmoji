@@ -199,8 +199,12 @@ void Window_setTitle(void *self, const char *title)
     if (title)
     {
 	w->title = PSC_copystr(title);
+	char *latintitle = X11Adapter_toLatin1(w->title);
 	xcb_change_property(c, XCB_PROP_MODE_REPLACE, w->w, XCB_ATOM_WM_NAME,
-		XCB_ATOM_STRING, 8, strlen(w->title), w->title);
+		XCB_ATOM_STRING, 8, strlen(latintitle), latintitle);
+	xcb_change_property(c, XCB_PROP_MODE_REPLACE, w->w, A(_NET_WM_NAME),
+		A(UTF8_STRING), 8, strlen(w->title), w->title);
+	free(latintitle);
     }
     else
     {

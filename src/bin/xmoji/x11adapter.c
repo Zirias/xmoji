@@ -1,8 +1,10 @@
 #include "x11adapter.h"
 
+#include <locale.h>
 #include <poser/core.h>
 #include <stdlib.h>
 #include <string.h>
+#include <uchar.h>
 #include <xcb/xcbext.h>
 
 #define _STR(x) #x
@@ -98,6 +100,27 @@ static void X11Adapter_connect(void)
 	}
 	return;
     }
+    char *lc = setlocale(LC_ALL, "");
+    if (!lc) lc = "C";
+    char *lcdot = strchr(lc, '.');
+    if (!lcdot || strcmp(lcdot+1, "UTF-8"))
+    {
+	char utf8lc[32];
+	if (lcdot) *lcdot = 0;
+	snprintf(utf8lc, sizeof utf8lc, "%s.UTF-8", lc);
+	PSC_Log_fmt(PSC_L_INFO, "Configured locale doesn't use UTF-8 "
+		"encoding, trying `%s' instead", utf8lc);
+	lc = setlocale(LC_ALL, utf8lc);
+    }
+    if (lc)
+    {
+	PSC_Log_fmt(PSC_L_DEBUG, "Starting with locale `%s'", lc);
+    }
+    else
+    {
+	PSC_Log_msg(PSC_L_WARNING,
+		"Couldn't set locale, problems might occur");
+    }
     c = xcb_connect(0, 0);
     if (xcb_connection_has_error(c))
     {
@@ -163,6 +186,55 @@ void X11Adapter_await(void *cookie, void *ctx,
     X11ReplyHandler *rh = X11ReplyHandler_create(cookie, ctx, handler);
     if (nextReply) PSC_Queue_enqueue(waitingReplies, rh, free);
     else nextReply = rh;
+}
+
+char *X11Adapter_toLatin1(const char *utf8)
+{
+    size_t len = strlen(utf8);
+    char *latin1 = PSC_malloc(len+1);
+
+    const unsigned char *in = (const unsigned char *)utf8;
+    char *out = latin1;
+    for (; *in; ++in, ++out)
+    {
+	if (*in < 0x80)
+	{
+	    *out = *in;
+	    continue;
+	}
+	char32_t uc = 0;
+	int f = 0;
+	if ((*in & 0xe0) == 0xc0)
+	{
+	    uc = (*in & 0x1f);
+	    f = 1;
+	}
+	else if ((*in & 0xf0) == 0xe0)
+	{
+	    uc = (*in & 0xf);
+	    f = 2;
+	}
+	else if ((*in & 0xf8) == 0xf0)
+	{
+	    uc = (*in & 0x7);
+	    f = 3;
+	}
+	else
+	{
+	    *out = '?';
+	    continue;
+	}
+	for (; f && *++in; --f)
+	{
+	    if ((*in & 0xc0) != 0x80) break;
+	    uc <<= 6;
+	    uc |= (*in & 0x3f);
+	}
+	if (f || uc > 0xff) *out = '?';
+	else *out = uc;
+    }
+
+    return latin1;
 }
 
 void X11Adapter_done(void)
