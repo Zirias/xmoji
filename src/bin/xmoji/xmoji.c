@@ -1,13 +1,12 @@
 #include "xmoji.h"
 
-#include "x11adapter.h"
 #include "window.h"
+#include "x11adapter.h"
 
 #include <poser/core.h>
 #include <stdio.h>
 #include <stdlib.h>
 
-static X11Adapter *x11;
 static Window *win;
 
 static void onclose(void *receiver, void *sender, void *args)
@@ -26,8 +25,7 @@ static void onprestartup(void *receiver, void *sender, void *args)
 
     PSC_EAStartup *ea = args;
 
-    x11 = X11Adapter_create();
-    if (!x11 || !(win = Window_create(x11)))
+    if (!(win = Window_create()))
     {
 	PSC_EAStartup_return(ea, EXIT_FAILURE);
 	return;
@@ -54,8 +52,8 @@ static void onshutdown(void *receiver, void *sender, void *args)
     (void)sender;
     (void)args;
 
-    Object_destroy(win);
-    X11Adapter_destroy(x11);
+    Window_destroy(win);
+    X11Adapter_done();
     PSC_Log_setAsync(0);
 }
 

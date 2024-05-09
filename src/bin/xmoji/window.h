@@ -20,13 +20,8 @@ typedef struct MetaWindow
 
 C_CLASS_DECL(Window);
 C_CLASS_DECL(PSC_Event);
-C_CLASS_DECL(X11Adapter);
 
-Window *Window_create(X11Adapter *dpy)
-    ATTR_NONNULL((1));
-
-X11Adapter *Window_dpy(void *self)
-    CMETHOD ATTR_RETNONNULL;
+Window *Window_create(void);
 
 xcb_window_t Window_id(void *self)
     CMETHOD;

@@ -2,15 +2,12 @@
 
 #include <poser/core.h>
 #include <stdlib.h>
+#include <string.h>
 #include <xcb/xcbext.h>
 
 #define _STR(x) #x
 #define STR(x) _STR(x)
 #define X_SZNM(a) { sizeof STR(a) - 1, STR(a) },
-
-static const struct { int len; const char *nm; } atomnm[] = {
-    X_ATOMS(X_SZNM)
-};
 
 typedef struct X11ReplyHandler
 {
@@ -18,6 +15,18 @@ typedef struct X11ReplyHandler
     void *ctx;
     xcb_void_cookie_t cookie;
 } X11ReplyHandler;
+
+static const struct { int len; const char *nm; } atomnm[] = {
+    X_ATOMS(X_SZNM)
+};
+
+static xcb_connection_t *c;
+static xcb_screen_t *s;
+static PSC_Event *clientmsg;
+static X11ReplyHandler *nextReply;
+static PSC_Queue *waitingReplies;
+static xcb_atom_t atoms[NATOMS];
+static int fd;
 
 static X11ReplyHandler *X11ReplyHandler_create(void *cookie, void *ctx,
 	void (*handler)(void *, void *, xcb_generic_error_t *))
@@ -29,51 +38,40 @@ static X11ReplyHandler *X11ReplyHandler_create(void *cookie, void *ctx,
     return self;
 }
 
-struct X11Adapter
-{
-    xcb_connection_t *c;
-    xcb_screen_t *s;
-    PSC_Event *clientmsg;
-    X11ReplyHandler *nextReply;
-    PSC_Queue *waitingReplies;
-    xcb_atom_t atoms[NATOMS];
-    int fd;
-};
-
 static void readEvents(void *receiver, void *sender, void *args)
 {
+    (void)receiver;
     (void)sender;
     (void)args;
 
-    X11Adapter *self = receiver;
     xcb_generic_event_t *ev = 0;
 
-    if (self->nextReply)
+    if (nextReply)
     {
 	void *reply = 0;
         xcb_generic_error_t *error = 0;
 
-	while (xcb_poll_for_reply(self->c, self->nextReply->cookie.sequence,
+	while (xcb_poll_for_reply(c, nextReply->cookie.sequence,
 		    &reply, &error))
 	{
-	    self->nextReply->handler(self->nextReply->ctx, reply, error);
+	    nextReply->handler(nextReply->ctx, reply, error);
 	    free(reply);
 	    free(error);
-	    free(self->nextReply);
-	    self->nextReply = PSC_Queue_dequeue(self->waitingReplies);
-	    if (!self->nextReply) break;
+	    free(nextReply);
+	    nextReply = PSC_Queue_dequeue(waitingReplies);
+	    if (!nextReply) break;
 	}
 
-	ev = xcb_poll_for_queued_event(self->c);
+	ev = xcb_poll_for_queued_event(c);
     }
-    else ev = xcb_poll_for_event(self->c);
+    else ev = xcb_poll_for_event(c);
 
     while (ev)
     {
 	switch (ev->response_type & 0x7f)
 	{
 	    case XCB_CLIENT_MESSAGE:
-		PSC_Event_raise(self->clientmsg,
+		PSC_Event_raise(clientmsg,
 			((xcb_client_message_event_t *)ev)->window, ev);
 		break;
 
@@ -82,31 +80,40 @@ static void readEvents(void *receiver, void *sender, void *args)
 	}
 
 	free(ev);
-	ev = xcb_poll_for_queued_event(self->c);
+	ev = xcb_poll_for_queued_event(c);
     }
 
-    xcb_flush(self->c);
+    xcb_flush(c);
 }
 
-SOLOCAL X11Adapter *X11Adapter_create(void)
+static void X11Adapter_connect(void)
 {
-    xcb_connection_t *c = xcb_connect(0, 0);
+    if (c)
+    {
+	if (xcb_connection_has_error(c))
+	{
+	    PSC_Log_setAsync(0);
+	    PSC_Log_msg(PSC_L_ERROR, "Lost X11 connection.");
+	    PSC_Service_quit();
+	}
+	return;
+    }
+    c = xcb_connect(0, 0);
     if (xcb_connection_has_error(c))
     {
 	xcb_disconnect(c);
+	c = 0;
 	PSC_Log_msg(PSC_L_ERROR,
 		"Error connecting to X server. This program requires X11. "
 		"If you're in an X session, check your DISPLAY variable.");
-	return 0;
+	return;
     }
 
-    X11Adapter *self = PSC_malloc(sizeof *self);
-    self->c = c;
-    self->s = xcb_setup_roots_iterator(xcb_get_setup(c)).data;
-    self->clientmsg = PSC_Event_create(self);
-    self->nextReply = 0;
-    self->waitingReplies = PSC_Queue_create();
-    self->fd = xcb_get_file_descriptor(c);
+    s = xcb_setup_roots_iterator(xcb_get_setup(c)).data;
+    clientmsg = PSC_Event_create(0);
+    nextReply = 0;
+    waitingReplies = PSC_Queue_create();
+    fd = xcb_get_file_descriptor(c);
 
     xcb_intern_atom_cookie_t atomcookies[NATOMS];
     for (int i = 0; i < NATOMS; ++i)
@@ -119,56 +126,60 @@ SOLOCAL X11Adapter *X11Adapter_create(void)
 		atomcookies[i], 0);
 	if (atom)
 	{
-	    self->atoms[i] = atom->atom;
+	    atoms[i] = atom->atom;
 	    free(atom);
 	}
-	else self->atoms[i] = 0;
+	else atoms[i] = 0;
     }
 
-    PSC_Event_register(PSC_Service_readyRead(), self, readEvents, self->fd);
-    PSC_Service_registerRead(self->fd);
-
-    return self;
+    PSC_Event_register(PSC_Service_readyRead(), 0, readEvents, fd);
+    PSC_Service_registerRead(fd);
 }
 
-xcb_connection_t *X11Adapter_connection(X11Adapter *self)
+xcb_connection_t *X11Adapter_connection(void)
 {
-    return self->c;
+    X11Adapter_connect();
+    return c;
 }
 
-xcb_screen_t *X11Adapter_screen(X11Adapter *self)
+xcb_screen_t *X11Adapter_screen(void)
 {
-    return self->s;
+    return s;
 }
 
-xcb_atom_t X11Adapter_atom(X11Adapter *self, XAtomId id)
+xcb_atom_t X11Adapter_atom(XAtomId id)
 {
-    return self->atoms[id];
+    return atoms[id];
 }
 
-PSC_Event *X11Adapter_clientmsg(X11Adapter *self)
+PSC_Event *X11Adapter_clientmsg(void)
 {
-    return self->clientmsg;
+    return clientmsg;
 }
 
-void X11Adapter_await(X11Adapter *self, void *cookie, void *ctx,
+void X11Adapter_await(void *cookie, void *ctx,
 	void (*handler)(void *ctx, void *reply, xcb_generic_error_t *error))
 {
     X11ReplyHandler *rh = X11ReplyHandler_create(cookie, ctx, handler);
-    if (self->nextReply) PSC_Queue_enqueue(self->waitingReplies, rh, free);
-    else self->nextReply = rh;
+    if (nextReply) PSC_Queue_enqueue(waitingReplies, rh, free);
+    else nextReply = rh;
 }
 
-void X11Adapter_destroy(X11Adapter *self)
+void X11Adapter_done(void)
 {
-    if (!self) return;
-
-    PSC_Service_unregisterRead(self->fd);
-    PSC_Event_unregister(PSC_Service_readyRead(), self, readEvents, self->fd);
-    PSC_Queue_destroy(self->waitingReplies);
-    free(self->nextReply);
-    PSC_Event_destroy(self->clientmsg);
-    xcb_disconnect(self->c);
-    free(self);
+    if (!c) return;
+    PSC_Service_unregisterRead(fd);
+    PSC_Event_unregister(PSC_Service_readyRead(), 0, readEvents, fd);
+    fd = 0;
+    PSC_Queue_destroy(waitingReplies);
+    waitingReplies = 0;
+    free(nextReply);
+    nextReply = 0;
+    PSC_Event_destroy(clientmsg);
+    clientmsg = 0;
+    xcb_disconnect(c);
+    c = 0;
+    s = 0;
+    memset(atoms, 0, sizeof atoms);
 }
 

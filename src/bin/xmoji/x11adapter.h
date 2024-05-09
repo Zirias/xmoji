@@ -4,7 +4,6 @@
 #include <poser/decl.h>
 #include <xcb/xcb.h>
 
-C_CLASS_DECL(X11Adapter);
 C_CLASS_DECL(PSC_Event);
 
 #define X_ENUM(a) a,
@@ -21,22 +20,17 @@ typedef enum XAtomId
     NATOMS
 } XAtomId;
 
-#define A(x) (X11Adapter_atom(x11, (x)))
+#define A(x) (X11Adapter_atom(x))
 
-X11Adapter *X11Adapter_create(void);
+xcb_connection_t *X11Adapter_connection(void);
+xcb_screen_t *X11Adapter_screen(void);
+xcb_atom_t X11Adapter_atom(XAtomId id);
+PSC_Event *X11Adapter_clientmsg(void) ATTR_RETNONNULL;
 
-xcb_connection_t *X11Adapter_connection(X11Adapter *self)
-    CMETHOD;
-xcb_screen_t *X11Adapter_screen(X11Adapter *self)
-    CMETHOD;
-xcb_atom_t X11Adapter_atom(X11Adapter *self, XAtomId id)
-    CMETHOD;
-PSC_Event *X11Adapter_clientmsg(X11Adapter *self)
-    CMETHOD ATTR_RETNONNULL;
-void X11Adapter_await(X11Adapter *self, void *cookie, void *ctx,
+void X11Adapter_await(void *cookie, void *ctx,
 	void (*handler)(void *ctx, void *reply, xcb_generic_error_t *error))
-    CMETHOD ATTR_NONNULL((3));
+    ATTR_NONNULL((2));
 
-void X11Adapter_destroy(X11Adapter *self);
+void X11Adapter_done(void);
 
 #endif
