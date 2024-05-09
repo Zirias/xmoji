@@ -4,7 +4,50 @@
 #include <stdint.h>
 
 #define _MO_first(x, ...) (x)
-#define MetaObject_callvoid(t, m, ...) do { \
+
+typedef struct MetaObject
+{
+    uint32_t id;
+    const char *name;
+    void (*destroy)(void *obj);
+} MetaObject;
+
+#define MetaObject_init(mname, mdestroy) { \
+    .id = 0, \
+    .name = mname, \
+    .destroy = mdestroy \
+}
+
+typedef struct Object
+{
+    void *base;
+    uint32_t type;
+} Object;
+
+int MetaObject_register(void *meta);
+const void *MetaObject_get(uint32_t id);
+
+void *Object_instanceOf(void *self, uint32_t type);
+void Object_destroy(void *self);
+
+#define Object_instance(o) Object_instanceOf((void *)(o), mo.base.id)
+
+#define Object_base(o) Object_instance(o)->base
+
+#define Object_vcall(r, t, m, ...) do { \
+    Object *mo_obj = (Object *)_MO_first(__VA_ARGS__,); \
+    while (mo_obj) { \
+	const Meta ## t *mo_meta = MetaObject_get(mo_obj->type); \
+	if (!mo_meta) break; \
+	if (mo_meta->m) { \
+	    r = mo_meta->m(__VA_ARGS__); \
+	    break; \
+	} \
+	mo_obj = mo_obj->base; \
+    } \
+} while (0)
+
+#define Object_vcallv(t, m, ...) do { \
     Object *mo_obj = (Object *)_MO_first(__VA_ARGS__,); \
     while (mo_obj) { \
 	const Meta ## t *mo_meta = MetaObject_get(mo_obj->type); \
@@ -16,26 +59,5 @@
 	mo_obj = mo_obj->base; \
     } \
 } while (0)
-
-typedef struct MetaObject
-{
-    uint32_t id;
-    const char *name;
-    void *(*create)(void *options);
-    void (*destroy)(void *obj);
-} MetaObject;
-
-typedef struct Object
-{
-    void *base;
-    uint32_t type;
-} Object;
-
-int MetaObject_register(void *meta);
-const void *MetaObject_get(uint32_t id);
-
-void *Object_create(uint32_t type, void *options);
-void *Object_instanceOf(void *self, uint32_t type);
-void Object_destroy(void *self);
 
 #endif

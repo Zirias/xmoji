@@ -5,27 +5,7 @@
 
 #define MAXTYPES 64
 
-static void *create(void *options)
-{
-    (void)options;
-
-    Object *self = PSC_malloc(sizeof *self);
-    self->base = 0;
-    self->type = 0;
-    return self;
-}
-
-static void destroy(void *obj)
-{
-    free(obj);
-}
-
-static MetaObject mo = {
-    .id = 0,
-    .name = "Object",
-    .create = create,
-    .destroy = destroy
-};
+static MetaObject mo = MetaObject_init("Object", 0);
 
 static MetaObject *types[MAXTYPES] = {
     &mo,
@@ -46,13 +26,6 @@ const void *MetaObject_get(uint32_t id)
 {
     if (id >= ntypes) return 0;
     return types[id];
-}
-
-void *Object_create(uint32_t type, void *options)
-{
-    if (type >= ntypes) return 0;
-    MetaObject *m = types[type];
-    return m->create(options);
 }
 
 void *Object_instanceOf(void *self, uint32_t type)

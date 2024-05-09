@@ -12,6 +12,12 @@ typedef struct MetaWindow
     int (*hide)(void *window);
 } MetaWindow;
 
+#define MetaWindow_init(name, destroy, mshow, mhide) { \
+    .base = MetaObject_init(name, destroy), \
+    .show = mshow, \
+    .hide = mhide \
+}
+
 C_CLASS_DECL(Window);
 C_CLASS_DECL(PSC_Event);
 C_CLASS_DECL(X11Adapter);
@@ -45,5 +51,7 @@ const char *Window_title(const void *self)
     CMETHOD;
 void Window_setTitle(void *self, const char *title)
     CMETHOD;
+
+#define Window_destroy(w) Object_destroy(w)
 
 #endif
