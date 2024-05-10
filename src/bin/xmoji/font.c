@@ -48,10 +48,11 @@ Font *Font_create(char **patterns)
 {
     if (init() < 0) return 0;
     char **p = patterns;
+    char *patstr;
     FcPattern *fcfont;
     for (;;)
     {
-	char *patstr = *p;
+	patstr = *p;
 	if (!patstr) patstr = "sans";
 	PSC_Log_fmt(PSC_L_DEBUG, "Looking for font: %s", patstr);
 	FcPattern *fcpat = FcNameParse((FcChar8 *)patstr);
@@ -67,9 +68,17 @@ Font *Font_create(char **patterns)
 	if (result == FcResultMatch && (!*p || !strcmp(
 		    (const char *)reqfamily.u.s,
 		    (const char *)foundfamily.u.s))) break;
-	else FcPatternDestroy(fcfont);
+	FcPatternDestroy(fcfont);
+	fcfont = 0;
 	if (!*p) break;
 	++p;
+    }
+
+    if (!fcfont)
+    {
+	PSC_Log_fmt(PSC_L_WARNING, "No matching font found for `%s'", patstr);
+	done();
+	return 0;
     }
 
     FcValue fontfile;
@@ -78,7 +87,7 @@ Font *Font_create(char **patterns)
     if (result != FcResultMatch)
     {
 	FcPatternDestroy(fcfont);
-	PSC_Log_msg(PSC_L_ERROR, "Found font without a file");
+	PSC_Log_msg(PSC_L_WARNING, "Found font without a file");
 	done();
 	return 0;
     }
