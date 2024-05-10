@@ -57,7 +57,7 @@ static void onshutdown(void *receiver, void *sender, void *args)
     PSC_Log_setAsync(0);
 }
 
-SOLOCAL int Xmoji_run(void)
+SOLOCAL int Xmoji_run(int argc, char **argv)
 {
     PSC_RunOpts_foreground();
     PSC_Log_setFileLogger(stderr);
@@ -65,6 +65,8 @@ SOLOCAL int Xmoji_run(void)
     PSC_Event_register(PSC_Service_prestartup(), 0, onprestartup, 0);
     PSC_Event_register(PSC_Service_startup(), 0, onstartup, 0);
     PSC_Event_register(PSC_Service_shutdown(), 0, onshutdown, 0);
+
+    X11Adapter_init(argc, argv, "Xmoji");
     return PSC_Service_run();
 }
 

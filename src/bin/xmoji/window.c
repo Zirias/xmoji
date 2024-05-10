@@ -49,6 +49,20 @@ static void create_window_cb(void *ctx, void *reply,
     }
 }
 
+static void set_windowclass_cb(void *ctx, void *reply,
+	xcb_generic_error_t *error)
+{
+    (void)ctx;
+    (void)reply;
+
+    if (error)
+    {
+	PSC_Log_setAsync(0);
+	PSC_Log_msg(PSC_L_ERROR, "Cannot set window class");
+	PSC_Service_quit();
+    }
+}
+
 static void set_protocol_cb(void *ctx, void *reply,
 	xcb_generic_error_t *error)
 {
@@ -60,6 +74,20 @@ static void set_protocol_cb(void *ctx, void *reply,
 	PSC_Log_setAsync(0);
 	PSC_Log_msg(PSC_L_ERROR,
 		"Cannot set supported window manager protocols");
+	PSC_Service_quit();
+    }
+}
+
+static void set_windowtype_cb(void *ctx, void *reply,
+	xcb_generic_error_t *error)
+{
+    (void)ctx;
+    (void)reply;
+
+    if (error)
+    {
+	PSC_Log_setAsync(0);
+	PSC_Log_msg(PSC_L_ERROR, "Cannot set window type");
 	PSC_Service_quit();
     }
 }
@@ -123,6 +151,15 @@ Window *Window_create(void)
     cookie = xcb_change_property_checked(c, XCB_PROP_MODE_REPLACE, w,
 	    A(WM_PROTOCOLS), 4, 32, 1, &delwin);
     X11Adapter_await(&cookie, self, set_protocol_cb);
+    size_t sz;
+    const char *wmclass = X11Adapter_wmClass(&sz);
+    cookie = xcb_change_property_checked(c, XCB_PROP_MODE_REPLACE, w,
+	    XCB_ATOM_WM_CLASS, XCB_ATOM_STRING, 8, sz, wmclass);
+    X11Adapter_await(&cookie, self, set_windowclass_cb);
+    xcb_atom_t wtnorm = A(_NET_WM_WINDOW_TYPE_NORMAL);
+    cookie = xcb_change_property_checked(c, XCB_PROP_MODE_REPLACE, w,
+	    A(_NET_WM_WINDOW_TYPE), 4, 32, 1, &wtnorm);
+    X11Adapter_await(&cookie, self, set_windowtype_cb);
 
     PSC_Event_register(X11Adapter_clientmsg(), self, clientmsg, w);
 

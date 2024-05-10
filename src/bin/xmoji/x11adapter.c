@@ -22,6 +22,9 @@ static const struct { int len; const char *nm; } atomnm[] = {
     X_ATOMS(X_SZNM)
 };
 
+static char wmclass[512];
+static size_t wmclasssz;
+
 static xcb_connection_t *c;
 static xcb_screen_t *s;
 static PSC_Event *clientmsg;
@@ -100,27 +103,6 @@ static void X11Adapter_connect(void)
 	}
 	return;
     }
-    char *lc = setlocale(LC_ALL, "");
-    if (!lc) lc = "C";
-    char *lcdot = strchr(lc, '.');
-    if (!lcdot || strcmp(lcdot+1, "UTF-8"))
-    {
-	char utf8lc[32];
-	if (lcdot) *lcdot = 0;
-	snprintf(utf8lc, sizeof utf8lc, "%s.UTF-8", lc);
-	PSC_Log_fmt(PSC_L_INFO, "Configured locale doesn't use UTF-8 "
-		"encoding, trying `%s' instead", utf8lc);
-	lc = setlocale(LC_ALL, utf8lc);
-    }
-    if (lc)
-    {
-	PSC_Log_fmt(PSC_L_DEBUG, "Starting with locale `%s'", lc);
-    }
-    else
-    {
-	PSC_Log_msg(PSC_L_WARNING,
-		"Couldn't set locale, problems might occur");
-    }
     c = xcb_connect(0, 0);
     if (xcb_connection_has_error(c))
     {
@@ -159,6 +141,68 @@ static void X11Adapter_connect(void)
     PSC_Service_registerRead(fd);
 }
 
+void X11Adapter_init(int argc, char **argv, const char *classname)
+{
+    char *lc = setlocale(LC_ALL, "");
+    if (!lc) lc = "C";
+    char *lcdot = strchr(lc, '.');
+    if (!lcdot || strcmp(lcdot+1, "UTF-8"))
+    {
+	char utf8lc[32];
+	if (lcdot) *lcdot = 0;
+	snprintf(utf8lc, sizeof utf8lc, "%s.UTF-8", lc);
+	PSC_Log_fmt(PSC_L_INFO, "Configured locale doesn't use UTF-8 "
+		"encoding, trying `%s' instead", utf8lc);
+	lc = setlocale(LC_ALL, utf8lc);
+    }
+    if (lc)
+    {
+	PSC_Log_fmt(PSC_L_DEBUG, "Starting with locale `%s'", lc);
+    }
+    else
+    {
+	PSC_Log_msg(PSC_L_WARNING,
+		"Couldn't set locale, problems might occur");
+    }
+
+    char *nm = 0;
+    for (int i = 1; i < argc-1; ++i)
+    {
+	if (!strcmp(argv[i], "-name"))
+	{
+	    nm = argv[++i];
+	    break;
+	}
+    }
+    if (!nm) nm = getenv("RESOURCE_NAME");
+    if (!nm && argv[0] && *argv[0])
+    {
+	char *lastslash = strrchr(argv[0], '/');
+	if (lastslash) nm = lastslash+1;
+	else nm = argv[0];
+	if (!*nm) nm = 0;
+    }
+    if (!nm) nm = "unknown";
+    nm = X11Adapter_toLatin1(nm);
+    char *clnm = 0;
+    if (classname)
+    {
+	clnm = X11Adapter_toLatin1(classname);
+	classname = clnm;
+    }
+    else classname = nm;
+    int len = snprintf(wmclass, sizeof wmclass / 2, "%s", nm);
+    size_t pos = len + 1;
+    if (pos > sizeof wmclass / 2) pos = sizeof wmclass / 2;
+    int len2 = snprintf(wmclass+pos, sizeof wmclass / 2, "%s", classname);
+    wmclasssz = pos + len2 + 1;
+    if (wmclasssz > sizeof wmclass) wmclasssz = sizeof wmclass;
+    PSC_Log_fmt(PSC_L_DEBUG,
+	    "starting with window class \"%s\", \"%s\"", nm, classname);
+    free(clnm);
+    free(nm);
+}
+
 xcb_connection_t *X11Adapter_connection(void)
 {
     X11Adapter_connect();
@@ -178,6 +222,12 @@ xcb_atom_t X11Adapter_atom(XAtomId id)
 PSC_Event *X11Adapter_clientmsg(void)
 {
     return clientmsg;
+}
+
+const char *X11Adapter_wmClass(size_t *sz)
+{
+    if (sz) *sz = wmclasssz;
+    return wmclass;
 }
 
 void X11Adapter_await(void *cookie, void *ctx,

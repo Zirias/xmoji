@@ -1,6 +1,6 @@
 #include "xmoji.h"
 
-int main(void)
+int main(int argc, char **argv)
 {
-    return Xmoji_run();
+    return Xmoji_run(argc, argv);
 }
