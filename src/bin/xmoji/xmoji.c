@@ -1,5 +1,6 @@
 #include "xmoji.h"
 
+#include "font.h"
 #include "window.h"
 #include "x11adapter.h"
 
@@ -7,6 +8,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+static Font *emojifont;
 static Window *win;
 
 static void onclose(void *receiver, void *sender, void *args)
@@ -31,6 +33,9 @@ static void onprestartup(void *receiver, void *sender, void *args)
 	return;
     }
 
+    char *emojifontnames[] = { "Noto Color Emoji", "Noto Emoji", 0 };
+    emojifont = Font_create(emojifontnames);
+
     Window_setSize(win, 640, 200);
     Window_setTitle(win, "Xmoji 😀 äöüß");
     PSC_Event_register(Window_closed(win), 0, onclose, 0);
@@ -52,6 +57,7 @@ static void onshutdown(void *receiver, void *sender, void *args)
     (void)sender;
     (void)args;
 
+    Font_destroy(emojifont);
     Window_destroy(win);
     X11Adapter_done();
     PSC_Log_setAsync(0);
