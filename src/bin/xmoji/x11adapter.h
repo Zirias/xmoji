@@ -29,7 +29,7 @@ typedef enum XAtomId
 
 #define A(x) (X11Adapter_atom(x))
 
-void X11Adapter_init(int argc, char **argv, const char *classname);
+int X11Adapter_init(int argc, char **argv, const char *classname);
 
 xcb_connection_t *X11Adapter_connection(void);
 xcb_screen_t *X11Adapter_screen(void);

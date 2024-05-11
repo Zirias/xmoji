@@ -91,34 +91,17 @@ static void readEvents(void *receiver, void *sender, void *args)
     xcb_flush(c);
 }
 
-static void X11Adapter_connect(void)
+int X11Adapter_init(int argc, char **argv, const char *classname)
 {
-    if (c)
-    {
-	if (xcb_connection_has_error(c))
-	{
-	    PSC_Log_setAsync(0);
-	    PSC_Log_msg(PSC_L_ERROR, "Lost X11 connection.");
-	    PSC_Service_quit();
-	}
-	return;
-    }
+    if (c) return 0;
     c = xcb_connect(0, 0);
     if (xcb_connection_has_error(c))
     {
-	xcb_disconnect(c);
-	c = 0;
 	PSC_Log_msg(PSC_L_ERROR,
-		"Error connecting to X server. This program requires X11. "
+		"Could not connect to X server. This program requires X11. "
 		"If you're in an X session, check your DISPLAY variable.");
-	return;
+	goto error;
     }
-
-    s = xcb_setup_roots_iterator(xcb_get_setup(c)).data;
-    clientmsg = PSC_Event_create(0);
-    nextReply = 0;
-    waitingReplies = PSC_Queue_create();
-    fd = xcb_get_file_descriptor(c);
 
     xcb_intern_atom_cookie_t atomcookies[NATOMS];
     for (int i = 0; i < NATOMS; ++i)
@@ -134,15 +117,22 @@ static void X11Adapter_connect(void)
 	    atoms[i] = atom->atom;
 	    free(atom);
 	}
-	else atoms[i] = 0;
+	else
+	{
+	    PSC_Log_fmt(PSC_L_ERROR, "Could not find or create X atom `%s'",
+		    atomnm[i].nm);
+	    goto error;
+	}
     }
 
+    s = xcb_setup_roots_iterator(xcb_get_setup(c)).data;
+    clientmsg = PSC_Event_create(0);
+    nextReply = 0;
+    waitingReplies = PSC_Queue_create();
+    fd = xcb_get_file_descriptor(c);
     PSC_Event_register(PSC_Service_readyRead(), 0, readEvents, fd);
     PSC_Service_registerRead(fd);
-}
 
-void X11Adapter_init(int argc, char **argv, const char *classname)
-{
     char *lc = setlocale(LC_ALL, "");
     if (!lc) lc = "C";
     char *lcdot = strchr(lc, '.');
@@ -201,11 +191,23 @@ void X11Adapter_init(int argc, char **argv, const char *classname)
 	    "starting with window class \"%s\", \"%s\"", nm, classname);
     free(clnm);
     free(nm);
+
+    return 0;
+
+error:
+    xcb_disconnect(c);
+    c = 0;
+    return -1;
 }
 
 xcb_connection_t *X11Adapter_connection(void)
 {
-    X11Adapter_connect();
+    if (xcb_connection_has_error(c))
+    {
+	PSC_Log_setAsync(0);
+	PSC_Log_msg(PSC_L_ERROR, "Lost X11 connection.");
+	PSC_Service_quit();
+    }
     return c;
 }
 

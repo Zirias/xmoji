@@ -10,7 +10,12 @@
 FT_Library ftlib;
 int refcnt;
 
-static int init(void)
+struct Font
+{
+    FT_Face face;
+};
+
+int Font_init(void)
 {
     if (refcnt++) return 0;
 
@@ -32,22 +37,18 @@ static int init(void)
     return 0;
 }
 
-static void done(void)
+void Font_done(void)
 {
     if (--refcnt) return;
     FT_Done_FreeType(ftlib);
     FcFini();
 }
 
-struct Font
-{
-    FT_Face face;
-};
-
 Font *Font_create(char **patterns)
 {
-    if (init() < 0) return 0;
+    static char *emptypat[] = { 0 };
     char **p = patterns;
+    if (!p) p = emptypat;
     char *patstr;
     FcPattern *fcfont;
     for (;;)
@@ -77,7 +78,6 @@ Font *Font_create(char **patterns)
     if (!fcfont)
     {
 	PSC_Log_fmt(PSC_L_WARNING, "No matching font found for `%s'", patstr);
-	done();
 	return 0;
     }
 
@@ -88,7 +88,6 @@ Font *Font_create(char **patterns)
     {
 	FcPatternDestroy(fcfont);
 	PSC_Log_msg(PSC_L_WARNING, "Found font without a file");
-	done();
 	return 0;
     }
     char *name = (char *)FcPatternFormat(fcfont,
@@ -113,5 +112,4 @@ void Font_destroy(Font *self)
     if (!self) return;
     FT_Done_Face(self->face);
     free(self);
-    done();
 }
