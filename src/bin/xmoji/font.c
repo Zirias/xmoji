@@ -51,6 +51,7 @@ Font *Font_create(char **patterns)
     if (!p) p = emptypat;
     char *patstr;
     FcPattern *fcfont;
+    FT_Face face;
     for (;;)
     {
 	patstr = *p;
@@ -61,49 +62,122 @@ Font *Font_create(char **patterns)
 	FcDefaultSubstitute(fcpat);
 	FcResult result;
 	fcfont = FcFontMatch(0, fcpat, &result);
-	FcValue reqfamily;
-	FcPatternGet(fcpat, FC_FAMILY, 0, &reqfamily);
+	int ismatch = (result == FcResultMatch);
+	FcChar8 *foundfamily = 0;
+	if (ismatch) FcPatternGetString(fcfont, FC_FAMILY, 0, &foundfamily);
+	if (ismatch && *p)
+	{
+	    FcChar8 *reqfamily = 0;
+	    FcPatternGetString(fcpat, FC_FAMILY, 0, &reqfamily);
+	    if (reqfamily && (!foundfamily ||
+			strcmp((const char *)reqfamily,
+			    (const char *)foundfamily)))
+	    {
+		ismatch = 0;
+	    }
+	}
+	double pixelsize = 0;
+	double fixedpixelsize = 0;
+	if (ismatch)
+	{
+	    FcPatternGetDouble(fcpat, FC_PIXEL_SIZE, 0, &pixelsize);
+	    if (!pixelsize) ismatch = 0;
+	}
 	FcPatternDestroy(fcpat);
-	FcValue foundfamily;
-	FcPatternGet(fcfont, FC_FAMILY, 0, &foundfamily);
-	if (result == FcResultMatch && (!*p || !strcmp(
-		    (const char *)reqfamily.u.s,
-		    (const char *)foundfamily.u.s))) break;
+	fcpat = 0;
+	FcChar8 *fontfile = 0;
+	if (ismatch)
+	{
+	    FcPatternGetString(fcfont, FC_FILE, 0, &fontfile);
+	    if (!fontfile)
+	    {
+		PSC_Log_msg(PSC_L_WARNING, "Found font without a file");
+		ismatch = 0;
+	    }
+	}
+	int fontindex = 0;
+	if (ismatch)
+	{
+	    FcPatternGetInteger(fcfont, FC_INDEX, 0, &fontindex);
+	    if (FT_New_Face(ftlib,
+			(const char *)fontfile, fontindex, &face) == 0)
+	    {
+		if (!(face->face_flags & FT_FACE_FLAG_SCALABLE))
+		{
+		    unsigned targetpx = (unsigned)(64.0 * pixelsize);
+		    int bestdiff = INT_MIN;
+		    int bestidx = 0;
+		    for (int i = 0; i < face->num_fixed_sizes; ++i)
+		    {
+			int diff = face->available_sizes[i].y_ppem - targetpx;
+			if (!diff)
+			{
+			    bestdiff = diff;
+			    bestidx = i;
+			    break;
+			}
+			if (diff < 0)
+			{
+			    if (bestdiff > 0) continue;
+			    if (diff > bestdiff)
+			    {
+				bestdiff = diff;
+				bestidx = i;
+			    }
+			}
+			else
+			{
+			    if (bestdiff < 0 || diff < bestdiff)
+			    {
+				bestdiff = diff;
+				bestidx = i;
+			    }
+			}
+		    }
+		    if (FT_Select_Size(face, bestidx) == 0)
+		    {
+			fixedpixelsize =
+			    (double)face->available_sizes[bestidx].y_ppem
+			    / 64.0;
+		    }
+		    else
+		    {
+			PSC_Log_msg(PSC_L_WARNING,
+				"Cannot select best matching font size");
+			ismatch = 0;
+		    }
+		}
+		else if (FT_Set_Char_Size(face, 0,
+			    (unsigned)(64.0 * pixelsize), 0, 0) != 0)
+		{
+		    PSC_Log_msg(PSC_L_WARNING, "Cannot set desired font size");
+		    ismatch = 0;
+		}
+	    }
+	    else
+	    {
+		PSC_Log_fmt(PSC_L_WARNING, "Cannot open font file %s",
+			(const char *)fontfile);
+		ismatch = 0;
+	    }
+	}
 	FcPatternDestroy(fcfont);
 	fcfont = 0;
-	if (!*p) break;
+	if (ismatch)
+	{
+	    PSC_Log_fmt(PSC_L_DEBUG, "Font `%s:pixelsize=%.2f' found in `%s'",
+		    (const char *)foundfamily,
+		    fixedpixelsize ? fixedpixelsize : pixelsize,
+		    (const char *)fontfile);
+	    break;
+	}
+	PSC_Log_fmt(PSC_L_WARNING, "No matching font found for `%s'", patstr);
+	if (!*p) return 0;
 	++p;
     }
 
-    if (!fcfont)
-    {
-	PSC_Log_fmt(PSC_L_WARNING, "No matching font found for `%s'", patstr);
-	return 0;
-    }
-
-    FcValue fontfile;
-    FcValue fontindex;
-    FcResult result = FcPatternGet(fcfont, FC_FILE, 0, &fontfile);
-    if (result != FcResultMatch)
-    {
-	FcPatternDestroy(fcfont);
-	PSC_Log_msg(PSC_L_WARNING, "Found font without a file");
-	return 0;
-    }
-    char *name = (char *)FcPatternFormat(fcfont,
-	    (FcChar8 *)"%{family}%{:pixelsize=}");
-    PSC_Log_fmt(PSC_L_DEBUG, "Font `%s' found in `%s'", name,
-	    (const char *)fontfile.u.s);
-    free(name);
-    result = FcPatternGet(fcfont, FC_INDEX, 0, &fontindex);
-    if (result != FcResultMatch)
-    {
-	fontindex.type = FcTypeInteger;
-	fontindex.u.i = 0;
-    }
-
     Font *self = PSC_malloc(sizeof *self);
-    FT_New_Face(ftlib, (const char *)fontfile.u.s, fontindex.u.i, &self->face);
+    self->face = face;
     return self;
 }
 
