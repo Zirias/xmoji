@@ -9,6 +9,7 @@ xmoji_PKGDEPS=		fontconfig \
 			freetype2 \
 			harfbuzz \
 			posercore \
-			xcb
+			xcb \
+			xcb-render
 
 $(call binrules,xmoji)

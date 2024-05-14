@@ -1,5 +1,6 @@
 #include "x11adapter.h"
 
+#include <inttypes.h>
 #include <locale.h>
 #include <poser/core.h>
 #include <stdlib.h>
@@ -31,6 +32,8 @@ static PSC_Event *clientmsg;
 static X11ReplyHandler *nextReply;
 static PSC_Queue *waitingReplies;
 static xcb_atom_t atoms[NATOMS];
+static xcb_render_pictformat_t rootformat;
+static xcb_render_pictformat_t alphaformat;
 static int fd;
 
 static X11ReplyHandler *X11ReplyHandler_create(void *cookie, void *ctx,
@@ -93,6 +96,7 @@ static void readEvents(void *receiver, void *sender, void *args)
 
 int X11Adapter_init(int argc, char **argv, const char *classname)
 {
+    xcb_render_query_pict_formats_reply_t *pf = 0;
     if (c) return 0;
     c = xcb_connect(0, 0);
     if (xcb_connection_has_error(c))
@@ -103,11 +107,25 @@ int X11Adapter_init(int argc, char **argv, const char *classname)
 	goto error;
     }
 
+    xcb_render_query_version_cookie_t versioncookie =
+	xcb_render_query_version(c,
+		XCB_RENDER_MAJOR_VERSION, XCB_RENDER_MINOR_VERSION);
     xcb_intern_atom_cookie_t atomcookies[NATOMS];
     for (int i = 0; i < NATOMS; ++i)
     {
 	atomcookies[i] = xcb_intern_atom(c, 0, atomnm[i].len, atomnm[i].nm);
     }
+    xcb_render_query_version_reply_t *version =
+	xcb_render_query_version_reply(c, versioncookie, 0);
+    xcb_render_query_pict_formats_cookie_t formatscookie;
+    if (version)
+    {
+	formatscookie = xcb_render_query_pict_formats(c);
+	PSC_Log_fmt(PSC_L_DEBUG, "using XRender version %"PRIu32".%"PRIu32,
+		version->major_version, version->minor_version);
+	free(version);
+    }
+    else goto error;
     for (int i = 0; i < NATOMS; ++i)
     {
 	xcb_intern_atom_reply_t *atom = xcb_intern_atom_reply(c,
@@ -124,8 +142,75 @@ int X11Adapter_init(int argc, char **argv, const char *classname)
 	    goto error;
 	}
     }
+    pf = xcb_render_query_pict_formats_reply(c, formatscookie, 0);
+    if (!pf)
+    {
+	PSC_Log_msg(PSC_L_ERROR, "Could not query picture formats");
+	goto error;
+    }
 
     s = xcb_setup_roots_iterator(xcb_get_setup(c)).data;
+    xcb_render_pictscreen_iterator_t si =
+	xcb_render_query_pict_formats_screens_iterator(pf);
+    while (!rootformat && si.rem)
+    {
+	xcb_render_pictdepth_iterator_t di =
+	    xcb_render_pictscreen_depths_iterator(si.data);
+	while (!rootformat && di.rem)
+	{
+	    xcb_render_pictvisual_iterator_t vi =
+		xcb_render_pictdepth_visuals_iterator(di.data);
+	    while (!rootformat && vi.rem)
+	    {
+		if (vi.data->visual == s->root_visual)
+		{
+		    rootformat = vi.data->format;
+		}
+		xcb_render_pictvisual_next(&vi);
+	    }
+	    xcb_render_pictdepth_next(&di);
+	}
+	xcb_render_pictscreen_next(&si);
+    }
+    for (xcb_render_pictforminfo_iterator_t fi =
+	    xcb_render_query_pict_formats_formats_iterator(pf);
+	    fi.rem;
+	    xcb_render_pictforminfo_next(&fi))
+    {
+	if (fi.data->id == rootformat)
+	{
+	    if (fi.data->type == XCB_RENDER_PICT_TYPE_DIRECT
+		    && fi.data->depth >= 24)
+	    {
+		PSC_Log_fmt(PSC_L_DEBUG,
+			"Root visual picture format ok (DIRECT, %"PRIu32"bpp)",
+			fi.data->depth);
+	    }
+	    else
+	    {
+		PSC_Log_fmt(PSC_L_ERROR,
+			"Incompatible root visual format: %s, %"PRIu32"bpp",
+			fi.data->type == XCB_RENDER_PICT_TYPE_DIRECT ?
+			"DIRECT" : "INDEXED", fi.data->depth);
+		goto error;
+	    }
+	}
+	if (fi.data->type != XCB_RENDER_PICT_TYPE_DIRECT) continue;
+	if (fi.data->depth != 8) continue;
+	if (fi.data->direct.red_mask != 0) continue;
+	if (fi.data->direct.green_mask != 0) continue;
+	if (fi.data->direct.blue_mask != 0) continue;
+	if (fi.data->direct.alpha_mask != 255) continue;
+	alphaformat = fi.data->id;
+    }
+    if (!alphaformat)
+    {
+	PSC_Log_msg(PSC_L_ERROR, "No 8bit alpha format found");
+	goto error;
+    }
+    free(pf);
+    pf = 0;
+
     clientmsg = PSC_Event_create(0);
     nextReply = 0;
     waitingReplies = PSC_Queue_create();
@@ -195,8 +280,10 @@ int X11Adapter_init(int argc, char **argv, const char *classname)
     return 0;
 
 error:
+    free(pf);
     xcb_disconnect(c);
     c = 0;
+    s = 0;
     return -1;
 }
 
@@ -219,6 +306,16 @@ xcb_screen_t *X11Adapter_screen(void)
 xcb_atom_t X11Adapter_atom(XAtomId id)
 {
     return atoms[id];
+}
+
+xcb_render_pictformat_t X11Adapter_rootformat(void)
+{
+    return rootformat;
+}
+
+xcb_render_pictformat_t X11Adapter_alphaformat(void)
+{
+    return alphaformat;
 }
 
 PSC_Event *X11Adapter_clientmsg(void)
@@ -301,6 +398,8 @@ void X11Adapter_done(void)
     nextReply = 0;
     PSC_Event_destroy(clientmsg);
     clientmsg = 0;
+    rootformat = 0;
+    alphaformat = 0;
     xcb_disconnect(c);
     c = 0;
     s = 0;

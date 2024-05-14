@@ -2,7 +2,7 @@
 #define XMOJI_X11ADAPTER_H
 
 #include <poser/decl.h>
-#include <xcb/xcb.h>
+#include <xcb/render.h>
 
 C_CLASS_DECL(PSC_Event);
 
@@ -34,6 +34,8 @@ int X11Adapter_init(int argc, char **argv, const char *classname);
 xcb_connection_t *X11Adapter_connection(void);
 xcb_screen_t *X11Adapter_screen(void);
 xcb_atom_t X11Adapter_atom(XAtomId id);
+xcb_render_pictformat_t X11Adapter_rootformat(void);
+xcb_render_pictformat_t X11Adapter_alphaformat(void);
 PSC_Event *X11Adapter_clientmsg(void) ATTR_RETNONNULL;
 const char *X11Adapter_wmClass(size_t *sz) ATTR_RETNONNULL;
 char *X11Adapter_toLatin1(const char *utf8) ATTR_NONNULL((1)) ATTR_RETNONNULL;
