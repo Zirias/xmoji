@@ -1,8 +1,6 @@
 #include "font.h"
 
 #include <fontconfig/fontconfig.h>
-#include <ft2build.h>
-#include FT_FREETYPE_H
 #include <poser/core.h>
 #include <stdlib.h>
 #include <string.h>
@@ -13,6 +11,8 @@ int refcnt;
 struct Font
 {
     FT_Face face;
+    double pixelsize;
+    double fixedpixelsize;
 };
 
 int Font_init(void)
@@ -179,6 +179,11 @@ Font *Font_create(char **patterns)
     Font *self = PSC_malloc(sizeof *self);
     self->face = face;
     return self;
+}
+
+FT_Face Font_face(const Font *self)
+{
+    return self->face;
 }
 
 void Font_destroy(Font *self)

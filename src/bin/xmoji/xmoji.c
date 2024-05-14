@@ -1,15 +1,18 @@
 #include "xmoji.h"
 
 #include "font.h"
+#include "textrenderer.h"
 #include "window.h"
 #include "x11adapter.h"
 
+#include <inttypes.h>
 #include <poser/core.h>
 #include <stdio.h>
 #include <stdlib.h>
 
 static Font *sysfont;
 static Font *emojifont;
+static TextRenderer *text;
 static Window *win;
 
 static struct { int argc; char **argv; } startupargs;
@@ -21,6 +24,13 @@ static void onclose(void *receiver, void *sender, void *args)
     (void)args;
 
     PSC_Service_quit();
+}
+
+static void debugsize(void *ctx, uint32_t width, uint32_t height)
+{
+    (void)ctx;
+
+    PSC_Log_fmt(PSC_L_DEBUG, "Text size: %"PRIu32"x%"PRIu32, width, height);
 }
 
 static void onprestartup(void *receiver, void *sender, void *args)
@@ -37,6 +47,9 @@ static void onprestartup(void *receiver, void *sender, void *args)
     char *emojifontnames[] = { "Noto Color Emoji", "Noto Emoji", 0 };
     emojifont = Font_create(emojifontnames);
     if (!(win = Window_create())) goto error;
+
+    text = TextRenderer_fromUtf8(sysfont, "Hello world!");
+    TextRenderer_size(text, 0, debugsize);
 
     Window_setSize(win, 640, 200);
     Window_setTitle(win, "Xmoji 😀 äöüß");
@@ -63,6 +76,7 @@ static void onshutdown(void *receiver, void *sender, void *args)
     (void)sender;
     (void)args;
 
+    TextRenderer_destroy(text);
     Font_destroy(emojifont);
     emojifont = 0;
     Font_destroy(sysfont);
