@@ -12,12 +12,15 @@
 #define STR(x) _STR(x)
 #define X_SZNM(a) { sizeof STR(a) - 1, STR(a) },
 
-typedef struct X11ReplyHandler
+#define MAXWAITING 128
+
+typedef struct X11ReplyHandlerRecord
 {
     void (*handler)(void *ctx, void *reply, xcb_generic_error_t *error);
     void *ctx;
-    xcb_void_cookie_t cookie;
-} X11ReplyHandler;
+    unsigned sequence;
+    int noreply;
+} X11ReplyHandlerRecord;
 
 static const struct { int len; const char *nm; } atomnm[] = {
     X_ATOMS(X_SZNM)
@@ -29,69 +32,190 @@ static size_t wmclasssz;
 static xcb_connection_t *c;
 static xcb_screen_t *s;
 static PSC_Event *clientmsg;
-static X11ReplyHandler *nextReply;
-static PSC_Queue *waitingReplies;
+static PSC_Event *expose;
 static xcb_atom_t atoms[NATOMS];
 static xcb_render_pictformat_t rootformat;
 static xcb_render_pictformat_t alphaformat;
 static int fd;
 
-static X11ReplyHandler *X11ReplyHandler_create(void *cookie, void *ctx,
-	void (*handler)(void *, void *, xcb_generic_error_t *))
+static X11ReplyHandlerRecord waitingReplies[MAXWAITING];
+static unsigned waitingFront;
+static unsigned waitingBack;
+static unsigned waitingNum;
+static unsigned waitingNoreply;
+
+static int syncreq;
+
+static int enqueueWaiting(unsigned sequence, int noreply, void *ctx,
+	X11ReplyHandler handler)
 {
-    X11ReplyHandler *self = PSC_malloc(sizeof *self);
-    self->handler = handler;
-    self->ctx = ctx;
-    self->cookie.sequence = ((xcb_void_cookie_t *)cookie)->sequence;
-    return self;
+    if (waitingNum == MAXWAITING) return -1;
+    waitingReplies[waitingBack].handler = handler;
+    waitingReplies[waitingBack].ctx = ctx;
+    waitingReplies[waitingBack].sequence = sequence;
+    waitingReplies[waitingBack].noreply = noreply;
+    if (++waitingBack == MAXWAITING) waitingBack = 0;
+    ++waitingNum;
+    if (noreply) ++waitingNoreply;
+    return 0;
 }
 
-static void readEvents(void *receiver, void *sender, void *args)
+static void removeFirstWaiting(void)
+{
+    if (!waitingNum) return;
+    --waitingNum;
+    if (waitingReplies[waitingFront].noreply) --waitingNoreply;
+    if (++waitingFront == MAXWAITING) waitingFront = 0;
+}
+
+static void removeWaitingBefore(unsigned sequence)
+{
+    while (waitingNum)
+    {
+	unsigned currentseq = waitingReplies[waitingFront].sequence;
+	if ((int)(sequence - currentseq) <= 0) return;
+	PSC_Log_fmt(PSC_L_DEBUG, "Discard reply: %u", currentseq);
+	waitingReplies[waitingFront].handler(
+		waitingReplies[waitingFront].ctx, 0, 0);
+	--waitingNum;
+	if (++waitingFront == MAXWAITING) waitingFront = 0;
+    }
+}
+
+static void handleX11Event(xcb_generic_event_t *ev)
+{
+    switch (ev->response_type & 0x7f)
+    {
+	case XCB_CLIENT_MESSAGE:
+	    PSC_Event_raise(clientmsg,
+		    ((xcb_client_message_event_t *)ev)->window, ev);
+	    break;
+
+	case XCB_EXPOSE:
+	    PSC_Event_raise(expose,
+		    ((xcb_expose_event_t *)ev)->window, ev);
+	    break;
+
+	default:
+	    PSC_Log_fmt(PSC_L_DEBUG, "Unhandled event type %hhu: %u",
+		    ev->response_type & 0x7fU, ev->sequence);
+	    break;
+    }
+    free(ev);
+}
+
+static void readX11Input(void *receiver, void *sender, void *args)
 {
     (void)receiver;
     (void)sender;
     (void)args;
 
-    xcb_generic_event_t *ev = 0;
-
-    if (nextReply)
+    int handled = 1;
+    while (handled)
     {
-	void *reply = 0;
-        xcb_generic_error_t *error = 0;
+	handled = 0;
+	xcb_generic_event_t *ev = xcb_poll_for_event(c);
 
-	while (xcb_poll_for_reply(c, nextReply->cookie.sequence,
-		    &reply, &error))
+	while (waitingNum)
 	{
-	    nextReply->handler(nextReply->ctx, reply, error);
-	    free(reply);
-	    free(error);
-	    free(nextReply);
-	    nextReply = PSC_Queue_dequeue(waitingReplies);
-	    if (!nextReply) break;
+	    if (ev && ev->response_type == 0)
+	    {
+		if (ev->sequence == waitingReplies[waitingFront].sequence)
+		{
+		    PSC_Log_fmt(PSC_L_DEBUG, "Received error: %u",
+			    ev->sequence);
+		    waitingReplies[waitingFront].handler(
+			    waitingReplies[waitingFront].ctx, 0,
+			    (xcb_generic_error_t *)ev);
+		    free(ev);
+		    ev = xcb_poll_for_event(c);
+		    handled = 1;
+		    removeFirstWaiting();
+		    continue;
+		}
+		if ((int)(waitingReplies[waitingFront].sequence
+			    - ev->sequence) > 0)
+		{
+		    PSC_Log_fmt(PSC_L_WARNING, "Unhandled X11 error %d: %u",
+			    ((xcb_generic_error_t *)ev)->error_code,
+			    ev->sequence);
+		    free(ev);
+		    ev = xcb_poll_for_event(c);
+		    handled = 1;
+		    continue;
+		}
+	    }
+
+	    void *reply = 0;
+	    xcb_generic_error_t *error = 0;
+	    if (xcb_poll_for_reply(c,
+			waitingReplies[waitingFront].sequence,
+			&reply, &error))
+	    {
+		if (reply)
+		{
+		    PSC_Log_fmt(PSC_L_DEBUG, "Received reply: %u",
+			    waitingReplies[waitingFront].sequence);
+		}
+		else if (error)
+		{
+		    PSC_Log_fmt(PSC_L_DEBUG, "Received error: %u",
+			    waitingReplies[waitingFront].sequence);
+		}
+		else
+		{
+		    PSC_Log_fmt(PSC_L_DEBUG, "Confirmed request: %u",
+			    waitingReplies[waitingFront].sequence);
+		}
+		waitingReplies[waitingFront].handler(
+			waitingReplies[waitingFront].ctx, reply, error);
+		free(reply);
+		free(error);
+		handled = 1;
+	    }
+	    else break;
+	    removeFirstWaiting();
 	}
-
-	ev = xcb_poll_for_queued_event(c);
+	if (ev)
+	{
+	    removeWaitingBefore(ev->sequence);
+	    handleX11Event(ev);
+	    handled = 1;
+	}
     }
-    else ev = xcb_poll_for_event(c);
+}
 
-    while (ev)
+static void sync_cb(void *ctx, void *reply, xcb_generic_error_t *error)
+{
+    (void)ctx;
+    (void)error;
+
+    if (!reply)
     {
-	switch (ev->response_type & 0x7f)
-	{
-	    case XCB_CLIENT_MESSAGE:
-		PSC_Event_raise(clientmsg,
-			((xcb_client_message_event_t *)ev)->window, ev);
-		break;
-
-	    default:
-		break;
-	}
-
-	free(ev);
-	ev = xcb_poll_for_queued_event(c);
+	PSC_Log_setAsync(0);
+	PSC_Log_msg(PSC_L_ERROR, "X11 sync failed");
+	PSC_Service_quit();
     }
 
-    xcb_flush(c);
+    syncreq = 0;
+    PSC_Log_msg(PSC_L_DEBUG, "X11 connection synced");
+}
+
+static void flushXcb(void *receiver, void *sender, void *args)
+{
+    (void)receiver;
+    (void)sender;
+    (void)args;
+
+    if (waitingNum)
+    {
+	if (waitingNoreply && !syncreq)
+	{
+	    syncreq = 1;
+	    AWAIT(xcb_get_input_focus(c), 0, sync_cb);
+	}
+	xcb_flush(c);
+    }
 }
 
 int X11Adapter_init(int argc, char **argv, const char *classname)
@@ -212,10 +336,10 @@ int X11Adapter_init(int argc, char **argv, const char *classname)
     pf = 0;
 
     clientmsg = PSC_Event_create(0);
-    nextReply = 0;
-    waitingReplies = PSC_Queue_create();
+    expose = PSC_Event_create(0);
     fd = xcb_get_file_descriptor(c);
-    PSC_Event_register(PSC_Service_readyRead(), 0, readEvents, fd);
+    PSC_Event_register(PSC_Service_readyRead(), 0, readX11Input, fd);
+    PSC_Event_register(PSC_Service_eventsDone(), 0, flushXcb, 0);
     PSC_Service_registerRead(fd);
 
     char *lc = setlocale(LC_ALL, "");
@@ -323,18 +447,39 @@ PSC_Event *X11Adapter_clientmsg(void)
     return clientmsg;
 }
 
+PSC_Event *X11Adapter_expose(void)
+{
+    return expose;
+}
+
 const char *X11Adapter_wmClass(size_t *sz)
 {
     if (sz) *sz = wmclasssz;
     return wmclass;
 }
 
-void X11Adapter_await(void *cookie, void *ctx,
-	void (*handler)(void *ctx, void *reply, xcb_generic_error_t *error))
+static void await(unsigned sequence, int noreply, void *ctx,
+	X11ReplyHandler handler)
 {
-    X11ReplyHandler *rh = X11ReplyHandler_create(cookie, ctx, handler);
-    if (nextReply) PSC_Queue_enqueue(waitingReplies, rh, free);
-    else nextReply = rh;
+    if (enqueueWaiting(sequence, noreply, ctx, handler) < 0)
+    {
+	PSC_Log_setAsync(0);
+	PSC_Log_msg(PSC_L_ERROR, "Reply queue is full");
+	PSC_Service_quit();
+    }
+    if (noreply) PSC_Log_fmt(PSC_L_DEBUG, "Awaiting Request: %u", sequence);
+    else PSC_Log_fmt(PSC_L_DEBUG, "Awaiting Reply: %u", sequence);
+}
+
+void X11Adapter_await(unsigned sequence, void *ctx, X11ReplyHandler handler)
+{
+    await(sequence, 0, ctx, handler);
+}
+
+void X11Adapter_awaitNoreply(unsigned sequence, void *ctx,
+	X11ReplyHandler handler)
+{
+    await(sequence, 1, ctx, handler);
 }
 
 char *X11Adapter_toLatin1(const char *utf8)
@@ -382,6 +527,7 @@ char *X11Adapter_toLatin1(const char *utf8)
 	if (f || uc > 0xff) *out = '?';
 	else *out = uc;
     }
+    *out = 0;
 
     return latin1;
 }
@@ -389,13 +535,14 @@ char *X11Adapter_toLatin1(const char *utf8)
 void X11Adapter_done(void)
 {
     if (!c) return;
+    PSC_Event_unregister(PSC_Service_eventsDone(), 0, flushXcb, 0);
     PSC_Service_unregisterRead(fd);
-    PSC_Event_unregister(PSC_Service_readyRead(), 0, readEvents, fd);
+    PSC_Event_unregister(PSC_Service_readyRead(), 0, readX11Input, fd);
     fd = 0;
-    PSC_Queue_destroy(waitingReplies);
-    waitingReplies = 0;
-    free(nextReply);
-    nextReply = 0;
+    waitingFront = 0;
+    waitingBack = 0;
+    waitingNum = 0;
+    PSC_Event_destroy(expose);
     PSC_Event_destroy(clientmsg);
     clientmsg = 0;
     rootformat = 0;

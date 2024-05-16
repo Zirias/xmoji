@@ -27,7 +27,14 @@ typedef enum XAtomId
     NATOMS
 } XAtomId;
 
+typedef void (*X11ReplyHandler)(void *ctx, void *reply,
+	xcb_generic_error_t *error);
+
 #define A(x) (X11Adapter_atom(x))
+#define AWAIT(x,c,h) (_Generic((x), \
+	    xcb_void_cookie_t: X11Adapter_awaitNoreply, \
+	    default: X11Adapter_await \
+	)((x).sequence, c, h))
 
 int X11Adapter_init(int argc, char **argv, const char *classname);
 
@@ -37,12 +44,15 @@ xcb_atom_t X11Adapter_atom(XAtomId id);
 xcb_render_pictformat_t X11Adapter_rootformat(void);
 xcb_render_pictformat_t X11Adapter_alphaformat(void);
 PSC_Event *X11Adapter_clientmsg(void) ATTR_RETNONNULL;
+PSC_Event *X11Adapter_expose(void) ATTR_RETNONNULL;
 const char *X11Adapter_wmClass(size_t *sz) ATTR_RETNONNULL;
 char *X11Adapter_toLatin1(const char *utf8) ATTR_NONNULL((1)) ATTR_RETNONNULL;
 
-void X11Adapter_await(void *cookie, void *ctx,
-	void (*handler)(void *ctx, void *reply, xcb_generic_error_t *error))
-    ATTR_NONNULL((2));
+void X11Adapter_await(unsigned sequence, void *ctx, X11ReplyHandler handler)
+    ATTR_NONNULL((3));
+void X11Adapter_awaitNoreply(unsigned sequence, void *ctx,
+	X11ReplyHandler handler)
+    ATTR_NONNULL((3));
 
 void X11Adapter_done(void);
 

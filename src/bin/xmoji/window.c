@@ -1,5 +1,7 @@
 #include "window.h"
 
+#include "textrenderer.h"
+#include "xmoji.h"
 #include "x11adapter.h"
 
 #include <poser/core.h>
@@ -20,7 +22,17 @@ struct Window
     xcb_window_t w;
     uint32_t width;
     uint32_t height;
+    TextRenderer *hello;
 };
+
+static void expose(void *receiver, void *sender, void *args)
+{
+    (void)sender;
+    (void)args;
+
+    Window *self = receiver;
+    TextRenderer_render(self->hello, self->w, 0, 0);
+}
 
 static void clientmsg(void *receiver, void *sender, void *args)
 {
@@ -92,12 +104,25 @@ static void set_windowtype_cb(void *ctx, void *reply,
     }
 }
 
+static void map_window_cb(void *ctx, void *reply,
+	xcb_generic_error_t *error)
+{
+    (void)ctx;
+    (void)reply;
+
+    if (error)
+    {
+	PSC_Log_setAsync(0);
+	PSC_Log_msg(PSC_L_ERROR, "Cannot map window");
+	PSC_Service_quit();
+    }
+}
+
 static int show(void *window)
 {
     Window *self = window;
-    xcb_connection_t *c = X11Adapter_connection();
-    xcb_map_window(c, self->w);
-    xcb_flush(c);
+    AWAIT(xcb_map_window(X11Adapter_connection(), self->w),
+	    self, map_window_cb);
     return 0;
 }
 
@@ -110,6 +135,9 @@ static int hide(void *window)
 static void destroy(void *window)
 {
     Window *self = window;
+    TextRenderer_destroy(self->hello);
+    PSC_Event_unregister(X11Adapter_expose(), self,
+	    expose, self->w);
     PSC_Event_unregister(X11Adapter_clientmsg(), self,
 	    clientmsg, self->w);
     PSC_Event_destroy(self->closed);
@@ -140,29 +168,31 @@ Window *Window_create(void)
     self->height = 200;
 
     uint32_t mask = XCB_CW_BACK_PIXEL | XCB_CW_EVENT_MASK;
-    uint32_t values[] = { s->white_pixel, XCB_EVENT_MASK_STRUCTURE_NOTIFY };
+    uint32_t values[] = { s->white_pixel,
+	XCB_EVENT_MASK_EXPOSURE | XCB_EVENT_MASK_STRUCTURE_NOTIFY };
 
-    xcb_void_cookie_t cookie;
-    cookie = xcb_create_window_checked(c, XCB_COPY_FROM_PARENT, w, s->root,
-	    0, 0, self->width, self->height, 2, XCB_WINDOW_CLASS_INPUT_OUTPUT,
-	    s->root_visual, mask, values);
-    X11Adapter_await(&cookie, self, create_window_cb);
+    AWAIT(xcb_create_window(c, XCB_COPY_FROM_PARENT, w, s->root,
+		0, 0, self->width, self->height, 2,
+		XCB_WINDOW_CLASS_INPUT_OUTPUT, s->root_visual, mask, values),
+	    self, create_window_cb);
     xcb_atom_t delwin = A(WM_DELETE_WINDOW);
-    cookie = xcb_change_property_checked(c, XCB_PROP_MODE_REPLACE, w,
-	    A(WM_PROTOCOLS), 4, 32, 1, &delwin);
-    X11Adapter_await(&cookie, self, set_protocol_cb);
+    AWAIT(xcb_change_property(c, XCB_PROP_MODE_REPLACE, w,
+		A(WM_PROTOCOLS), 4, 32, 1, &delwin),
+	    self, set_protocol_cb);
     size_t sz;
     const char *wmclass = X11Adapter_wmClass(&sz);
-    cookie = xcb_change_property_checked(c, XCB_PROP_MODE_REPLACE, w,
-	    XCB_ATOM_WM_CLASS, XCB_ATOM_STRING, 8, sz, wmclass);
-    X11Adapter_await(&cookie, self, set_windowclass_cb);
+    AWAIT(xcb_change_property(c, XCB_PROP_MODE_REPLACE, w,
+		XCB_ATOM_WM_CLASS, XCB_ATOM_STRING, 8, sz, wmclass),
+	    self, set_windowclass_cb);
     xcb_atom_t wtnorm = A(_NET_WM_WINDOW_TYPE_NORMAL);
-    cookie = xcb_change_property_checked(c, XCB_PROP_MODE_REPLACE, w,
-	    A(_NET_WM_WINDOW_TYPE), 4, 32, 1, &wtnorm);
-    X11Adapter_await(&cookie, self, set_windowtype_cb);
+    AWAIT(xcb_change_property(c, XCB_PROP_MODE_REPLACE, w,
+		A(_NET_WM_WINDOW_TYPE), 4, 32, 1, &wtnorm),
+	    self, set_windowtype_cb);
 
     PSC_Event_register(X11Adapter_clientmsg(), self, clientmsg, w);
+    PSC_Event_register(X11Adapter_expose(), self, expose, w);
 
+    self->hello = TextRenderer_fromUtf8(Xmoji_sysfont(), "Hello, World!");
     return self;
 }
 
@@ -216,7 +246,6 @@ void Window_setSize(void *self, uint32_t width, uint32_t height)
     {
 	xcb_connection_t *c = X11Adapter_connection();
 	xcb_configure_window(c, w->w, mask, values);
-	xcb_flush(c);
     }
 }
 
@@ -248,6 +277,5 @@ void Window_setTitle(void *self, const char *title)
 	w->title = 0;
 	xcb_delete_property(c, w->w, XCB_ATOM_WM_NAME);
     }
-    xcb_flush(c);
 }
 
