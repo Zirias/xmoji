@@ -31,12 +31,11 @@ struct Window
 static void drawbg_cb(void *ctx, unsigned sequence,
 	void *reply, xcb_generic_error_t *error)
 {
+    (void)ctx;
     (void)sequence;
     (void)reply;
 
-    Window *self = ctx;
     if (error) PSC_Log_msg(PSC_L_ERROR, "Cannot draw window background");
-    TextRenderer_render(self->hello, self->w, 0, 0);
 }
 
 static void expose(void *receiver, void *sender, void *args)
@@ -49,6 +48,7 @@ static void expose(void *receiver, void *sender, void *args)
 		XCB_RENDER_PICT_OP_OVER, self->p, self->bgcol, 1,
 		&self->windowrect),
 	    self, drawbg_cb);
+    TextRenderer_render(self->hello, self->w, 0, 0);
 }
 
 static void clientmsg(void *receiver, void *sender, void *args)
@@ -201,9 +201,9 @@ Window *Window_create(void)
     self->closed = PSC_Event_create(self);
     self->title = 0;
     self->w = w;
-    self->bgcol.red = 0xffff;
-    self->bgcol.green = 0xffff;
-    self->bgcol.blue = 0xffff;
+    self->bgcol.red = 0xb000;
+    self->bgcol.green = 0xb000;
+    self->bgcol.blue = 0xb000;
     self->bgcol.alpha = 0xffff;
     self->windowrect.x = 0;
     self->windowrect.y = 0;

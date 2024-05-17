@@ -27,10 +27,18 @@ typedef struct RenderContext
     void *cbctx;
     TR_render_cb cb;
     xcb_drawable_t drawable;
-    xcb_pixmap_t src;
     xcb_render_picture_t pic;
     xcb_render_picture_t srcpic;
     int awaiting;
+    unsigned len;
+    struct {
+	uint8_t count;
+	uint8_t pad0[3];
+	int16_t dx;
+	int16_t dy;
+	uint16_t glyphid;
+	uint8_t pad1[2];
+    } glyphs[];
 } RenderContext;
 
 static void doshape(void *tr)
@@ -142,48 +150,36 @@ static void dorender(void *ctx, unsigned sequence,
 	{
 	    xcb_render_free_picture(c, rctx->srcpic);
 	    xcb_render_free_picture(c, rctx->pic);
-	    xcb_free_pixmap(c, rctx->src);
 	    free(rctx);
 	}
 	return;
     }
-    unsigned len = hb_buffer_get_length(rctx->renderer->hbbuffer);
     hb_glyph_info_t *info = hb_buffer_get_glyph_infos(
 	    rctx->renderer->hbbuffer, 0);
     hb_glyph_position_t *pos = hb_buffer_get_glyph_positions(
 	    rctx->renderer->hbbuffer, 0);
-    struct glyphitem {
-	uint8_t count;
-	uint8_t pad0[3];
-	int16_t dx;
-	int16_t dy;
-	uint16_t glyphid;
-	uint8_t pad1[2];
-    } *glyphs = PSC_malloc(len * sizeof *glyphs);
-    memset(glyphs, 0, len * sizeof *glyphs);
     uint32_t x = 0;
     uint32_t y = (Font_pixelsize(rctx->renderer->font) + .5) * 64.;
     uint16_t rx = 0;
     uint16_t ry = 0;
     uint16_t prx = 0;
     uint16_t pry = 0;
-    for (unsigned i = 0; i < len; ++i)
+    for (unsigned i = 0; i < rctx->len; ++i)
     {
 	rx = (x + 0x20) >> 6;
 	ry = (y + 0x20) >> 6;
 	Font_uploadGlyph(rctx->renderer->font, info[i].codepoint);
-	glyphs[i].count = 1;
-	glyphs[i].dx = rx - prx + ((pos[i].x_offset + 0x20) >> 6);
-	glyphs[i].dy = ry - pry + ((pos[i].y_offset + 0x20) >> 6);
-	glyphs[i].glyphid = info[i].codepoint;
+	rctx->glyphs[i].count = 1;
+	rctx->glyphs[i].dx = rx - prx + ((pos[i].x_offset + 0x20) >> 6);
+	rctx->glyphs[i].dy = ry - pry + ((pos[i].y_offset + 0x20) >> 6);
+	rctx->glyphs[i].glyphid = info[i].codepoint;
 	prx = rx;
 	pry = ry;
 	x += pos[i].x_advance;
 	y += pos[i].y_advance;
     }
-    rctx->src = xcb_generate_id(c);
-    AWAIT(xcb_create_pixmap(c, 32, rctx->src,
-		X11Adapter_screen()->root, 1, 1),
+    xcb_pixmap_t src = xcb_generate_id(c);
+    AWAIT(xcb_create_pixmap(c, 32, src, X11Adapter_screen()->root, 1, 1),
 	    rctx, dorender);
     ++rctx->awaiting;
     rctx->pic = xcb_generate_id(c);
@@ -198,23 +194,24 @@ static void dorender(void *ctx, unsigned sequence,
     ++rctx->awaiting;
     rctx->srcpic = xcb_generate_id(c);
     values[0] = XCB_RENDER_REPEAT_NORMAL;
-    AWAIT(xcb_render_create_picture(c, rctx->srcpic, rctx->src,
+    AWAIT(xcb_render_create_picture(c, rctx->srcpic, src,
 		X11Adapter_argbformat(), XCB_RENDER_CP_REPEAT, values),
 	    rctx, dorender);
     ++rctx->awaiting;
-    xcb_render_color_t black = { 0xffff, 0, 0, 0 };
+    xcb_render_color_t black = { 0, 0, 0, 0xffff };
     xcb_rectangle_t rect = { 0, 0, 1, 1 };
     AWAIT(xcb_render_fill_rectangles(c, XCB_RENDER_PICT_OP_OVER,
 		rctx->srcpic, black, 1, &rect),
 	    rctx, dorender);
     ++rctx->awaiting;
+    xcb_free_pixmap(c, src);
     AWAIT(xcb_render_composite_glyphs_16(c, XCB_RENDER_PICT_OP_OVER,
 		rctx->srcpic, rctx->pic, 0,
 		Font_glyphset(rctx->renderer->font), 0, 0,
-		len * sizeof *glyphs, (const uint8_t *)glyphs),
+		rctx->len * sizeof *rctx->glyphs,
+		(const uint8_t *)rctx->glyphs),
 	    rctx, dorender);
     ++rctx->awaiting;
-    free(glyphs);
 }
 
 static void doshapedone(void *receiver, void *sender, void *args)
@@ -229,12 +226,15 @@ static void doshapedone(void *receiver, void *sender, void *args)
 void TextRenderer_render(TextRenderer *self, xcb_drawable_t drawable,
 	void *ctx, TR_render_cb cb)
 {
-    RenderContext *rctx = PSC_malloc(sizeof *rctx);
+    unsigned len = hb_buffer_get_length(self->hbbuffer);
+    RenderContext *rctx = PSC_malloc(sizeof *rctx
+	    + len * sizeof *rctx->glyphs);
     memset(rctx, 0, sizeof *rctx);
     rctx->renderer = self;
     rctx->cbctx = ctx;
     rctx->cb = cb;
     rctx->drawable = drawable;
+    rctx->len = len;
 
     if (self->shaped) dorender(rctx, 0, 0, 0);
     else

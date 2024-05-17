@@ -334,8 +334,11 @@ int X11Adapter_init(int argc, char **argv, const char *classname)
 	}
 	else if (fi.data->depth == 32)
 	{
+	    if (fi.data->direct.red_shift != 16) continue;
 	    if (fi.data->direct.red_mask != 255) continue;
+	    if (fi.data->direct.green_shift != 8) continue;
 	    if (fi.data->direct.green_mask != 255) continue;
+	    if (fi.data->direct.blue_shift != 0) continue;
 	    if (fi.data->direct.blue_mask != 255) continue;
 	    argbformat = fi.data->id;
 	}
