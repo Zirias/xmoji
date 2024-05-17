@@ -16,7 +16,7 @@
 
 typedef struct X11ReplyHandlerRecord
 {
-    void (*handler)(void *ctx, void *reply, xcb_generic_error_t *error);
+    X11ReplyHandler handler;
     void *ctx;
     unsigned sequence;
     int noreply;
@@ -77,7 +77,7 @@ static void removeWaitingBefore(unsigned sequence)
 	if ((int)(sequence - currentseq) <= 0) return;
 	PSC_Log_fmt(PSC_L_DEBUG, "Discard reply: %u", currentseq);
 	waitingReplies[waitingFront].handler(
-		waitingReplies[waitingFront].ctx, 0, 0);
+		waitingReplies[waitingFront].ctx, currentseq, 0, 0);
 	--waitingNum;
 	if (++waitingFront == MAXWAITING) waitingFront = 0;
     }
@@ -126,7 +126,7 @@ static void readX11Input(void *receiver, void *sender, void *args)
 		    PSC_Log_fmt(PSC_L_DEBUG, "Received error: %u",
 			    ev->sequence);
 		    waitingReplies[waitingFront].handler(
-			    waitingReplies[waitingFront].ctx, 0,
+			    waitingReplies[waitingFront].ctx, ev->sequence, 0,
 			    (xcb_generic_error_t *)ev);
 		    free(ev);
 		    ev = xcb_poll_for_event(c);
@@ -169,7 +169,8 @@ static void readX11Input(void *receiver, void *sender, void *args)
 			    waitingReplies[waitingFront].sequence);
 		}
 		waitingReplies[waitingFront].handler(
-			waitingReplies[waitingFront].ctx, reply, error);
+			waitingReplies[waitingFront].ctx,
+			waitingReplies[waitingFront].sequence, reply, error);
 		free(reply);
 		free(error);
 		handled = 1;
@@ -186,9 +187,11 @@ static void readX11Input(void *receiver, void *sender, void *args)
     }
 }
 
-static void sync_cb(void *ctx, void *reply, xcb_generic_error_t *error)
+static void sync_cb(void *ctx, unsigned sequence,
+	void *reply, xcb_generic_error_t *error)
 {
     (void)ctx;
+    (void)sequence;
     (void)error;
 
     if (!reply)
@@ -478,7 +481,7 @@ const char *X11Adapter_wmClass(size_t *sz)
     return wmclass;
 }
 
-static void await(unsigned sequence, int noreply, void *ctx,
+static unsigned await(unsigned sequence, int noreply, void *ctx,
 	X11ReplyHandler handler)
 {
     if (enqueueWaiting(sequence, noreply, ctx, handler) < 0)
@@ -489,17 +492,19 @@ static void await(unsigned sequence, int noreply, void *ctx,
     }
     if (noreply) PSC_Log_fmt(PSC_L_DEBUG, "Awaiting Request: %u", sequence);
     else PSC_Log_fmt(PSC_L_DEBUG, "Awaiting Reply: %u", sequence);
+    return sequence;
 }
 
-void X11Adapter_await(unsigned sequence, void *ctx, X11ReplyHandler handler)
-{
-    await(sequence, 0, ctx, handler);
-}
-
-void X11Adapter_awaitNoreply(unsigned sequence, void *ctx,
+unsigned X11Adapter_await(unsigned sequence, void *ctx,
 	X11ReplyHandler handler)
 {
-    await(sequence, 1, ctx, handler);
+    return await(sequence, 0, ctx, handler);
+}
+
+unsigned X11Adapter_awaitNoreply(unsigned sequence, void *ctx,
+	X11ReplyHandler handler)
+{
+    return await(sequence, 1, ctx, handler);
 }
 
 char *X11Adapter_toLatin1(const char *utf8)

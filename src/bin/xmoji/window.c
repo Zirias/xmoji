@@ -28,8 +28,10 @@ struct Window
     TextRenderer *hello;
 };
 
-static void drawbg_cb(void *ctx, void *reply, xcb_generic_error_t *error)
+static void drawbg_cb(void *ctx, unsigned sequence,
+	void *reply, xcb_generic_error_t *error)
 {
+    (void)sequence;
     (void)reply;
 
     Window *self = ctx;
@@ -62,10 +64,11 @@ static void clientmsg(void *receiver, void *sender, void *args)
     }
 }
 
-static void create_window_cb(void *ctx, void *reply,
-	xcb_generic_error_t *error)
+static void create_window_cb(void *ctx, unsigned sequence,
+	void *reply, xcb_generic_error_t *error)
 {
     (void)ctx;
+    (void)sequence;
     (void)reply;
 
     if (error)
@@ -76,10 +79,11 @@ static void create_window_cb(void *ctx, void *reply,
     }
 }
 
-static void create_picture_cb(void *ctx, void *reply,
-	xcb_generic_error_t *error)
+static void create_picture_cb(void *ctx, unsigned sequence,
+	void *reply, xcb_generic_error_t *error)
 {
     (void)ctx;
+    (void)sequence;
     (void)reply;
 
     if (error)
@@ -90,10 +94,11 @@ static void create_picture_cb(void *ctx, void *reply,
     }
 }
 
-static void set_windowclass_cb(void *ctx, void *reply,
-	xcb_generic_error_t *error)
+static void set_windowclass_cb(void *ctx, unsigned sequence,
+	void *reply, xcb_generic_error_t *error)
 {
     (void)ctx;
+    (void)sequence;
     (void)reply;
 
     if (error)
@@ -104,10 +109,11 @@ static void set_windowclass_cb(void *ctx, void *reply,
     }
 }
 
-static void set_protocol_cb(void *ctx, void *reply,
-	xcb_generic_error_t *error)
+static void set_protocol_cb(void *ctx, unsigned sequence,
+	void *reply, xcb_generic_error_t *error)
 {
     (void)ctx;
+    (void)sequence;
     (void)reply;
 
     if (error)
@@ -119,10 +125,11 @@ static void set_protocol_cb(void *ctx, void *reply,
     }
 }
 
-static void set_windowtype_cb(void *ctx, void *reply,
-	xcb_generic_error_t *error)
+static void set_windowtype_cb(void *ctx, unsigned sequence,
+	void *reply, xcb_generic_error_t *error)
 {
     (void)ctx;
+    (void)sequence;
     (void)reply;
 
     if (error)
@@ -133,10 +140,11 @@ static void set_windowtype_cb(void *ctx, void *reply,
     }
 }
 
-static void map_window_cb(void *ctx, void *reply,
-	xcb_generic_error_t *error)
+static void map_window_cb(void *ctx, unsigned sequence,
+	void *reply, xcb_generic_error_t *error)
 {
     (void)ctx;
+    (void)sequence;
     (void)reply;
 
     if (error)

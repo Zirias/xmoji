@@ -124,8 +124,10 @@ int TextRenderer_size(TextRenderer *self, void *ctx, TR_size_cb cb)
     return 0;
 }
 
-static void dorender(void *ctx, void *reply, xcb_generic_error_t *error)
+static void dorender(void *ctx, unsigned sequence,
+	void *reply, xcb_generic_error_t *error)
 {
+    (void)sequence;
     (void)reply;
 
     RenderContext *rctx = ctx;
@@ -135,7 +137,6 @@ static void dorender(void *ctx, void *reply, xcb_generic_error_t *error)
 	if (error)
 	{
 	    PSC_Log_msg(PSC_L_ERROR, "Could not render text.");
-	    return;
 	}
 	if (!--rctx->awaiting)
 	{
@@ -172,8 +173,8 @@ static void dorender(void *ctx, void *reply, xcb_generic_error_t *error)
 	ry = (y + 0x20) >> 6;
 	Font_uploadGlyph(rctx->renderer->font, info[i].codepoint);
 	glyphs[i].count = 1;
-	glyphs[i].dx = rx - prx + (pos[i].x_offset >> 6);
-	glyphs[i].dy = ry - pry + (pos[i].y_offset >> 6);
+	glyphs[i].dx = rx - prx + ((pos[i].x_offset + 0x20) >> 6);
+	glyphs[i].dy = ry - pry + ((pos[i].y_offset + 0x20) >> 6);
 	glyphs[i].glyphid = info[i].codepoint;
 	prx = rx;
 	pry = ry;
@@ -222,7 +223,7 @@ static void doshapedone(void *receiver, void *sender, void *args)
     (void)args;
 
     RenderContext *rctx = receiver;
-    dorender(rctx, 0, 0);
+    dorender(rctx, 0, 0, 0);
 }
 
 void TextRenderer_render(TextRenderer *self, xcb_drawable_t drawable,
@@ -235,10 +236,10 @@ void TextRenderer_render(TextRenderer *self, xcb_drawable_t drawable,
     rctx->cb = cb;
     rctx->drawable = drawable;
 
-    if (self->shaped) dorender(rctx, 0, 0);
+    if (self->shaped) dorender(rctx, 0, 0, 0);
     else
     {
-	PSC_ThreadJob *shapejob = PSC_ThreadJob_create(getsizejob, self, 0);
+	PSC_ThreadJob *shapejob = PSC_ThreadJob_create(doshape, self, 0);
 	PSC_Event_register(PSC_ThreadJob_finished(shapejob), rctx,
 		doshapedone, 0);
 	PSC_ThreadPool_enqueue(shapejob);

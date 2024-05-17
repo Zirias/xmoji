@@ -60,9 +60,10 @@ void Font_done(void)
     FcFini();
 }
 
-static void create_glyphset_cb(void *ctx, void *reply,
-	xcb_generic_error_t *error)
+static void create_glyphset_cb(void *ctx, unsigned sequence,
+	void *reply, xcb_generic_error_t *error)
 {
+    (void)sequence;
     (void)reply;
 
     OutlineFont *of = ctx;
@@ -73,8 +74,10 @@ static void create_glyphset_cb(void *ctx, void *reply,
     }
 }
 
-static void add_glyph_cb(void *ctx, void *reply, xcb_generic_error_t *error)
+static void add_glyph_cb(void *ctx, unsigned sequence,
+	void *reply, xcb_generic_error_t *error)
 {
+    (void)sequence;
     (void)reply;
 
     UploadCtx *uc = ctx;
