@@ -43,6 +43,7 @@ xcb_screen_t *X11Adapter_screen(void);
 xcb_atom_t X11Adapter_atom(XAtomId id);
 xcb_render_pictformat_t X11Adapter_rootformat(void);
 xcb_render_pictformat_t X11Adapter_alphaformat(void);
+xcb_render_pictformat_t X11Adapter_argbformat(void);
 PSC_Event *X11Adapter_clientmsg(void) ATTR_RETNONNULL;
 PSC_Event *X11Adapter_expose(void) ATTR_RETNONNULL;
 const char *X11Adapter_wmClass(size_t *sz) ATTR_RETNONNULL;

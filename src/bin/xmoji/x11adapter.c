@@ -36,6 +36,7 @@ static PSC_Event *expose;
 static xcb_atom_t atoms[NATOMS];
 static xcb_render_pictformat_t rootformat;
 static xcb_render_pictformat_t alphaformat;
+static xcb_render_pictformat_t argbformat;
 static int fd;
 
 static X11ReplyHandlerRecord waitingReplies[MAXWAITING];
@@ -320,16 +321,30 @@ int X11Adapter_init(int argc, char **argv, const char *classname)
 	    }
 	}
 	if (fi.data->type != XCB_RENDER_PICT_TYPE_DIRECT) continue;
-	if (fi.data->depth != 8) continue;
-	if (fi.data->direct.red_mask != 0) continue;
-	if (fi.data->direct.green_mask != 0) continue;
-	if (fi.data->direct.blue_mask != 0) continue;
 	if (fi.data->direct.alpha_mask != 255) continue;
-	alphaformat = fi.data->id;
+	if (fi.data->depth == 8)
+	{
+	    if (fi.data->direct.red_mask != 0) continue;
+	    if (fi.data->direct.green_mask != 0) continue;
+	    if (fi.data->direct.blue_mask != 0) continue;
+	    alphaformat = fi.data->id;
+	}
+	else if (fi.data->depth == 32)
+	{
+	    if (fi.data->direct.red_mask != 255) continue;
+	    if (fi.data->direct.green_mask != 255) continue;
+	    if (fi.data->direct.blue_mask != 255) continue;
+	    argbformat = fi.data->id;
+	}
     }
     if (!alphaformat)
     {
 	PSC_Log_msg(PSC_L_ERROR, "No 8bit alpha format found");
+	goto error;
+    }
+    if (!argbformat)
+    {
+	PSC_Log_msg(PSC_L_ERROR, "No 32bit ARGB format found");
 	goto error;
     }
     free(pf);
@@ -442,6 +457,11 @@ xcb_render_pictformat_t X11Adapter_alphaformat(void)
     return alphaformat;
 }
 
+xcb_render_pictformat_t X11Adapter_argbformat(void)
+{
+    return argbformat;
+}
+
 PSC_Event *X11Adapter_clientmsg(void)
 {
     return clientmsg;
@@ -547,6 +567,7 @@ void X11Adapter_done(void)
     clientmsg = 0;
     rootformat = 0;
     alphaformat = 0;
+    argbformat = 0;
     xcb_disconnect(c);
     c = 0;
     s = 0;

@@ -20,10 +20,22 @@ struct Window
     PSC_Event *closed;
     char *title;
     xcb_window_t w;
+    xcb_render_picture_t p;
+    xcb_render_color_t bgcol;
+    xcb_rectangle_t windowrect;
     uint32_t width;
     uint32_t height;
     TextRenderer *hello;
 };
+
+static void drawbg_cb(void *ctx, void *reply, xcb_generic_error_t *error)
+{
+    (void)reply;
+
+    Window *self = ctx;
+    if (error) PSC_Log_msg(PSC_L_ERROR, "Cannot draw window background");
+    TextRenderer_render(self->hello, self->w, 0, 0);
+}
 
 static void expose(void *receiver, void *sender, void *args)
 {
@@ -31,7 +43,10 @@ static void expose(void *receiver, void *sender, void *args)
     (void)args;
 
     Window *self = receiver;
-    TextRenderer_render(self->hello, self->w, 0, 0);
+    AWAIT(xcb_render_fill_rectangles(X11Adapter_connection(),
+		XCB_RENDER_PICT_OP_OVER, self->p, self->bgcol, 1,
+		&self->windowrect),
+	    self, drawbg_cb);
 }
 
 static void clientmsg(void *receiver, void *sender, void *args)
@@ -57,6 +72,20 @@ static void create_window_cb(void *ctx, void *reply,
     {
 	PSC_Log_setAsync(0);
 	PSC_Log_msg(PSC_L_ERROR, "Cannot create window");
+	PSC_Service_quit();
+    }
+}
+
+static void create_picture_cb(void *ctx, void *reply,
+	xcb_generic_error_t *error)
+{
+    (void)ctx;
+    (void)reply;
+
+    if (error)
+    {
+	PSC_Log_setAsync(0);
+	PSC_Log_msg(PSC_L_ERROR, "Cannot create XRender picture");
 	PSC_Service_quit();
     }
 }
@@ -164,15 +193,22 @@ Window *Window_create(void)
     self->closed = PSC_Event_create(self);
     self->title = 0;
     self->w = w;
-    self->width = 320;
-    self->height = 200;
+    self->bgcol.red = 0xffff;
+    self->bgcol.green = 0xffff;
+    self->bgcol.blue = 0xffff;
+    self->bgcol.alpha = 0xffff;
+    self->windowrect.x = 0;
+    self->windowrect.y = 0;
+    self->windowrect.width = 320;
+    self->windowrect.height = 200;
 
-    uint32_t mask = XCB_CW_BACK_PIXEL | XCB_CW_EVENT_MASK;
-    uint32_t values[] = { s->white_pixel,
-	XCB_EVENT_MASK_EXPOSURE | XCB_EVENT_MASK_STRUCTURE_NOTIFY };
+    uint32_t mask = XCB_CW_EVENT_MASK;
+    uint32_t values[] = { 
+	XCB_EVENT_MASK_EXPOSURE | XCB_EVENT_MASK_STRUCTURE_NOTIFY
+    };
 
     AWAIT(xcb_create_window(c, XCB_COPY_FROM_PARENT, w, s->root,
-		0, 0, self->width, self->height, 2,
+		0, 0, self->windowrect.width, self->windowrect.height, 2,
 		XCB_WINDOW_CLASS_INPUT_OUTPUT, s->root_visual, mask, values),
 	    self, create_window_cb);
     xcb_atom_t delwin = A(WM_DELETE_WINDOW);
@@ -188,6 +224,10 @@ Window *Window_create(void)
     AWAIT(xcb_change_property(c, XCB_PROP_MODE_REPLACE, w,
 		A(_NET_WM_WINDOW_TYPE), 4, 32, 1, &wtnorm),
 	    self, set_windowtype_cb);
+    self->p = xcb_generate_id(c);
+    AWAIT(xcb_render_create_picture(c, self->p, w, X11Adapter_rootformat(),
+		0, 0),
+	    self, create_picture_cb);
 
     PSC_Event_register(X11Adapter_clientmsg(), self, clientmsg, w);
     PSC_Event_register(X11Adapter_expose(), self, expose, w);
@@ -215,13 +255,13 @@ void Window_hide(void *self)
 uint32_t Window_width(const void *self)
 {
     const Window *w = Object_instance(self);
-    return w->width;
+    return w->windowrect.width;
 }
 
 uint32_t Window_height(const void *self)
 {
     const Window *w = Object_instance(self);
-    return w->height;
+    return w->windowrect.height;
 }
 
 void Window_setSize(void *self, uint32_t width, uint32_t height)
@@ -230,15 +270,15 @@ void Window_setSize(void *self, uint32_t width, uint32_t height)
     uint16_t mask = 0;
     uint32_t values[2];
     int n = 0;
-    if (width != w->width)
+    if (width != w->windowrect.width)
     {
-	w->width = width;
+	w->windowrect.width = width;
 	values[n++] = width;
 	mask |= XCB_CONFIG_WINDOW_WIDTH;
     }
-    if (height != w->height)
+    if (height != w->windowrect.height)
     {
-	w->height = height;
+	w->windowrect.height = height;
 	values[n++] = height;
 	mask |= XCB_CONFIG_WINDOW_HEIGHT;
     }

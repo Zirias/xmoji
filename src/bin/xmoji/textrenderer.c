@@ -1,6 +1,7 @@
 #include "textrenderer.h"
 
 #include "font.h"
+#include "x11adapter.h"
 
 #include <hb.h>
 #include <hb-ft.h>
@@ -9,6 +10,7 @@
 
 struct TextRenderer
 {
+    Font *font;
     hb_font_t *hbfont;
     hb_buffer_t *hbbuffer;
     PSC_ThreadJob *shapejob;
@@ -18,6 +20,18 @@ struct TextRenderer
     uint32_t width;
     uint32_t height;
 };
+
+typedef struct RenderContext
+{
+    TextRenderer *renderer;
+    void *cbctx;
+    TR_render_cb cb;
+    xcb_drawable_t drawable;
+    xcb_pixmap_t src;
+    xcb_render_picture_t pic;
+    xcb_render_picture_t srcpic;
+    int awaiting;
+} RenderContext;
 
 static void doshape(void *tr)
 {
@@ -82,10 +96,11 @@ static void getsizedone(void *receiver, void *sender, void *args)
     self->sizecb = 0;
 }
 
-TextRenderer *TextRenderer_fromUtf8(const Font *font, const char *utf8)
+TextRenderer *TextRenderer_fromUtf8(Font *font, const char *utf8)
 {
     TextRenderer *self = PSC_malloc(sizeof *self);
     memset(self, 0, sizeof *self);
+    self->font = font;
     self->hbfont = hb_ft_font_create_referenced(Font_face(font));
     self->hbbuffer = hb_buffer_create();
     hb_buffer_add_utf8(self->hbbuffer, utf8, -1, 0, -1);
@@ -107,6 +122,127 @@ int TextRenderer_size(TextRenderer *self, void *ctx, TR_size_cb cb)
 	    getsizedone, 0);
     PSC_ThreadPool_enqueue(self->shapejob);
     return 0;
+}
+
+static void dorender(void *ctx, void *reply, xcb_generic_error_t *error)
+{
+    (void)reply;
+
+    RenderContext *rctx = ctx;
+    xcb_connection_t *c = X11Adapter_connection();
+    if (rctx->awaiting)
+    {
+	if (error)
+	{
+	    PSC_Log_msg(PSC_L_ERROR, "Could not render text.");
+	    return;
+	}
+	if (!--rctx->awaiting)
+	{
+	    xcb_render_free_picture(c, rctx->srcpic);
+	    xcb_render_free_picture(c, rctx->pic);
+	    xcb_free_pixmap(c, rctx->src);
+	    free(rctx);
+	}
+	return;
+    }
+    unsigned len = hb_buffer_get_length(rctx->renderer->hbbuffer);
+    hb_glyph_info_t *info = hb_buffer_get_glyph_infos(
+	    rctx->renderer->hbbuffer, 0);
+    hb_glyph_position_t *pos = hb_buffer_get_glyph_positions(
+	    rctx->renderer->hbbuffer, 0);
+    struct glyphitem {
+	uint8_t count;
+	uint8_t pad0[3];
+	int16_t dx;
+	int16_t dy;
+	uint16_t glyphid;
+	uint8_t pad1[2];
+    } *glyphs = PSC_malloc(len * sizeof *glyphs);
+    memset(glyphs, 0, len * sizeof *glyphs);
+    uint32_t x = 0;
+    uint32_t y = (Font_pixelsize(rctx->renderer->font) + .5) * 64.;
+    uint16_t rx = 0;
+    uint16_t ry = 0;
+    uint16_t prx = 0;
+    uint16_t pry = 0;
+    for (unsigned i = 0; i < len; ++i)
+    {
+	rx = (x + 0x20) >> 6;
+	ry = (y + 0x20) >> 6;
+	Font_uploadGlyph(rctx->renderer->font, info[i].codepoint);
+	glyphs[i].count = 1;
+	glyphs[i].dx = rx - prx + (pos[i].x_offset >> 6);
+	glyphs[i].dy = ry - pry + (pos[i].y_offset >> 6);
+	glyphs[i].glyphid = info[i].codepoint;
+	prx = rx;
+	pry = ry;
+	x += pos[i].x_advance;
+	y += pos[i].y_advance;
+    }
+    rctx->src = xcb_generate_id(c);
+    AWAIT(xcb_create_pixmap(c, 32, rctx->src,
+		X11Adapter_screen()->root, 1, 1),
+	    rctx, dorender);
+    ++rctx->awaiting;
+    rctx->pic = xcb_generate_id(c);
+    uint32_t values[] = {
+	XCB_RENDER_POLY_MODE_IMPRECISE,
+	XCB_RENDER_POLY_EDGE_SMOOTH
+    };
+    AWAIT(xcb_render_create_picture(c, rctx->pic, rctx->drawable,
+		X11Adapter_rootformat(),
+		XCB_RENDER_CP_POLY_MODE|XCB_RENDER_CP_POLY_EDGE, values),
+	    rctx, dorender);
+    ++rctx->awaiting;
+    rctx->srcpic = xcb_generate_id(c);
+    values[0] = XCB_RENDER_REPEAT_NORMAL;
+    AWAIT(xcb_render_create_picture(c, rctx->srcpic, rctx->src,
+		X11Adapter_argbformat(), XCB_RENDER_CP_REPEAT, values),
+	    rctx, dorender);
+    ++rctx->awaiting;
+    xcb_render_color_t black = { 0xffff, 0, 0, 0 };
+    xcb_rectangle_t rect = { 0, 0, 1, 1 };
+    AWAIT(xcb_render_fill_rectangles(c, XCB_RENDER_PICT_OP_OVER,
+		rctx->srcpic, black, 1, &rect),
+	    rctx, dorender);
+    ++rctx->awaiting;
+    AWAIT(xcb_render_composite_glyphs_16(c, XCB_RENDER_PICT_OP_OVER,
+		rctx->srcpic, rctx->pic, 0,
+		Font_glyphset(rctx->renderer->font), 0, 0,
+		len * sizeof *glyphs, (const uint8_t *)glyphs),
+	    rctx, dorender);
+    ++rctx->awaiting;
+    free(glyphs);
+}
+
+static void doshapedone(void *receiver, void *sender, void *args)
+{
+    (void)sender;
+    (void)args;
+
+    RenderContext *rctx = receiver;
+    dorender(rctx, 0, 0);
+}
+
+void TextRenderer_render(TextRenderer *self, xcb_drawable_t drawable,
+	void *ctx, TR_render_cb cb)
+{
+    RenderContext *rctx = PSC_malloc(sizeof *rctx);
+    memset(rctx, 0, sizeof *rctx);
+    rctx->renderer = self;
+    rctx->cbctx = ctx;
+    rctx->cb = cb;
+    rctx->drawable = drawable;
+
+    if (self->shaped) dorender(rctx, 0, 0);
+    else
+    {
+	PSC_ThreadJob *shapejob = PSC_ThreadJob_create(getsizejob, self, 0);
+	PSC_Event_register(PSC_ThreadJob_finished(shapejob), rctx,
+		doshapedone, 0);
+	PSC_ThreadPool_enqueue(shapejob);
+    }
 }
 
 void TextRenderer_destroy(TextRenderer *self)

@@ -1,4 +1,5 @@
 #include "font.h"
+#include "x11adapter.h"
 
 #include <fontconfig/fontconfig.h>
 #include <poser/core.h>
@@ -12,8 +13,23 @@ struct Font
 {
     FT_Face face;
     double pixelsize;
-    double fixedpixelsize;
 };
+
+typedef struct OutlineFont
+{
+    Font base;
+    uint32_t uploaded[1U << 11U];
+    xcb_render_glyphset_t glyphset;
+    int failed;
+    uint16_t uploading;
+} OutlineFont;
+
+typedef struct UploadCtx
+{
+    OutlineFont *of;
+    uint16_t glyphid;
+    uint8_t bitmap[];
+} UploadCtx;
 
 int Font_init(void)
 {
@@ -44,6 +60,37 @@ void Font_done(void)
     FcFini();
 }
 
+static void create_glyphset_cb(void *ctx, void *reply,
+	xcb_generic_error_t *error)
+{
+    (void)reply;
+
+    OutlineFont *of = ctx;
+    if (error)
+    {
+	PSC_Log_msg(PSC_L_ERROR, "Cannot create glyphset");
+	of->failed = 1;
+    }
+}
+
+static void add_glyph_cb(void *ctx, void *reply, xcb_generic_error_t *error)
+{
+    (void)reply;
+
+    UploadCtx *uc = ctx;
+    if (error)
+    {
+	PSC_Log_msg(PSC_L_ERROR, "Cannot upload glyph");
+	uc->of->failed = 1;
+    }
+    else
+    {
+	--uc->of->uploading;
+    }
+
+    free(uc);
+}
+
 Font *Font_create(char **patterns)
 {
     static char *emptypat[] = { 0 };
@@ -52,6 +99,8 @@ Font *Font_create(char **patterns)
     char *patstr;
     FcPattern *fcfont;
     FT_Face face;
+    double pixelsize = 0;
+    double fixedpixelsize = 0;
     for (;;)
     {
 	patstr = *p;
@@ -76,8 +125,8 @@ Font *Font_create(char **patterns)
 		ismatch = 0;
 	    }
 	}
-	double pixelsize = 0;
-	double fixedpixelsize = 0;
+	pixelsize = 0;
+	fixedpixelsize = 0;
 	if (ismatch)
 	{
 	    FcPatternGetDouble(fcpat, FC_PIXEL_SIZE, 0, &pixelsize);
@@ -161,22 +210,39 @@ Font *Font_create(char **patterns)
 		ismatch = 0;
 	    }
 	}
-	FcPatternDestroy(fcfont);
-	fcfont = 0;
 	if (ismatch)
 	{
 	    PSC_Log_fmt(PSC_L_DEBUG, "Font `%s:pixelsize=%.2f' found in `%s'",
 		    (const char *)foundfamily,
 		    fixedpixelsize ? fixedpixelsize : pixelsize,
 		    (const char *)fontfile);
-	    break;
 	}
+	FcPatternDestroy(fcfont);
+	fcfont = 0;
+	if (ismatch) break;
 	PSC_Log_fmt(PSC_L_WARNING, "No matching font found for `%s'", patstr);
 	if (!*p) return 0;
 	++p;
     }
 
-    Font *self = PSC_malloc(sizeof *self);
+    Font *self;
+    if (fixedpixelsize)
+    {
+	self = PSC_malloc(sizeof *self);
+	self->pixelsize = fixedpixelsize;
+    }
+    else
+    {
+	OutlineFont *of = PSC_malloc(sizeof *of);
+	memset(of, 0, sizeof *of);
+	xcb_connection_t *c = X11Adapter_connection();
+	of->glyphset = xcb_generate_id(c);
+	AWAIT(xcb_render_create_glyph_set(c,
+		    of->glyphset, X11Adapter_alphaformat()),
+		of, create_glyphset_cb);
+	self = (Font *)of;
+	self->pixelsize = pixelsize;
+    }
     self->face = face;
     return self;
 }
@@ -184,6 +250,54 @@ Font *Font_create(char **patterns)
 FT_Face Font_face(const Font *self)
 {
     return self->face;
+}
+
+double Font_pixelsize(const Font *self)
+{
+    return self->pixelsize;
+}
+
+int Font_uploadGlyph(Font *self, uint32_t glyphid)
+{
+    if (glyphid > 0xffffU) return -1;
+    if (!(self->face->face_flags & FT_FACE_FLAG_SCALABLE)) return -1;
+    OutlineFont *of = (OutlineFont *)self;
+    uint32_t word = glyphid >> 5;
+    uint32_t bit = 1U << (glyphid & 0x1fU);
+    if (of->uploaded[word] & bit) return 0;
+    if (FT_Load_Glyph(self->face, glyphid, FT_LOAD_RENDER) != 0) return -1;
+    FT_GlyphSlot slot = self->face->glyph;
+    xcb_render_glyphinfo_t glyph;
+    glyph.x = -slot->bitmap_left;
+    glyph.y = slot->bitmap_top;
+    glyph.width = slot->bitmap.width;
+    glyph.height = slot->bitmap.rows;
+    glyph.x_off = 0;
+    glyph.y_off = 0;
+    int stride = (glyph.width+3)&~3;
+    UploadCtx *ctx = PSC_malloc(sizeof *ctx + stride*glyph.height);
+    ctx->of = of;
+    ctx->glyphid = glyphid;
+    memset(ctx->bitmap, 0, stride*glyph.height);
+    for (int y = 0; y < glyph.height; ++y)
+    {
+	memcpy(ctx->bitmap+y*stride, slot->bitmap.buffer+y*glyph.width,
+		glyph.width);
+    }
+    AWAIT(xcb_render_add_glyphs(X11Adapter_connection(),
+		of->glyphset, 1, &glyphid, &glyph, stride*glyph.height,
+		ctx->bitmap),
+	    ctx, add_glyph_cb);
+    of->uploaded[word] |= bit;
+    ++of->uploading;
+    return 0;
+}
+
+xcb_render_glyphset_t Font_glyphset(const Font *self)
+{
+    if (!(self->face->face_flags & FT_FACE_FLAG_SCALABLE)) return 0;
+    const OutlineFont *of = (const OutlineFont *)self;
+    return of->glyphset;
 }
 
 void Font_destroy(Font *self)
