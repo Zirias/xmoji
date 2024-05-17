@@ -38,17 +38,38 @@ static void drawbg_cb(void *ctx, unsigned sequence,
     if (error) PSC_Log_msg(PSC_L_ERROR, "Cannot draw window background");
 }
 
+static void draw(Window *self)
+{
+    AWAIT(xcb_render_fill_rectangles(X11Adapter_connection(),
+		XCB_RENDER_PICT_OP_OVER, self->p, self->bgcol, 1,
+		&self->windowrect),
+	    self, drawbg_cb);
+    TextRenderer_render(self->hello, self->w, 0, 0);
+}
+
 static void expose(void *receiver, void *sender, void *args)
 {
     (void)sender;
     (void)args;
 
     Window *self = receiver;
-    AWAIT(xcb_render_fill_rectangles(X11Adapter_connection(),
-		XCB_RENDER_PICT_OP_OVER, self->p, self->bgcol, 1,
-		&self->windowrect),
-	    self, drawbg_cb);
-    TextRenderer_render(self->hello, self->w, 0, 0);
+    draw(self);
+}
+
+static void configureNotify(void *receiver, void *sender, void *args)
+{
+    (void)sender;
+
+    Window *self = receiver;
+    xcb_configure_notify_event_t *ev = args;
+
+    if (ev->width != self->windowrect.width ||
+	    ev->height != self->windowrect.height)
+    {
+	self->windowrect.width = ev->width;
+	self->windowrect.height = ev->height;
+	draw(self);
+    }
 }
 
 static void clientmsg(void *receiver, void *sender, void *args)
@@ -175,6 +196,8 @@ static void destroy(void *window)
     TextRenderer_destroy(self->hello);
     PSC_Event_unregister(X11Adapter_expose(), self,
 	    expose, self->w);
+    PSC_Event_unregister(X11Adapter_configureNotify(), self,
+	    configureNotify, self->w);
     PSC_Event_unregister(X11Adapter_clientmsg(), self,
 	    clientmsg, self->w);
     PSC_Event_destroy(self->closed);
@@ -238,6 +261,7 @@ Window *Window_create(void)
 	    self, create_picture_cb);
 
     PSC_Event_register(X11Adapter_clientmsg(), self, clientmsg, w);
+    PSC_Event_register(X11Adapter_configureNotify(), self, configureNotify, w);
     PSC_Event_register(X11Adapter_expose(), self, expose, w);
 
     self->hello = TextRenderer_fromUtf8(Xmoji_sysfont(), "Hello, World!");

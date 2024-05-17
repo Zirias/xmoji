@@ -32,6 +32,7 @@ static size_t wmclasssz;
 static xcb_connection_t *c;
 static xcb_screen_t *s;
 static PSC_Event *clientmsg;
+static PSC_Event *configureNotify;
 static PSC_Event *expose;
 static xcb_atom_t atoms[NATOMS];
 static xcb_render_pictformat_t rootformat;
@@ -90,6 +91,11 @@ static void handleX11Event(xcb_generic_event_t *ev)
 	case XCB_CLIENT_MESSAGE:
 	    PSC_Event_raise(clientmsg,
 		    ((xcb_client_message_event_t *)ev)->window, ev);
+	    break;
+
+	case XCB_CONFIGURE_NOTIFY:
+	    PSC_Event_raise(configureNotify,
+		    ((xcb_configure_notify_event_t *)ev)->window, ev);
 	    break;
 
 	case XCB_EXPOSE:
@@ -357,6 +363,7 @@ int X11Adapter_init(int argc, char **argv, const char *classname)
     pf = 0;
 
     clientmsg = PSC_Event_create(0);
+    configureNotify = PSC_Event_create(0);
     expose = PSC_Event_create(0);
     fd = xcb_get_file_descriptor(c);
     PSC_Event_register(PSC_Service_readyRead(), 0, readX11Input, fd);
@@ -473,6 +480,11 @@ PSC_Event *X11Adapter_clientmsg(void)
     return clientmsg;
 }
 
+PSC_Event *X11Adapter_configureNotify(void)
+{
+    return configureNotify;
+}
+
 PSC_Event *X11Adapter_expose(void)
 {
     return expose;
@@ -571,7 +583,10 @@ void X11Adapter_done(void)
     waitingBack = 0;
     waitingNum = 0;
     PSC_Event_destroy(expose);
+    PSC_Event_destroy(configureNotify);
     PSC_Event_destroy(clientmsg);
+    expose = 0;
+    configureNotify = 0;
     clientmsg = 0;
     rootformat = 0;
     alphaformat = 0;
