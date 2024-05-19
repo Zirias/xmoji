@@ -2,6 +2,7 @@
 #include "x11adapter.h"
 
 #include <fontconfig/fontconfig.h>
+#include FT_OUTLINE_H
 #include <poser/core.h>
 #include <stdlib.h>
 #include <string.h>
@@ -18,7 +19,7 @@ struct Font
 typedef struct OutlineFont
 {
     Font base;
-    uint32_t uploaded[1U << 11U];
+    uint32_t uploaded[1U << 13U];
     xcb_render_glyphset_t glyphset;
     int haserror;
     uint16_t uploading;
@@ -232,7 +233,7 @@ double Font_pixelsize(const Font *self)
     return self->pixelsize;
 }
 
-static int uploadglyphs(Font *self, unsigned len, hb_glyph_info_t *info)
+int Font_uploadGlyphs(Font *self, unsigned len, GlyphRenderInfo *glyphinfo)
 {
     if (!(self->face->face_flags & FT_FACE_FLAG_SCALABLE)) return -1;
     OutlineFont *of = (OutlineFont *)self;
@@ -245,11 +246,11 @@ static int uploadglyphs(Font *self, unsigned len, hb_glyph_info_t *info)
     size_t bitmapdatasz = 0;
     for (unsigned i = 0; i < len; ++i)
     {
-	if (info[i].codepoint > 0xffffU) goto done;
-	uint32_t word = info[i].codepoint >> 5;
-	uint32_t bit = 1U << (info[i].codepoint & 0x1fU);
+	if (glyphinfo[i].glyphid > 0x3ffffU) goto done;
+	uint32_t word = glyphinfo[i].glyphid >> 5;
+	uint32_t bit = 1U << (glyphinfo[i].glyphid & 0x1fU);
 	if (of->uploaded[word] & bit) continue;
-	glyphids[toupload++] = info[i].codepoint;
+	glyphids[toupload++] = glyphinfo[i].glyphid;
     }
     if (!toupload)
     {
@@ -264,9 +265,15 @@ static int uploadglyphs(Font *self, unsigned len, hb_glyph_info_t *info)
     xcb_connection_t *c = X11Adapter_connection();
     for (unsigned i = 0; i < toupload; ++i)
     {
-	if (FT_Load_Glyph(self->face, glyphids[i],
-		    FT_LOAD_RENDER | FT_LOAD_FORCE_AUTOHINT) != 0) goto done;
+	if (FT_Load_Glyph(self->face, glyphids[i] & 0xffffU,
+		    FT_LOAD_FORCE_AUTOHINT) != 0) goto done;
 	FT_GlyphSlot slot = self->face->glyph;
+	uint32_t xshift = (glyphids[i] & 0x30000U) >> 12;
+	if (xshift)
+	{
+	    FT_Outline_Translate(&slot->outline, xshift, 0);
+	}
+	FT_Render_Glyph(slot, FT_RENDER_MODE_NORMAL);
 	glyphs[i].x = -slot->bitmap_left;
 	glyphs[i].y = slot->bitmap_top;
 	glyphs[i].width = slot->bitmap.width;
@@ -321,21 +328,6 @@ done:
     free(glyphs);
     free(glyphids);
     return rc;
-}
-
-int Font_uploadGlyphs(Font *self, hb_buffer_t *hbbuf)
-{
-    return uploadglyphs(self, hb_buffer_get_length(hbbuf),
-	    hb_buffer_get_glyph_infos(hbbuf, 0));
-}
-
-int Font_uploadGlyph(Font *self, uint32_t glyphid)
-{
-    hb_glyph_info_t info = {
-	.codepoint = glyphid,
-	.cluster = 0
-    };
-    return uploadglyphs(self, 1, &info);
 }
 
 xcb_render_glyphset_t Font_glyphset(const Font *self)

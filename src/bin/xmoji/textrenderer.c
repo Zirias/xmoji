@@ -31,14 +31,7 @@ typedef struct RenderContext
     TextRenderer *renderer;
     xcb_render_picture_t pic;
     unsigned len;
-    struct {
-	uint8_t count;
-	uint8_t pad0[3];
-	int16_t dx;
-	int16_t dy;
-	uint16_t glyphid;
-	uint8_t pad1[2];
-    } glyphs[];
+    GlyphRenderInfo glyphs[];
 } RenderContext;
 
 static void doshape(void *tr)
@@ -162,7 +155,6 @@ static void dorender(void *ctx)
 {
     RenderContext *rctx = ctx;
     xcb_connection_t *c = X11Adapter_connection();
-    Font_uploadGlyphs(rctx->renderer->font, rctx->renderer->hbbuffer);
     hb_glyph_info_t *info = hb_buffer_get_glyph_infos(
 	    rctx->renderer->hbbuffer, 0);
     hb_glyph_position_t *pos = hb_buffer_get_glyph_positions(
@@ -175,12 +167,13 @@ static void dorender(void *ctx)
     uint16_t pry = 0;
     for (unsigned i = 0; i < rctx->len; ++i)
     {
-	rx = (x + 0x20) >> 6;
+	rx = (x + 8) >> 4;
 	ry = (y + 0x20) >> 6;
 	rctx->glyphs[i].count = 1;
-	rctx->glyphs[i].dx = rx - prx + ((pos[i].x_offset + 0x20) >> 6);
+	rctx->glyphs[i].dx = (rx >> 2) - (prx >> 2)
+	    + ((pos[i].x_offset + 0x20) >> 6);
 	rctx->glyphs[i].dy = ry - pry + ((pos[i].y_offset + 0x20) >> 6);
-	rctx->glyphs[i].glyphid = info[i].codepoint;
+	rctx->glyphs[i].glyphid = info[i].codepoint | ((rx & 3) << 16);
 	prx = rx;
 	pry = ry;
 	x += pos[i].x_advance;
@@ -195,7 +188,8 @@ static void dorender(void *ctx)
 		(unsigned)rctx->renderer->pixmap);
 	rctx->renderer->pencolored = 1;
     }
-    CHECK(xcb_render_composite_glyphs_16(c, XCB_RENDER_PICT_OP_OVER,
+    Font_uploadGlyphs(rctx->renderer->font, rctx->len, rctx->glyphs);
+    CHECK(xcb_render_composite_glyphs_32(c, XCB_RENDER_PICT_OP_OVER,
 		rctx->renderer->pen, rctx->pic, 0,
 		Font_glyphset(rctx->renderer->font), 0, 0,
 		rctx->len * sizeof *rctx->glyphs,
