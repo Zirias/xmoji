@@ -14,12 +14,20 @@
 
 #define MAXWAITING 128
 
+#define RQ_AWAIT_REPLY 1
+#define RQ_AWAIT_NOREPLY 0
+#define RQ_CHECK_ERROR -1
+#define RQ_CHECK_ERROR_UNSIGNED -2
+#define RQ_CHECK_ERROR_STRING -3
+
 typedef struct X11ReplyHandlerRecord
 {
     X11ReplyHandler handler;
     void *ctx;
     unsigned sequence;
-    int noreply;
+    int replytype;
+    const char *sarg;
+    unsigned uarg;
 } X11ReplyHandlerRecord;
 
 static const struct { int len; const char *nm; } atomnm[] = {
@@ -31,9 +39,11 @@ static size_t wmclasssz;
 
 static xcb_connection_t *c;
 static xcb_screen_t *s;
+static size_t maxRequestSize;
 static PSC_Event *clientmsg;
 static PSC_Event *configureNotify;
 static PSC_Event *expose;
+static PSC_Event *requestError;
 static xcb_atom_t atoms[NATOMS];
 static xcb_render_pictformat_t rootformat;
 static xcb_render_pictformat_t alphaformat;
@@ -44,21 +54,22 @@ static X11ReplyHandlerRecord waitingReplies[MAXWAITING];
 static unsigned waitingFront;
 static unsigned waitingBack;
 static unsigned waitingNum;
-static unsigned waitingNoreply;
+static int waitingNoreply;
 
-static int syncreq;
-
-static int enqueueWaiting(unsigned sequence, int noreply, void *ctx,
-	X11ReplyHandler handler)
+static int enqueueWaiting(unsigned sequence, int replytype, void *ctx,
+	X11ReplyHandler handler, const char *sarg, unsigned uarg)
 {
     if (waitingNum == MAXWAITING) return -1;
     waitingReplies[waitingBack].handler = handler;
     waitingReplies[waitingBack].ctx = ctx;
     waitingReplies[waitingBack].sequence = sequence;
-    waitingReplies[waitingBack].noreply = noreply;
+    waitingReplies[waitingBack].replytype = replytype;
+    waitingReplies[waitingBack].sarg = sarg;
+    waitingReplies[waitingBack].uarg = uarg;
     if (++waitingBack == MAXWAITING) waitingBack = 0;
     ++waitingNum;
-    if (noreply) ++waitingNoreply;
+    if (replytype == RQ_AWAIT_NOREPLY) waitingNoreply = 1;
+    else if (replytype == RQ_AWAIT_REPLY) waitingNoreply = 0;
     return 0;
 }
 
@@ -66,7 +77,6 @@ static void removeFirstWaiting(void)
 {
     if (!waitingNum) return;
     --waitingNum;
-    if (waitingReplies[waitingFront].noreply) --waitingNoreply;
     if (++waitingFront == MAXWAITING) waitingFront = 0;
 }
 
@@ -111,6 +121,26 @@ static void handleX11Event(xcb_generic_event_t *ev)
     free(ev);
 }
 
+static void handleRequestError(X11ReplyHandlerRecord *rec,
+	xcb_generic_error_t *err)
+{
+    switch (rec->replytype)
+    {
+	case RQ_CHECK_ERROR_STRING:
+	    PSC_Log_fmt(PSC_L_ERROR, rec->ctx, rec->sarg);
+	    break;
+
+	case RQ_CHECK_ERROR_UNSIGNED:
+	    PSC_Log_fmt(PSC_L_ERROR, rec->ctx, rec->uarg);
+	    PSC_Event_raise(requestError, rec->uarg, 0);
+	    break;
+
+	default:
+	    rec->handler(rec->ctx, rec->sequence, 0, err);
+	    break;
+    }
+}
+
 static void readX11Input(void *receiver, void *sender, void *args)
 {
     (void)receiver;
@@ -131,8 +161,7 @@ static void readX11Input(void *receiver, void *sender, void *args)
 		{
 		    PSC_Log_fmt(PSC_L_DEBUG, "Received error: %u",
 			    ev->sequence);
-		    waitingReplies[waitingFront].handler(
-			    waitingReplies[waitingFront].ctx, ev->sequence, 0,
+		    handleRequestError(waitingReplies + waitingFront,
 			    (xcb_generic_error_t *)ev);
 		    free(ev);
 		    ev = xcb_poll_for_event(c);
@@ -161,22 +190,45 @@ static void readX11Input(void *receiver, void *sender, void *args)
 	    {
 		if (reply)
 		{
-		    PSC_Log_fmt(PSC_L_DEBUG, "Received reply: %u",
-			    waitingReplies[waitingFront].sequence);
+		    if (waitingReplies[waitingFront].replytype !=
+			    RQ_AWAIT_REPLY)
+		    {
+			PSC_Log_fmt(PSC_L_ERROR,
+				"Received unexpected reply: %u",
+				waitingReplies[waitingFront].sequence);
+			free(reply);
+			reply = 0;
+		    }
+		    else
+		    {
+			PSC_Log_fmt(PSC_L_DEBUG, "Received reply: %u",
+				waitingReplies[waitingFront].sequence);
+		    }
 		}
 		else if (error)
 		{
 		    PSC_Log_fmt(PSC_L_DEBUG, "Received error: %u",
 			    waitingReplies[waitingFront].sequence);
 		}
-		else
+		else if (waitingReplies[waitingFront].replytype ==
+			RQ_AWAIT_NOREPLY)
 		{
 		    PSC_Log_fmt(PSC_L_DEBUG, "Confirmed request: %u",
 			    waitingReplies[waitingFront].sequence);
 		}
-		waitingReplies[waitingFront].handler(
-			waitingReplies[waitingFront].ctx,
-			waitingReplies[waitingFront].sequence, reply, error);
+		if (reply || error || waitingReplies[waitingFront].replytype
+			== RQ_AWAIT_NOREPLY)
+		{
+		    X11ReplyHandlerRecord *rec = waitingReplies + waitingFront;
+		    if (error && !reply)
+		    {
+			handleRequestError(rec, error);
+		    }
+		    else
+		    {
+			rec->handler(rec->ctx, rec->sequence, reply, error);
+		    }
+		}
 		free(reply);
 		free(error);
 		handled = 1;
@@ -206,8 +258,6 @@ static void sync_cb(void *ctx, unsigned sequence,
 	PSC_Log_msg(PSC_L_ERROR, "X11 sync failed");
 	PSC_Service_quit();
     }
-
-    syncreq = 0;
     PSC_Log_msg(PSC_L_DEBUG, "X11 connection synced");
 }
 
@@ -219,11 +269,7 @@ static void flushXcb(void *receiver, void *sender, void *args)
 
     if (waitingNum)
     {
-	if (waitingNoreply && !syncreq)
-	{
-	    syncreq = 1;
-	    AWAIT(xcb_get_input_focus(c), 0, sync_cb);
-	}
+	if (waitingNoreply) AWAIT(xcb_get_input_focus(c), 0, sync_cb);
 	xcb_flush(c);
     }
 }
@@ -284,6 +330,9 @@ int X11Adapter_init(int argc, char **argv, const char *classname)
     }
 
     s = xcb_setup_roots_iterator(xcb_get_setup(c)).data;
+    maxRequestSize = xcb_get_maximum_request_length(c) << 2;
+    PSC_Log_fmt(PSC_L_DEBUG, "maximum request size is %zu bytes",
+	    maxRequestSize);
     xcb_render_pictscreen_iterator_t si =
 	xcb_render_query_pict_formats_screens_iterator(pf);
     while (!rootformat && si.rem)
@@ -365,6 +414,7 @@ int X11Adapter_init(int argc, char **argv, const char *classname)
     clientmsg = PSC_Event_create(0);
     configureNotify = PSC_Event_create(0);
     expose = PSC_Event_create(0);
+    requestError = PSC_Event_create(0);
     fd = xcb_get_file_descriptor(c);
     PSC_Event_register(PSC_Service_readyRead(), 0, readX11Input, fd);
     PSC_Event_register(PSC_Service_eventsDone(), 0, flushXcb, 0);
@@ -455,6 +505,11 @@ xcb_screen_t *X11Adapter_screen(void)
     return s;
 }
 
+size_t X11Adapter_maxRequestSize(void)
+{
+    return maxRequestSize;
+}
+
 xcb_atom_t X11Adapter_atom(XAtomId id)
 {
     return atoms[id];
@@ -490,36 +545,71 @@ PSC_Event *X11Adapter_expose(void)
     return expose;
 }
 
+PSC_Event *X11Adapter_requestError(void)
+{
+    return requestError;
+}
+
 const char *X11Adapter_wmClass(size_t *sz)
 {
     if (sz) *sz = wmclasssz;
     return wmclass;
 }
 
-static unsigned await(unsigned sequence, int noreply, void *ctx,
-	X11ReplyHandler handler)
+static unsigned await(unsigned sequence, int replytype, void *ctx,
+	X11ReplyHandler handler, const char *sarg, unsigned uarg)
 {
-    if (enqueueWaiting(sequence, noreply, ctx, handler) < 0)
+    if (enqueueWaiting(sequence, replytype, ctx, handler, sarg, uarg) < 0)
     {
 	PSC_Log_setAsync(0);
 	PSC_Log_msg(PSC_L_ERROR, "Reply queue is full");
 	PSC_Service_quit();
     }
-    if (noreply) PSC_Log_fmt(PSC_L_DEBUG, "Awaiting Request: %u", sequence);
-    else PSC_Log_fmt(PSC_L_DEBUG, "Awaiting Reply: %u", sequence);
+    switch (replytype)
+    {
+	case RQ_AWAIT_REPLY:
+	    PSC_Log_fmt(PSC_L_DEBUG, "Awaiting Reply: %u", sequence);
+	    break;
+
+	case RQ_AWAIT_NOREPLY:
+	    PSC_Log_fmt(PSC_L_DEBUG, "Awaiting Request: %u", sequence);
+	    break;
+
+	default:
+	    PSC_Log_fmt(PSC_L_DEBUG, "Checking Request: %u", sequence);
+	    break;
+    }
     return sequence;
 }
 
 unsigned X11Adapter_await(unsigned sequence, void *ctx,
 	X11ReplyHandler handler)
 {
-    return await(sequence, 0, ctx, handler);
+    return await(sequence, RQ_AWAIT_REPLY, ctx, handler, 0, 0);
 }
 
 unsigned X11Adapter_awaitNoreply(unsigned sequence, void *ctx,
 	X11ReplyHandler handler)
 {
-    return await(sequence, 1, ctx, handler);
+    return await(sequence, RQ_AWAIT_NOREPLY, ctx, handler, 0, 0);
+}
+
+unsigned X11Adapter_check(unsigned sequence, void *ctx,
+	X11ReplyHandler handler)
+{
+    return await(sequence, RQ_CHECK_ERROR, ctx, handler, 0, 0);
+}
+
+unsigned X11Adapter_checkLogUnsigned(unsigned sequence, const char *msg,
+	unsigned arg)
+{
+    return await(sequence, RQ_CHECK_ERROR_UNSIGNED, (void *)msg, 0, 0, arg);
+}
+
+unsigned X11Adapter_checkLogString(unsigned sequence, const char *msg,
+	const char *arg)
+{
+    return await(sequence, RQ_CHECK_ERROR_STRING, (void *)msg, 0, arg, 0);
 }
 
 char *X11Adapter_toLatin1(const char *utf8)
@@ -582,9 +672,11 @@ void X11Adapter_done(void)
     waitingFront = 0;
     waitingBack = 0;
     waitingNum = 0;
+    PSC_Event_destroy(requestError);
     PSC_Event_destroy(expose);
     PSC_Event_destroy(configureNotify);
     PSC_Event_destroy(clientmsg);
+    requestError = 0;
     expose = 0;
     configureNotify = 0;
     clientmsg = 0;
@@ -592,8 +684,9 @@ void X11Adapter_done(void)
     alphaformat = 0;
     argbformat = 0;
     xcb_disconnect(c);
-    c = 0;
+    maxRequestSize = 0;
     s = 0;
+    c = 0;
     memset(atoms, 0, sizeof atoms);
 }
 

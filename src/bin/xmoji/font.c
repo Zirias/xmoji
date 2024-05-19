@@ -20,16 +20,9 @@ typedef struct OutlineFont
     Font base;
     uint32_t uploaded[1U << 11U];
     xcb_render_glyphset_t glyphset;
-    int failed;
+    int haserror;
     uint16_t uploading;
 } OutlineFont;
-
-typedef struct UploadCtx
-{
-    OutlineFont *of;
-    uint16_t glyphid;
-    uint8_t bitmap[];
-} UploadCtx;
 
 int Font_init(void)
 {
@@ -60,38 +53,15 @@ void Font_done(void)
     FcFini();
 }
 
-static void create_glyphset_cb(void *ctx, unsigned sequence,
-	void *reply, xcb_generic_error_t *error)
+static void requestError(void *receiver, void *sender, void *args)
 {
-    (void)sequence;
-    (void)reply;
+    (void)sender;
+    (void)args;
 
-    OutlineFont *of = ctx;
-    if (error)
-    {
-	PSC_Log_msg(PSC_L_ERROR, "Cannot create glyphset");
-	of->failed = 1;
-    }
-}
-
-static void add_glyph_cb(void *ctx, unsigned sequence,
-	void *reply, xcb_generic_error_t *error)
-{
-    (void)sequence;
-    (void)reply;
-
-    UploadCtx *uc = ctx;
-    if (error)
-    {
-	PSC_Log_msg(PSC_L_ERROR, "Cannot upload glyph");
-	uc->of->failed = 1;
-    }
-    else
-    {
-	--uc->of->uploading;
-    }
-
-    free(uc);
+    OutlineFont *of = receiver;
+    PSC_Log_fmt(PSC_L_ERROR, "Font glyphset 0x%x failed",
+	    (unsigned)of->glyphset);
+    of->haserror = 1;
 }
 
 Font *Font_create(char **patterns)
@@ -240,9 +210,11 @@ Font *Font_create(char **patterns)
 	memset(of, 0, sizeof *of);
 	xcb_connection_t *c = X11Adapter_connection();
 	of->glyphset = xcb_generate_id(c);
-	AWAIT(xcb_render_create_glyph_set(c,
+	PSC_Event_register(X11Adapter_requestError(), of,
+		requestError, of->glyphset);
+	CHECK(xcb_render_create_glyph_set(c,
 		    of->glyphset, X11Adapter_alphaformat()),
-		of, create_glyphset_cb);
+		"Font: Cannot create glyphset 0x%x", (unsigned)of->glyphset);
 	self = (Font *)of;
 	self->pixelsize = pixelsize;
     }
@@ -260,40 +232,110 @@ double Font_pixelsize(const Font *self)
     return self->pixelsize;
 }
 
-int Font_uploadGlyph(Font *self, uint32_t glyphid)
+static int uploadglyphs(Font *self, unsigned len, hb_glyph_info_t *info)
 {
-    if (glyphid > 0xffffU) return -1;
     if (!(self->face->face_flags & FT_FACE_FLAG_SCALABLE)) return -1;
     OutlineFont *of = (OutlineFont *)self;
-    uint32_t word = glyphid >> 5;
-    uint32_t bit = 1U << (glyphid & 0x1fU);
-    if (of->uploaded[word] & bit) return 0;
-    if (FT_Load_Glyph(self->face, glyphid, FT_LOAD_RENDER) != 0) return -1;
-    FT_GlyphSlot slot = self->face->glyph;
-    xcb_render_glyphinfo_t glyph;
-    glyph.x = -slot->bitmap_left;
-    glyph.y = slot->bitmap_top;
-    glyph.width = slot->bitmap.width;
-    glyph.height = slot->bitmap.rows;
-    glyph.x_off = 0;
-    glyph.y_off = 0;
-    int stride = (glyph.width+3)&~3;
-    UploadCtx *ctx = PSC_malloc(sizeof *ctx + stride*glyph.height);
-    ctx->of = of;
-    ctx->glyphid = glyphid;
-    memset(ctx->bitmap, 0, stride*glyph.height);
-    for (int y = 0; y < glyph.height; ++y)
+    int rc = -1;
+    unsigned toupload = 0;
+    uint32_t *glyphids = PSC_malloc(len * sizeof *glyphids);
+    xcb_render_glyphinfo_t *glyphs = 0;
+    unsigned firstglyph = 0;
+    uint8_t *bitmapdata = 0;
+    size_t bitmapdatasz = 0;
+    for (unsigned i = 0; i < len; ++i)
     {
-	memcpy(ctx->bitmap+y*stride, slot->bitmap.buffer+y*glyph.width,
-		glyph.width);
+	if (info[i].codepoint > 0xffffU) goto done;
+	uint32_t word = info[i].codepoint >> 5;
+	uint32_t bit = 1U << (info[i].codepoint & 0x1fU);
+	if (of->uploaded[word] & bit) continue;
+	glyphids[toupload++] = info[i].codepoint;
     }
-    AWAIT(xcb_render_add_glyphs(X11Adapter_connection(),
-		of->glyphset, 1, &glyphid, &glyph, stride*glyph.height,
-		ctx->bitmap),
-	    ctx, add_glyph_cb);
-    of->uploaded[word] |= bit;
-    ++of->uploading;
-    return 0;
+    if (!toupload)
+    {
+	PSC_Log_fmt(PSC_L_DEBUG, "Font: Nothing to upload for glyphset 0x%x",
+		(unsigned)of->glyphset);
+	rc = 0;
+	goto done;
+    }
+    glyphs = PSC_malloc(toupload * sizeof *glyphs);
+    memset(glyphs, 0, toupload * sizeof *glyphs);
+    size_t bitmapdatapos = 0;
+    xcb_connection_t *c = X11Adapter_connection();
+    for (unsigned i = 0; i < toupload; ++i)
+    {
+	if (FT_Load_Glyph(self->face, glyphids[i],
+		    FT_LOAD_RENDER | FT_LOAD_FORCE_AUTOHINT) != 0) goto done;
+	FT_GlyphSlot slot = self->face->glyph;
+	glyphs[i].x = -slot->bitmap_left;
+	glyphs[i].y = slot->bitmap_top;
+	glyphs[i].width = slot->bitmap.width;
+	glyphs[i].height = slot->bitmap.rows;
+	unsigned stride = (slot->bitmap.width+3)&~3;
+	size_t bitmapsz = stride * slot->bitmap.rows;
+	if (sizeof (xcb_render_add_glyphs_request_t)
+		+ (i - firstglyph) * (sizeof *glyphids + sizeof *glyphs)
+		+ bitmapdatapos
+		+ bitmapsz
+		> X11Adapter_maxRequestSize())
+	{
+	    CHECK(xcb_render_add_glyphs(c, of->glyphset, i - firstglyph,
+			glyphids + firstglyph, glyphs + firstglyph,
+			bitmapdatapos, bitmapdata),
+		    "Cannot upload to glyphset 0x%x", (unsigned)of->glyphset);
+	    for (unsigned j = firstglyph; j < i; ++j)
+	    {
+		uint32_t word = glyphids[j] >> 5;
+		uint32_t bit = 1U << (glyphids[j] & 0x1fU);
+		of->uploaded[word] |= bit;
+	    }
+	    bitmapdatapos = 0;
+	    firstglyph = i;
+	}
+	if (bitmapdatapos + bitmapsz > bitmapdatasz)
+	{
+	    bitmapdata = PSC_realloc(bitmapdata, bitmapdatapos + bitmapsz);
+	    bitmapdatasz = bitmapdatapos + bitmapsz;
+	}
+	for (unsigned y = 0; y < slot->bitmap.rows; ++y)
+	{
+	    memcpy(bitmapdata + bitmapdatapos + y * stride,
+		    slot->bitmap.buffer + y * slot->bitmap.width,
+		    slot->bitmap.width);
+	}
+	bitmapdatapos += bitmapsz;
+    }
+    CHECK(xcb_render_add_glyphs(c, of->glyphset, toupload - firstglyph,
+		glyphids + firstglyph, glyphs + firstglyph,
+		bitmapdatapos, bitmapdata),
+	    "Cannot upload to glyphset 0x%x", (unsigned)of->glyphset);
+    for (unsigned i = firstglyph; i < toupload; ++i)
+    {
+	uint32_t word = glyphids[i] >> 5;
+	uint32_t bit = 1U << (glyphids[i] & 0x1fU);
+	of->uploaded[word] |= bit;
+    }
+    rc = 0;
+done:
+    free(bitmapdata);
+    free(glyphs);
+    free(glyphids);
+    return rc;
+}
+
+int Font_uploadGlyphs(Font *self, hb_buffer_t *hbbuf)
+{
+    return uploadglyphs(self, hb_buffer_get_length(hbbuf),
+	    hb_buffer_get_glyph_infos(hbbuf, 0));
+}
+
+int Font_uploadGlyph(Font *self, uint32_t glyphid)
+{
+    hb_glyph_info_t info = {
+	.codepoint = glyphid,
+	.cluster = 0
+    };
+    return uploadglyphs(self, 1, &info);
 }
 
 xcb_render_glyphset_t Font_glyphset(const Font *self)
@@ -306,6 +348,12 @@ xcb_render_glyphset_t Font_glyphset(const Font *self)
 void Font_destroy(Font *self)
 {
     if (!self) return;
+    if (self->face->face_flags & FT_FACE_FLAG_SCALABLE)
+    {
+	OutlineFont *of = (OutlineFont *)self;
+	PSC_Event_unregister(X11Adapter_requestError(), of,
+		requestError, of->glyphset);
+    }
     FT_Done_Face(self->face);
     free(self);
 }

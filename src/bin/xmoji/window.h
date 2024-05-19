@@ -29,6 +29,9 @@ xcb_window_t Window_id(void *self)
 PSC_Event *Window_closed(void *self)
     CMETHOD ATTR_RETNONNULL;
 
+PSC_Event *Window_errored(void *self)
+    CMETHOD ATTR_RETNONNULL;
+
 void Window_show(void *self)
     CMETHOD;
 
