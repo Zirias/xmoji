@@ -34,13 +34,15 @@ static void onprestartup(void *receiver, void *sender, void *args)
     if (X11Adapter_init(
 		startupargs.argc, startupargs.argv, "Xmoji") < 0) goto error;
     if (Font_init() < 0) goto error;
-    sysfont = Font_create(0);
+    sysfont = Font_create(3, 0);
     char *emojifontnames[] = { "Noto Color Emoji", "Noto Emoji", 0 };
-    emojifont = Font_create(emojifontnames);
+    emojifont = Font_create(0, emojifontnames);
     if (!(win = Window_create())) goto error;
 
     Window_setSize(win, 640, 200);
     Window_setTitle(win, "Xmoji 😀 äöüß");
+    Window_setBackgroundColor(win, 50, 60, 70);
+    Window_setDefaultColor(win, 240, 244, 255);
     PSC_Event_register(Window_closed(win), 0, onclose, 0);
     PSC_Event_register(Window_errored(win), 0, onclose, 0);
     return;

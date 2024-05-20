@@ -161,19 +161,26 @@ static void dorender(void *ctx)
 	    rctx->renderer->hbbuffer, 0);
     uint32_t x = 0;
     uint32_t y = (Font_pixelsize(rctx->renderer->font) + .5) * 64.;
-    uint16_t rx = 0;
+    uint32_t rx = 0;
+    uint32_t prx = 0;
     uint16_t ry = 0;
-    uint16_t prx = 0;
     uint16_t pry = 0;
+    uint8_t glyphidbits = Font_glyphidbits(rctx->renderer->font);
+    uint8_t subpixelbits = Font_subpixelbits(rctx->renderer->font);
+    uint8_t roundbits = 6 - subpixelbits;
+    uint8_t roundadd = 0;
+    if (roundbits) roundadd = 1U << (roundbits - 1);
+    uint8_t subpixelmask = (1U << subpixelbits) - 1;
     for (unsigned i = 0; i < rctx->len; ++i)
     {
-	rx = (x + 8) >> 4;
+	rx = (x + roundadd) >> roundbits;
 	ry = (y + 0x20) >> 6;
 	rctx->glyphs[i].count = 1;
-	rctx->glyphs[i].dx = (rx >> 2) - (prx >> 2)
+	rctx->glyphs[i].dx = (rx >> subpixelbits) - (prx >> subpixelbits)
 	    + ((pos[i].x_offset + 0x20) >> 6);
 	rctx->glyphs[i].dy = ry - pry + ((pos[i].y_offset + 0x20) >> 6);
-	rctx->glyphs[i].glyphid = info[i].codepoint | ((rx & 3) << 16);
+	rctx->glyphs[i].glyphid = info[i].codepoint
+	    | ((rx & subpixelmask) << glyphidbits);
 	prx = rx;
 	pry = ry;
 	x += pos[i].x_advance;
