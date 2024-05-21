@@ -54,19 +54,19 @@ void Object_own(void *self, void *obj)
 
 void *Object_instanceOf(void *self, uint32_t type)
 {
-    Object *obj;
-    if (type)
-    {
-	ObjectBase *base = Object_instanceOf(self, 0);
-	obj = base->mostDerived;
-    }
-    else obj = self;
+    Object *obj = type ? Object_mostDerived(self) : self;
     while (obj)
     {
 	if (obj->type == type) return obj;
 	obj = obj->base;
     }
     PSC_Service_panic("Bug: type error!");
+}
+
+void *Object_mostDerived(void *self)
+{
+    ObjectBase *base = Object_instanceOf(self, 0);
+    return base->mostDerived;
 }
 
 static void destroyRecursive(Object *obj)

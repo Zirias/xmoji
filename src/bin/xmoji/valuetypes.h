@@ -19,7 +19,7 @@ typedef uint32_t Color;
 
 #define Color_fromRgb(r,g,b) (((r)<<24)|((g)<<16)|((b)<<8)|0xffU)
 #define Color_fromRgba(r,g,b,a) (((r)<<24)|((g)<<16)|((b)<<8)|(a))
-#define Color_xcb(c) { \
+#define Color_xcb(c) (xcb_render_color_t){ \
     .red = (Color_red((c)) << 8 | Color_red((c))), \
     .green = (Color_green((c)) << 8 | Color_green((c))), \
     .blue = (Color_blue((c)) << 8 | Color_blue((c))), \

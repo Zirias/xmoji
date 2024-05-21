@@ -3,8 +3,6 @@
 
 #include <stdint.h>
 
-#define _MO_first(x, ...) (x)
-
 typedef struct MetaObject
 {
     uint32_t id;
@@ -30,6 +28,7 @@ const void *MetaObject_get(uint32_t id);
 Object *Object_create(void *derived);
 void Object_own(void *self, void *obj);
 void *Object_instanceOf(void *self, uint32_t type);
+void *Object_mostDerived(void *self);
 void Object_destroy(void *self);
 
 #define REGTYPE(errval) do { \
@@ -43,32 +42,32 @@ void Object_destroy(void *self);
 
 #define Object_instance(o) Object_instanceOf((void *)(o), OBJTYPE)
 
-#define Object_base(o) ((Object *)Object_instance(o))->base
-
-#define Object_vcall(r, t, m, ...) do { \
-    Object *mo_obj = (Object *)_MO_first(__VA_ARGS__,); \
+#define priv_MO_docall(r, mo, m, ...) r = mo->m(__VA_ARGS__)
+#define priv_MO_docallv(r, mo, m, ...) mo->m(__VA_ARGS__)
+#define priv_MO_first(x, ...) (x)
+#define priv_MO_derived(...) \
+    Object_mostDerived((Object *)priv_MO_first(__VA_ARGS__,))
+#define priv_MO_base(...) ((Object *)priv_MO_first(__VA_ARGS__,))->base
+#define priv_MO_vcall(b, c, r, t, m, ...) do { \
+    Object *mo_obj = b(__VA_ARGS__); \
     while (mo_obj) { \
 	const Meta ## t *mo_meta = MetaObject_get(mo_obj->type); \
 	if (!mo_meta) break; \
 	if (mo_meta->m) { \
-	    r = mo_meta->m(__VA_ARGS__); \
+	    c(r, mo_meta, m, __VA_ARGS__); \
 	    break; \
 	} \
 	mo_obj = mo_obj->base; \
     } \
 } while (0)
 
-#define Object_vcallv(t, m, ...) do { \
-    Object *mo_obj = (Object *)_MO_first(__VA_ARGS__,); \
-    while (mo_obj) { \
-	const Meta ## t *mo_meta = MetaObject_get(mo_obj->type); \
-	if (!mo_meta) break; \
-	if (mo_meta->m) { \
-	    mo_meta->m(__VA_ARGS__); \
-	    break; \
-	} \
-	mo_obj = mo_obj->base; \
-    } \
-} while (0)
+#define Object_vcall(r, t, m, ...) \
+    priv_MO_vcall(priv_MO_derived, priv_MO_docall, r, t, m, __VA_ARGS__)
+#define Object_vcallv(t, m, ...) \
+    priv_MO_vcall(priv_MO_derived, priv_MO_docallv, 0, t, m, __VA_ARGS__)
+#define Object_bcall(r, t, m, ...) \
+    priv_MO_vcall(priv_MO_base, priv_MO_docall, r, t, m, __VA_ARGS__)
+#define Object_bcallv(t, m, ...) \
+    priv_MO_vcall(priv_MO_base, priv_MO_docallv, 0, t, m, __VA_ARGS__)
 
 #endif

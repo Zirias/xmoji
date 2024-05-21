@@ -5,14 +5,12 @@
 #include <string.h>
 
 static void destroy(void *obj);
-static int draw(void *obj,
-	xcb_drawable_t drawable, xcb_render_picture_t picture);
 static int show(void *obj);
 static int hide(void *obj);
 static Size minSize(const void *obj);
 
 static MetaWidget mo = MetaWidget_init("Widget",
-	destroy, draw, show, hide, minSize);
+	destroy, 0, show, hide, minSize);
 
 struct Widget
 {
@@ -22,6 +20,7 @@ struct Widget
     PSC_Event *sizeRequested;
     PSC_Event *sizeChanged;
     Widget *parent;
+    ColorSet *colorSet;
     Rect geometry;
     Size size;
     int visible;
@@ -30,6 +29,7 @@ struct Widget
 static void destroy(void *obj)
 {
     Widget *self = obj;
+    ColorSet_destroy(self->colorSet);
     PSC_Event_destroy(self->sizeChanged);
     PSC_Event_destroy(self->sizeRequested);
     PSC_Event_destroy(self->hidden);
@@ -37,18 +37,9 @@ static void destroy(void *obj)
     free(self);
 }
 
-static int draw(void *obj,
-	xcb_drawable_t drawable, xcb_render_picture_t picture)
-{
-    (void)obj;
-    (void)drawable;
-    (void)picture;
-    return 0;
-}
-
 static int show(void *obj)
 {
-    Widget *self = obj;
+    Widget *self = Object_instance(obj);
     if (!self->visible)
     {
 	self->visible = 1;
@@ -59,7 +50,7 @@ static int show(void *obj)
 
 static int hide(void *obj)
 {
-    Widget *self = obj;
+    Widget *self = Object_instance(obj);
     if (self->visible)
     {
 	self->visible = 0;
@@ -90,7 +81,8 @@ Widget *Widget_createBase(void *derived, void *parent)
     self->geometry = (Rect){{0, 0}, {0, 0}};
     self->visible = 0;
 
-    if (parent) Object_own(parent, self);
+    if (parent) Object_own(parent, derived);
+    else self->colorSet = ColorSet_create(0xffffffff, 0x000000ff);
     return self;
 }
 
@@ -127,6 +119,8 @@ Widget *Widget_parent(const void *self)
 int Widget_draw(void *self,
 	xcb_drawable_t drawable, xcb_render_picture_t picture)
 {
+    Widget *w = Object_instance(self);
+    if (!w->visible) return 0;
     int rc = -1;
     Object_vcall(rc, Widget, draw, self, drawable, picture);
     return rc;
@@ -182,9 +176,42 @@ Pos Widget_origin(const void *self)
     return w->geometry.pos;
 }
 
+const ColorSet *Widget_colorSet(const void *self)
+{
+    const Widget *w = Object_instance(self);
+    if (w->colorSet) return w->colorSet;
+    if (w->parent) return Widget_colorSet(w->parent);
+    return 0;
+}
+
+Color Widget_color(const void *self, ColorRole role)
+{
+    const ColorSet *colorSet = Widget_colorSet(self);
+    if (!colorSet) return 0x00000000;
+    return ColorSet_color(colorSet, role);
+}
+
+void Widget_setColor(void *self, ColorRole role, Color color)
+{
+    Widget *w = Object_instance(self);
+    if (!w->colorSet)
+    {
+	const ColorSet *cs = Widget_colorSet(self);
+	if (cs) w->colorSet = ColorSet_clone(cs);
+	else w->colorSet = ColorSet_create(0xffffffff, 0x000000ff);
+    }
+    ColorSet_setColor(w->colorSet, role, color);
+}
+
 int Widget_visible(const void *self)
 {
     const Widget *w = Object_instance(self);
     return w->visible;
+}
+
+void Widget_requestSize(void *self)
+{
+    Widget *w = Object_instance(self);
+    PSC_Event_raise(w->sizeRequested, 0, 0);
 }
 

@@ -30,14 +30,14 @@ PSC_Event *Window_closed(void *self)
 PSC_Event *Window_errored(void *self)
     CMETHOD ATTR_RETNONNULL;
 
-void Window_setBackgroundColor(void *self, Color color)
-    CMETHOD;
-void Window_setDefaultColor(void *self, Color color)
-    CMETHOD;
-
 const char *Window_title(const void *self)
     CMETHOD;
 void Window_setTitle(void *self, const char *title)
+    CMETHOD;
+
+void *Window_mainWidget(const void *self)
+    CMETHOD;
+void Window_setMainWidget(void *self, void *widget)
     CMETHOD;
 
 #endif

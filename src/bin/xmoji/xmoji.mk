@@ -1,6 +1,8 @@
-xmoji_MODULES=		font \
+xmoji_MODULES=		colorset \
+			font \
 			main \
 			object \
+			textlabel \
 			textrenderer \
 			widget \
 			window \

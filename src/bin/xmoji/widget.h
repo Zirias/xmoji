@@ -1,6 +1,7 @@
 #ifndef XMOJI_WIDGET_H
 #define XMOJI_WIDGET_H
 
+#include "colorset.h"
 #include "object.h"
 #include "valuetypes.h"
 
@@ -50,6 +51,11 @@ Size Widget_minSize(const void *self) CMETHOD;
 Size Widget_size(const void *self) CMETHOD;
 void Widget_setOrigin(void *self, Pos origin) CMETHOD;
 Pos Widget_origin(const void *self) CMETHOD;
+const ColorSet *Widget_colorSet(const void *self) CMETHOD;
+Color Widget_color(const void *self, ColorRole role) CMETHOD;
+void Widget_setColor(void *self, ColorRole role, Color color) CMETHOD;
 int Widget_visible(const void *self) CMETHOD;
+
+void Widget_requestSize(void *self) CMETHOD;
 
 #endif

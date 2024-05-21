@@ -1,6 +1,7 @@
 #include "xmoji.h"
 
 #include "font.h"
+#include "textlabel.h"
 #include "valuetypes.h"
 #include "window.h"
 #include "x11adapter.h"
@@ -39,11 +40,15 @@ static void onprestartup(void *receiver, void *sender, void *args)
     char *emojifontnames[] = { "Noto Color Emoji", "Noto Emoji", 0 };
     emojifont = Font_create(0, emojifontnames);
     if (!(win = Window_create(0))) goto error;
-
-    Widget_setSize(win, (Size){200, 200});
     Window_setTitle(win, "Xmoji 😀 äöüß");
-    Window_setBackgroundColor(win, Color_fromRgb(50, 60, 70));
-    Window_setDefaultColor(win, Color_fromRgb(240, 244, 255));
+    Widget_setColor(win, COLOR_BG_NORMAL, Color_fromRgb(50, 60, 70));
+    Widget_setColor(win, COLOR_NORMAL, Color_fromRgb(200, 255, 240));
+
+    TextLabel *label = TextLabel_create(win, sysfont);
+    TextLabel_setText(label, "Hello, World!");
+    Widget_show(label);
+    Window_setMainWidget(win, label);
+
     PSC_Event_register(Window_closed(win), 0, onclose, 0);
     PSC_Event_register(Window_errored(win), 0, onclose, 0);
     return;

@@ -14,11 +14,10 @@ struct TextRenderer
     PSC_Event *shaped;
     hb_font_t *hbfont;
     hb_buffer_t *hbbuffer;
-    xcb_render_color_t color;
     xcb_pixmap_t pixmap;
     xcb_render_picture_t pen;
+    Color color;
     Size size;
-    int pencolored;
     int haserror;
 };
 
@@ -93,7 +92,6 @@ TextRenderer *TextRenderer_create(Font *font)
     self->font = font;
     self->shaped = PSC_Event_create(self);
     self->hbfont = hb_ft_font_create_referenced(Font_face(font));
-    self->color.alpha = 0xffff;
     xcb_connection_t *c = X11Adapter_connection();
     self->pixmap = xcb_generate_id(c);
     PSC_Event_register(X11Adapter_requestError(), self, requestError,
@@ -134,18 +132,8 @@ int TextRenderer_setUtf8(TextRenderer *self, const char *utf8)
     return 0;
 }
 
-void TextRenderer_setColor(TextRenderer *self, Color color)
-{
-    xcb_render_color_t xc = Color_xcb(color);
-    if (memcmp(&self->color, &xc, sizeof xc))
-    {
-	self->color = xc;
-	self->pencolored = 0;
-    }
-}
-
 int TextRenderer_render(TextRenderer *self,
-	xcb_render_picture_t picture, Pos pos)
+	xcb_render_picture_t picture, Color color, Pos pos)
 {
     if (self->haserror || !self->hbbuffer) return -1;
     unsigned len = hb_buffer_get_length(self->hbbuffer);
@@ -183,14 +171,14 @@ int TextRenderer_render(TextRenderer *self,
     glyphs[0].dx += pos.x;
     glyphs[0].dy += pos.y;
     xcb_connection_t *c = X11Adapter_connection();
-    if (!self->pencolored)
+    if (color != self->color)
     {
 	xcb_rectangle_t rect = { 0, 0, 1, 1 };
 	CHECK(xcb_render_fill_rectangles(c, XCB_RENDER_PICT_OP_OVER,
-		    self->pen, self->color, 1, &rect),
+		    self->pen, Color_xcb(color), 1, &rect),
 		"TextRenderer: Cannot colorize pen for 0x%x",
 		(unsigned)self->pixmap);
-	self->pencolored = 1;
+	self->color = color;
     }
     Font_uploadGlyphs(self->font, len, glyphs);
     CHECK(xcb_render_composite_glyphs_32(c, XCB_RENDER_PICT_OP_OVER,

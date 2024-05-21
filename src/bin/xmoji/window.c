@@ -1,8 +1,5 @@
 #include "window.h"
 
-#include "font.h"
-#include "textrenderer.h"
-#include "xmoji.h"
 #include "x11adapter.h"
 
 #include <poser/core.h>
@@ -12,11 +9,9 @@
 static void destroy(void *obj);
 static int draw(void *obj,
 	xcb_drawable_t drawable, xcb_render_picture_t picture);
-static int show(void *obj);
-static int hide(void *obj);
 
 static MetaWindow mo = MetaWindow_init("Window",
-	destroy, draw, show, hide, 0);
+	destroy, draw, 0, 0, 0);
 
 struct Window
 {
@@ -24,12 +19,12 @@ struct Window
     PSC_Event *closed;
     PSC_Event *errored;
     char *title;
+    void *mainWidget;
     xcb_window_t w;
     xcb_render_picture_t p;
-    xcb_render_color_t bgcol;
     int haserror;
-    Font *font[7];
-    TextRenderer *hello[7];
+    int haveMinSize;
+    int mapped;
 };
 
 static int draw(void *obj,
@@ -37,19 +32,18 @@ static int draw(void *obj,
 {
     (void)drawable;
 
-    Window *self = obj;
+    Window *self = Object_instance(obj);
     xcb_rectangle_t rect = {0, 0, 0, 0};
     Size size = Widget_size(self);
     rect.width = size.width;
     rect.height = size.height;
+    Color color = Widget_color(self, COLOR_BG_NORMAL);
     CHECK(xcb_render_fill_rectangles(X11Adapter_connection(),
-		XCB_RENDER_PICT_OP_OVER, picture, self->bgcol, 1, &rect),
+		XCB_RENDER_PICT_OP_OVER, picture, Color_xcb(color), 1, &rect),
 	    "Cannot draw window background on 0x%x", (unsigned)self->w);
-    Pos pos = { 0, 0 };
-    for (int i = 0; i < 7; ++i)
+    if (self->mainWidget)
     {
-	TextRenderer_render(self->hello[i], picture, pos);
-	pos.y += Font_linespace(self->font[i]);
+	return Widget_draw(self->mainWidget, drawable, picture);
     }
     return 0;
 }
@@ -75,7 +69,6 @@ static void configureNotify(void *receiver, void *sender, void *args)
     if (memcmp(&oldsz, &newsz, sizeof oldsz))
     {
 	Widget_setSize(self, newsz);
-	Widget_draw(self, self->w, self->p);
     }
 }
 
@@ -127,29 +120,42 @@ static void sizeChanged(void *receiver, void *sender, void *args)
     xcb_configure_window(X11Adapter_connection(), self->w, mask, values);
 }
 
-static int show(void *obj)
+static void map(Window *self)
 {
-    Window *self = obj;
     CHECK(xcb_map_window(X11Adapter_connection(), self->w),
 	    "Cannot map window 0x%x", (unsigned)self->w);
-    return Widget_show(Object_base(self));
+    self->mapped = 1;
 }
 
-static int hide(void *obj)
+static void sizeRequested(void *receiver, void *sender, void *args)
 {
-    (void)obj;
-    return 0;
+    (void)sender;
+    (void)args;
+
+    Window *self = receiver;
+    Size minSize = Widget_minSize(self->mainWidget);
+    if (minSize.width && minSize.height) self->haveMinSize = 1;
+    else self->haveMinSize = 0;
+    Size newSize = Widget_size(self);
+    if (minSize.width > newSize.width) newSize.width = minSize.width;
+    if (minSize.height > newSize.height) newSize.height = minSize.height;
+    Widget_setSize(self, newSize);
+    if (self->haveMinSize && !self->mapped && Widget_visible(self)) map(self);
+}
+
+static void shown(void *receiver, void *sender, void *args)
+{
+    (void)sender;
+    (void)args;
+
+    Window *self = receiver;
+    if (self->haveMinSize && !self->mapped) map(self);
 }
 
 static void destroy(void *window)
 {
     Window *self = window;
     xcb_connection_t *c = X11Adapter_connection();
-    for (int i = 0; i < 7; ++i)
-    {
-	TextRenderer_destroy(self->hello[i]);
-	Font_destroy(self->font[i]);
-    }
     xcb_render_free_picture(c, self->p);
     PSC_Event_unregister(Widget_sizeChanged(self), self, sizeChanged, 0);
     PSC_Event_unregister(X11Adapter_expose(), self,
@@ -184,12 +190,9 @@ Window *Window_createBase(void *derived, void *parent)
     self->errored = PSC_Event_create(self);
     self->title = 0;
     self->w = w;
-    self->bgcol.red = 0xffff;
-    self->bgcol.green = 0xffff;
-    self->bgcol.blue = 0xffff;
-    self->bgcol.alpha = 0xffff;
     self->haserror = 0;
-    Widget_setSize(self, (Size){320, 200});
+    self->haveMinSize = 0;
+    Widget_setSize(self, (Size){1, 1});
 
     PSC_Event_register(X11Adapter_requestError(), self, requestError, w);
 
@@ -199,7 +202,7 @@ Window *Window_createBase(void *derived, void *parent)
     };
 
     CHECK(xcb_create_window(c, XCB_COPY_FROM_PARENT, w, s->root,
-		0, 0, 320, 200, 2, XCB_WINDOW_CLASS_INPUT_OUTPUT,
+		0, 0, 1, 1, 2, XCB_WINDOW_CLASS_INPUT_OUTPUT,
 		s->root_visual, mask, values),
 	    "Cannot create window 0x%x", (unsigned)w);
     xcb_atom_t delwin = A(WM_DELETE_WINDOW);
@@ -223,14 +226,9 @@ Window *Window_createBase(void *derived, void *parent)
     PSC_Event_register(X11Adapter_clientmsg(), self, clientmsg, w);
     PSC_Event_register(X11Adapter_configureNotify(), self, configureNotify, w);
     PSC_Event_register(X11Adapter_expose(), self, expose, w);
+    PSC_Event_register(Widget_shown(self), self, shown, 0);
     PSC_Event_register(Widget_sizeChanged(self), self, sizeChanged, 0);
 
-    for (int i = 0; i < 7; ++i)
-    {
-	self->font[i] = Font_create(i, 0);
-	self->hello[i] = TextRenderer_create(self->font[i]);
-	TextRenderer_setUtf8(self->hello[i], "Hello, World!");
-    }
     return self;
 }
 
@@ -244,21 +242,6 @@ PSC_Event *Window_errored(void *self)
 {
     Window *w = Object_instance(self);
     return w->errored;
-}
-
-void Window_setBackgroundColor(void *self, Color color)
-{
-    Window *w = Object_instance(self);
-    Color_setXcb(color, &w->bgcol);
-}
-
-void Window_setDefaultColor(void *self, Color color)
-{
-    Window *w = Object_instance(self);
-    for (int i = 0; i < 7; ++i)
-    {
-	TextRenderer_setColor(w->hello[i], color);
-    }
 }
 
 const char *Window_title(const void *self)
@@ -288,6 +271,25 @@ void Window_setTitle(void *self, const char *title)
     {
 	w->title = 0;
 	xcb_delete_property(c, w->w, XCB_ATOM_WM_NAME);
+    }
+}
+
+void *Window_mainWidget(const void *self)
+{
+    Window *w = Object_instance(self);
+    return w->mainWidget;
+}
+
+void Window_setMainWidget(void *self, void *widget)
+{
+    Window *w = Object_instance(self);
+    if (w->mainWidget) PSC_Event_unregister(
+	    Widget_sizeRequested(w->mainWidget), w, sizeRequested, 0);
+    w->mainWidget = widget;
+    if (widget)
+    {
+	PSC_Event_register(Widget_sizeRequested(widget), w, sizeRequested, 0);
+	sizeRequested(w, 0, 0);
     }
 }
 

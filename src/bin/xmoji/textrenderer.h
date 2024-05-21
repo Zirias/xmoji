@@ -19,10 +19,8 @@ Size TextRenderer_size(const TextRenderer *self)
     CMETHOD;
 int TextRenderer_setUtf8(TextRenderer *self, const char *utf8)
     CMETHOD;
-void TextRenderer_setColor(TextRenderer *self, Color color)
-    CMETHOD;
 int TextRenderer_render(TextRenderer *self,
-	xcb_render_picture_t picture, Pos pos)
+	xcb_render_picture_t picture, Color color, Pos pos)
     CMETHOD;
 void TextRenderer_destroy(TextRenderer *self);
 
