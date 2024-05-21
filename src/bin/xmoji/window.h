@@ -2,6 +2,8 @@
 #define XMOJI_WINDOW_H
 
 #include "object.h"
+#include "valuetypes.h"
+
 #include <poser/decl.h>
 #include <xcb/xproto.h>
 
@@ -43,6 +45,10 @@ uint32_t Window_width(const void *self)
 uint32_t Window_height(const void *self)
     CMETHOD;
 void Window_setSize(void *self, uint32_t width, uint32_t height)
+    CMETHOD;
+void Window_setBackgroundColor(void *self, Color color)
+    CMETHOD;
+void Window_setDefaultColor(void *self, Color color)
     CMETHOD;
 
 const char *Window_title(const void *self)

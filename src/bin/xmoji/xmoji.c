@@ -1,6 +1,7 @@
 #include "xmoji.h"
 
 #include "font.h"
+#include "valuetypes.h"
 #include "window.h"
 #include "x11adapter.h"
 
@@ -39,10 +40,10 @@ static void onprestartup(void *receiver, void *sender, void *args)
     emojifont = Font_create(0, emojifontnames);
     if (!(win = Window_create())) goto error;
 
-    Window_setSize(win, 640, 200);
+    Window_setSize(win, 200, 200);
     Window_setTitle(win, "Xmoji 😀 äöüß");
-    Window_setBackgroundColor(win, 50, 60, 70);
-    Window_setDefaultColor(win, 240, 244, 255);
+    Window_setBackgroundColor(win, Color_fromRgb(50, 60, 70));
+    Window_setDefaultColor(win, Color_fromRgb(240, 244, 255));
     PSC_Event_register(Window_closed(win), 0, onclose, 0);
     PSC_Event_register(Window_errored(win), 0, onclose, 0);
     return;

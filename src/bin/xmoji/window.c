@@ -1,5 +1,6 @@
 #include "window.h"
 
+#include "font.h"
 #include "textrenderer.h"
 #include "xmoji.h"
 #include "x11adapter.h"
@@ -22,11 +23,11 @@ struct Window
     char *title;
     xcb_window_t w;
     xcb_render_picture_t p;
-    xcb_render_picture_t textpic;
     xcb_render_color_t bgcol;
     xcb_rectangle_t windowrect;
     int haserror;
-    TextRenderer *hello;
+    Font *font[7];
+    TextRenderer *hello[7];
 };
 
 static void draw(Window *self)
@@ -35,7 +36,13 @@ static void draw(Window *self)
 		XCB_RENDER_PICT_OP_OVER, self->p, self->bgcol, 1,
 		&self->windowrect),
 	    "Cannot draw window background on 0x%x", (unsigned)self->w);
-    TextRenderer_render(self->hello, self->textpic);
+    Pos pos = { 0, 0 };
+    for (int i = 0; i < 7; ++i)
+    {
+	TextRenderer_render(self->hello[i], self->p, pos);
+	Size size = TextRenderer_size(self->hello[i]);
+	pos.y += size.height;
+    }
 }
 
 static void expose(void *receiver, void *sender, void *args)
@@ -107,8 +114,11 @@ static void destroy(void *window)
 {
     Window *self = window;
     xcb_connection_t *c = X11Adapter_connection();
-    xcb_render_free_picture(c, self->textpic);
-    TextRenderer_destroy(self->hello);
+    for (int i = 0; i < 7; ++i)
+    {
+	TextRenderer_destroy(self->hello[i]);
+	Font_destroy(self->font[i]);
+    }
     xcb_render_free_picture(c, self->p);
     PSC_Event_unregister(X11Adapter_expose(), self,
 	    expose, self->w);
@@ -144,9 +154,9 @@ Window *Window_create(void)
     self->errored = PSC_Event_create(self);
     self->title = 0;
     self->w = w;
-    self->bgcol.red = 0xb000;
-    self->bgcol.green = 0xb000;
-    self->bgcol.blue = 0xb000;
+    self->bgcol.red = 0xffff;
+    self->bgcol.green = 0xffff;
+    self->bgcol.blue = 0xffff;
     self->bgcol.alpha = 0xffff;
     self->windowrect.x = 0;
     self->windowrect.y = 0;
@@ -178,17 +188,24 @@ Window *Window_create(void)
     CHECK(xcb_change_property(c, XCB_PROP_MODE_REPLACE, w,
 		A(_NET_WM_WINDOW_TYPE), 4, 32, 1, &wtnorm),
 	    "Cannot set window type for 0x%x", (unsigned)w);
+    /*
     self->p = xcb_generate_id(c);
     CHECK(xcb_render_create_picture(c, self->p, w, X11Adapter_rootformat(),
 		0, 0),
 	    "Cannot create XRender picture for 0x%x", (unsigned)w);
+    */
+    self->p = TextRenderer_createPicture(self->w);
 
     PSC_Event_register(X11Adapter_clientmsg(), self, clientmsg, w);
     PSC_Event_register(X11Adapter_configureNotify(), self, configureNotify, w);
     PSC_Event_register(X11Adapter_expose(), self, expose, w);
 
-    self->hello = TextRenderer_fromUtf8(Xmoji_sysfont(), "Hello, World!");
-    self->textpic = TextRenderer_createPicture(self->hello, self->w);
+    for (int i = 0; i < 7; ++i)
+    {
+	self->font[i] = Font_create(i, 0);
+	self->hello[i] = TextRenderer_create(self->font[i]);
+	TextRenderer_setUtf8(self->hello[i], "Hello, World!");
+    }
     return self;
 }
 
@@ -248,6 +265,21 @@ void Window_setSize(void *self, uint32_t width, uint32_t height)
     {
 	xcb_connection_t *c = X11Adapter_connection();
 	xcb_configure_window(c, w->w, mask, values);
+    }
+}
+
+void Window_setBackgroundColor(void *self, Color color)
+{
+    Window *w = Object_instance(self);
+    Color_setXcb(color, &w->bgcol);
+}
+
+void Window_setDefaultColor(void *self, Color color)
+{
+    Window *w = Object_instance(self);
+    for (int i = 0; i < 7; ++i)
+    {
+	TextRenderer_setColor(w->hello[i], color);
     }
 }
 
