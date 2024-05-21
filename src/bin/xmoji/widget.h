@@ -5,11 +5,13 @@
 #include "valuetypes.h"
 
 #include <poser/decl.h>
+#include <xcb/render.h>
 
 typedef struct MetaWidget
 {
     MetaObject base;
-    int (*draw)(void *widget);
+    int (*draw)(void *widget,
+	    xcb_drawable_t drawable, xcb_render_picture_t picture);
     int (*show)(void *widget);
     int (*hide)(void *widget);
     Size (*minSize)(const void *widget);
@@ -32,17 +34,22 @@ typedef struct SizeChangedEventArgs
     Size newSize;
 } SizeChangedEventArgs;
 
-Widget *Widget_create(void *parent);
+Widget *Widget_createBase(void *derived, void *parent);
+#define Widget_create(...) Widget_createBase(0, __VA_ARGS__)
 PSC_Event *Widget_shown(void *self) CMETHOD ATTR_RETNONNULL;
 PSC_Event *Widget_hidden(void *self) CMETHOD ATTR_RETNONNULL;
 PSC_Event *Widget_sizeRequested(void *self) CMETHOD ATTR_RETNONNULL;
 PSC_Event *Widget_sizeChanged(void *self) CMETHOD ATTR_RETNONNULL;
-int Widget_draw(void *self) CMETHOD;
+Widget *Widget_parent(const void *self) CMETHOD;
+int Widget_draw(void *self,
+	xcb_drawable_t drawable, xcb_render_picture_t picture) CMETHOD;
 int Widget_show(void *self) CMETHOD;
 int Widget_hide(void *self) CMETHOD;
 void Widget_setSize(void *self, Size size) CMETHOD;
 Size Widget_minSize(const void *self) CMETHOD;
 Size Widget_size(const void *self) CMETHOD;
+void Widget_setOrigin(void *self, Pos origin) CMETHOD;
+Pos Widget_origin(const void *self) CMETHOD;
 int Widget_visible(const void *self) CMETHOD;
 
 #endif

@@ -38,7 +38,7 @@ static void onprestartup(void *receiver, void *sender, void *args)
     sysfont = Font_create(3, 0);
     char *emojifontnames[] = { "Noto Color Emoji", "Noto Emoji", 0 };
     emojifont = Font_create(0, emojifontnames);
-    if (!(win = Window_create())) goto error;
+    if (!(win = Window_create(0))) goto error;
 
     Widget_setSize(win, (Size){200, 200});
     Window_setTitle(win, "Xmoji 😀 äöüß");

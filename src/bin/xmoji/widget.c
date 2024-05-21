@@ -5,7 +5,8 @@
 #include <string.h>
 
 static void destroy(void *obj);
-static int draw(void *obj);
+static int draw(void *obj,
+	xcb_drawable_t drawable, xcb_render_picture_t picture);
 static int show(void *obj);
 static int hide(void *obj);
 static Size minSize(const void *obj);
@@ -20,6 +21,8 @@ struct Widget
     PSC_Event *hidden;
     PSC_Event *sizeRequested;
     PSC_Event *sizeChanged;
+    Widget *parent;
+    Rect geometry;
     Size size;
     int visible;
 };
@@ -34,9 +37,12 @@ static void destroy(void *obj)
     free(self);
 }
 
-static int draw(void *obj)
+static int draw(void *obj,
+	xcb_drawable_t drawable, xcb_render_picture_t picture)
 {
     (void)obj;
+    (void)drawable;
+    (void)picture;
     return 0;
 }
 
@@ -68,23 +74,23 @@ static Size minSize(const void *obj)
     return (Size){0, 0};
 }
 
-Widget *Widget_create(void *parent)
+Widget *Widget_createBase(void *derived, void *parent)
 {
-    (void)parent;
-
     REGTYPE(0);
 
     Widget *self = PSC_malloc(sizeof *self);
-    self->base.base = 0;
-    self->base.type = mo.base.id;
+    if (!derived) derived = self;
+    self->base.base = Object_create(derived);
+    self->base.type = OBJTYPE;
     self->shown = PSC_Event_create(self);
     self->hidden = PSC_Event_create(self);
     self->sizeRequested = PSC_Event_create(self);
     self->sizeChanged = PSC_Event_create(self);
-    self->size.width = 0;
-    self->size.height = 0;
+    self->parent = parent;
+    self->geometry = (Rect){{0, 0}, {0, 0}};
     self->visible = 0;
 
+    if (parent) Object_own(parent, self);
     return self;
 }
 
@@ -112,10 +118,17 @@ PSC_Event *Widget_sizeChanged(void *self)
     return w->sizeChanged;
 }
 
-int Widget_draw(void *self)
+Widget *Widget_parent(const void *self)
+{
+    const Widget *w = Object_instance(self);
+    return w->parent;
+}
+
+int Widget_draw(void *self,
+	xcb_drawable_t drawable, xcb_render_picture_t picture)
 {
     int rc = -1;
-    Object_vcall(rc, Widget, draw, self);
+    Object_vcall(rc, Widget, draw, self, drawable, picture);
     return rc;
 }
 
@@ -136,10 +149,10 @@ int Widget_hide(void *self)
 void Widget_setSize(void *self, Size size)
 {
     Widget *w = Object_instance(self);
-    if (memcmp(&w->size, &size, sizeof size))
+    if (memcmp(&w->geometry.size, &size, sizeof size))
     {
-	SizeChangedEventArgs args = { w->size, size };
-	w->size = size;
+	SizeChangedEventArgs args = { w->geometry.size, size };
+	w->geometry.size = size;
 	PSC_Event_raise(w->sizeChanged, 0, &args);
     }
 }
@@ -153,13 +166,25 @@ Size Widget_minSize(const void *self)
 
 Size Widget_size(const void *self)
 {
+    const Widget *w = Object_instance(self);
+    return w->geometry.size;
+}
+
+void Widget_setOrigin(void *self, Pos pos)
+{
     Widget *w = Object_instance(self);
-    return w->size;
+    w->geometry.pos = pos;
+}
+
+Pos Widget_origin(const void *self)
+{
+    const Widget *w = Object_instance(self);
+    return w->geometry.pos;
 }
 
 int Widget_visible(const void *self)
 {
-    Widget *w = Object_instance(self);
+    const Widget *w = Object_instance(self);
     return w->visible;
 }
 

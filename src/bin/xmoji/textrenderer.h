@@ -26,6 +26,4 @@ int TextRenderer_render(TextRenderer *self,
     CMETHOD;
 void TextRenderer_destroy(TextRenderer *self);
 
-xcb_render_picture_t TextRenderer_createPicture(xcb_drawable_t drawable);
-
 #endif

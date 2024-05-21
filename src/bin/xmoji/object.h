@@ -27,6 +27,8 @@ typedef struct Object
 int MetaObject_register(void *meta);
 const void *MetaObject_get(uint32_t id);
 
+Object *Object_create(void *derived);
+void Object_own(void *self, void *obj);
 void *Object_instanceOf(void *self, uint32_t type);
 void Object_destroy(void *self);
 
@@ -39,8 +41,7 @@ void Object_destroy(void *self);
 
 #define OBJTYPE ((MetaObject *)&mo)->id
 
-#define Object_instance(o) \
-    Object_instanceOf((void *)(o), OBJTYPE)
+#define Object_instance(o) Object_instanceOf((void *)(o), OBJTYPE)
 
 #define Object_base(o) ((Object *)Object_instance(o))->base
 

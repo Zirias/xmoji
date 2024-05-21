@@ -213,19 +213,3 @@ void TextRenderer_destroy(TextRenderer *self)
     PSC_Event_destroy(self->shaped);
     free(self);
 }
-
-xcb_render_picture_t TextRenderer_createPicture(xcb_drawable_t drawable)
-{
-    xcb_connection_t *c = X11Adapter_connection();
-    xcb_render_picture_t pic = xcb_generate_id(c);
-    uint32_t values[] = {
-	XCB_RENDER_POLY_MODE_IMPRECISE,
-	XCB_RENDER_POLY_EDGE_SMOOTH
-    };
-    CHECK(xcb_render_create_picture(c, pic, drawable, X11Adapter_rootformat(),
-		XCB_RENDER_CP_POLY_MODE|XCB_RENDER_CP_POLY_EDGE, values),
-	    "TextRenderer: Cannot create XRender picture for 0x%x",
-	    (unsigned)drawable);
-    return pic;
-}
-

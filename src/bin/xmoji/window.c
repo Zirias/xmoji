@@ -10,7 +10,8 @@
 #include <string.h>
 
 static void destroy(void *obj);
-static int draw(void *obj);
+static int draw(void *obj,
+	xcb_drawable_t drawable, xcb_render_picture_t picture);
 static int show(void *obj);
 static int hide(void *obj);
 
@@ -31,20 +32,23 @@ struct Window
     TextRenderer *hello[7];
 };
 
-static int draw(void *obj)
+static int draw(void *obj,
+	xcb_drawable_t drawable, xcb_render_picture_t picture)
 {
+    (void)drawable;
+
     Window *self = obj;
     xcb_rectangle_t rect = {0, 0, 0, 0};
     Size size = Widget_size(self);
     rect.width = size.width;
     rect.height = size.height;
     CHECK(xcb_render_fill_rectangles(X11Adapter_connection(),
-		XCB_RENDER_PICT_OP_OVER, self->p, self->bgcol, 1, &rect),
+		XCB_RENDER_PICT_OP_OVER, picture, self->bgcol, 1, &rect),
 	    "Cannot draw window background on 0x%x", (unsigned)self->w);
     Pos pos = { 0, 0 };
     for (int i = 0; i < 7; ++i)
     {
-	TextRenderer_render(self->hello[i], self->p, pos);
+	TextRenderer_render(self->hello[i], picture, pos);
 	pos.y += Font_linespace(self->font[i]);
     }
     return 0;
@@ -55,7 +59,8 @@ static void expose(void *receiver, void *sender, void *args)
     (void)sender;
     (void)args;
 
-    Widget_draw(receiver);
+    Window *self = receiver;
+    Widget_draw(self, self->w, self->p);
 }
 
 static void configureNotify(void *receiver, void *sender, void *args)
@@ -70,7 +75,7 @@ static void configureNotify(void *receiver, void *sender, void *args)
     if (memcmp(&oldsz, &newsz, sizeof oldsz))
     {
 	Widget_setSize(self, newsz);
-	Widget_draw(self);
+	Widget_draw(self, self->w, self->p);
     }
 }
 
@@ -161,7 +166,7 @@ static void destroy(void *window)
     free(self);
 }
 
-Window *Window_create(void)
+Window *Window_createBase(void *derived, void *parent)
 {
     REGTYPE(0);
 
@@ -172,7 +177,8 @@ Window *Window_create(void)
     if (!w) return 0;
 
     Window *self = PSC_malloc(sizeof *self);
-    self->base.base = Widget_create(0);
+    if (!derived) derived = self;
+    self->base.base = Widget_createBase(derived, parent);
     self->base.type = OBJTYPE;
     self->closed = PSC_Event_create(self);
     self->errored = PSC_Event_create(self);
@@ -209,13 +215,10 @@ Window *Window_create(void)
     CHECK(xcb_change_property(c, XCB_PROP_MODE_REPLACE, w,
 		A(_NET_WM_WINDOW_TYPE), 4, 32, 1, &wtnorm),
 	    "Cannot set window type for 0x%x", (unsigned)w);
-    /*
     self->p = xcb_generate_id(c);
     CHECK(xcb_render_create_picture(c, self->p, w, X11Adapter_rootformat(),
 		0, 0),
 	    "Cannot create XRender picture for 0x%x", (unsigned)w);
-    */
-    self->p = TextRenderer_createPicture(self->w);
 
     PSC_Event_register(X11Adapter_clientmsg(), self, clientmsg, w);
     PSC_Event_register(X11Adapter_configureNotify(), self, configureNotify, w);
