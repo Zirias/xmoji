@@ -46,8 +46,7 @@ static void doshape(void *ctx)
 	{
 	    width += pos[i].x_advance;
 	}
-	height = FT_MulFix(face->bbox.yMax, face->size->metrics.y_scale)
-	    - FT_MulFix(face->bbox.yMin, face->size->metrics.y_scale);
+	height = face->size->metrics.ascender - face->size->metrics.descender;
     }
     else
     {

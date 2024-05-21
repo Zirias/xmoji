@@ -40,7 +40,7 @@ static void onprestartup(void *receiver, void *sender, void *args)
     emojifont = Font_create(0, emojifontnames);
     if (!(win = Window_create())) goto error;
 
-    Window_setSize(win, 200, 200);
+    Widget_setSize(win, (Size){200, 200});
     Window_setTitle(win, "Xmoji 😀 äöüß");
     Window_setBackgroundColor(win, Color_fromRgb(50, 60, 70));
     Window_setDefaultColor(win, Color_fromRgb(240, 244, 255));
@@ -59,7 +59,7 @@ static void onstartup(void *receiver, void *sender, void *args)
     (void)args;
 
     PSC_Log_setAsync(1);
-    Window_show(win);
+    Widget_show(win);
 }
 
 static void onshutdown(void *receiver, void *sender, void *args)
@@ -72,7 +72,7 @@ static void onshutdown(void *receiver, void *sender, void *args)
     emojifont = 0;
     Font_destroy(sysfont);
     sysfont = 0;
-    Window_destroy(win);
+    Object_destroy(win);
     win = 0;
     Font_done();
     X11Adapter_done();

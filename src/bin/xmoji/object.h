@@ -30,9 +30,19 @@ const void *MetaObject_get(uint32_t id);
 void *Object_instanceOf(void *self, uint32_t type);
 void Object_destroy(void *self);
 
-#define Object_instance(o) Object_instanceOf((void *)(o), mo.base.id)
+#define REGTYPE(errval) do { \
+    MetaObject *b_mo = (MetaObject *)&mo; \
+    if (!b_mo->id) { \
+	if (MetaObject_register(b_mo) < 0) return errval; \
+    } \
+} while (0)
 
-#define Object_base(o) Object_instance(o)->base
+#define OBJTYPE ((MetaObject *)&mo)->id
+
+#define Object_instance(o) \
+    Object_instanceOf((void *)(o), OBJTYPE)
+
+#define Object_base(o) ((Object *)Object_instance(o))->base
 
 #define Object_vcall(r, t, m, ...) do { \
     Object *mo_obj = (Object *)_MO_first(__VA_ARGS__,); \

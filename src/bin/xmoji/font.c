@@ -253,6 +253,11 @@ double Font_pixelsize(const Font *self)
     return self->pixelsize;
 }
 
+uint16_t Font_linespace(const Font *self)
+{
+    return (self->face->size->metrics.height + 0x20) >> 6;
+}
+
 uint8_t Font_glyphidbits(const Font *self)
 {
     if (!(self->face->face_flags & FT_FACE_FLAG_SCALABLE)) return 16;

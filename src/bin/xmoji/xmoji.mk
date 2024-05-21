@@ -2,6 +2,7 @@ xmoji_MODULES=		font \
 			main \
 			object \
 			textrenderer \
+			widget \
 			window \
 			x11adapter \
 			xmoji

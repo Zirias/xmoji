@@ -10,10 +10,12 @@
 #include <string.h>
 
 static void destroy(void *obj);
-static int show(void *window);
-static int hide(void *window);
+static int draw(void *obj);
+static int show(void *obj);
+static int hide(void *obj);
 
-static MetaWindow mo = MetaWindow_init("Window", destroy, show, hide);
+static MetaWindow mo = MetaWindow_init("Window",
+	destroy, draw, show, hide, 0);
 
 struct Window
 {
@@ -24,25 +26,28 @@ struct Window
     xcb_window_t w;
     xcb_render_picture_t p;
     xcb_render_color_t bgcol;
-    xcb_rectangle_t windowrect;
     int haserror;
     Font *font[7];
     TextRenderer *hello[7];
 };
 
-static void draw(Window *self)
+static int draw(void *obj)
 {
+    Window *self = obj;
+    xcb_rectangle_t rect = {0, 0, 0, 0};
+    Size size = Widget_size(self);
+    rect.width = size.width;
+    rect.height = size.height;
     CHECK(xcb_render_fill_rectangles(X11Adapter_connection(),
-		XCB_RENDER_PICT_OP_OVER, self->p, self->bgcol, 1,
-		&self->windowrect),
+		XCB_RENDER_PICT_OP_OVER, self->p, self->bgcol, 1, &rect),
 	    "Cannot draw window background on 0x%x", (unsigned)self->w);
     Pos pos = { 0, 0 };
     for (int i = 0; i < 7; ++i)
     {
 	TextRenderer_render(self->hello[i], self->p, pos);
-	Size size = TextRenderer_size(self->hello[i]);
-	pos.y += size.height;
+	pos.y += Font_linespace(self->font[i]);
     }
+    return 0;
 }
 
 static void expose(void *receiver, void *sender, void *args)
@@ -50,8 +55,7 @@ static void expose(void *receiver, void *sender, void *args)
     (void)sender;
     (void)args;
 
-    Window *self = receiver;
-    draw(self);
+    Widget_draw(receiver);
 }
 
 static void configureNotify(void *receiver, void *sender, void *args)
@@ -60,13 +64,13 @@ static void configureNotify(void *receiver, void *sender, void *args)
 
     Window *self = receiver;
     xcb_configure_notify_event_t *ev = args;
+    Size oldsz = Widget_size(self);
+    Size newsz = (Size){ ev->width, ev->height };
 
-    if (ev->width != self->windowrect.width ||
-	    ev->height != self->windowrect.height)
+    if (memcmp(&oldsz, &newsz, sizeof oldsz))
     {
-	self->windowrect.width = ev->width;
-	self->windowrect.height = ev->height;
-	draw(self);
+	Widget_setSize(self, newsz);
+	Widget_draw(self);
     }
 }
 
@@ -96,17 +100,39 @@ static void requestError(void *receiver, void *sender, void *args)
     PSC_Event_raise(self->errored, 0, 0);
 }
 
-static int show(void *window)
+static void sizeChanged(void *receiver, void *sender, void *args)
 {
-    Window *self = window;
-    CHECK(xcb_map_window(X11Adapter_connection(), self->w),
-	    "Cannot map window 0x%x", (unsigned)self->w);
-    return 0;
+    (void)sender;
+
+    Window *self = receiver;
+    SizeChangedEventArgs *ea = args;
+    uint16_t mask = 0;
+    uint32_t values[2];
+    int n = 0;
+    if (ea->newSize.width != ea->oldSize.width)
+    {
+	values[n++] = ea->newSize.width;
+	mask |= XCB_CONFIG_WINDOW_WIDTH;
+    }
+    if (ea->newSize.height != ea->oldSize.height)
+    {
+	values[n++] = ea->newSize.height;
+	mask |= XCB_CONFIG_WINDOW_HEIGHT;
+    }
+    xcb_configure_window(X11Adapter_connection(), self->w, mask, values);
 }
 
-static int hide(void *window)
+static int show(void *obj)
 {
-    (void)window;
+    Window *self = obj;
+    CHECK(xcb_map_window(X11Adapter_connection(), self->w),
+	    "Cannot map window 0x%x", (unsigned)self->w);
+    return Widget_show(Object_base(self));
+}
+
+static int hide(void *obj)
+{
+    (void)obj;
     return 0;
 }
 
@@ -120,6 +146,7 @@ static void destroy(void *window)
 	Font_destroy(self->font[i]);
     }
     xcb_render_free_picture(c, self->p);
+    PSC_Event_unregister(Widget_sizeChanged(self), self, sizeChanged, 0);
     PSC_Event_unregister(X11Adapter_expose(), self,
 	    expose, self->w);
     PSC_Event_unregister(X11Adapter_configureNotify(), self,
@@ -136,10 +163,7 @@ static void destroy(void *window)
 
 Window *Window_create(void)
 {
-    if (!mo.base.id)
-    {
-	if (MetaObject_register(&mo) < 0) return 0;
-    }
+    REGTYPE(0);
 
     xcb_connection_t *c = X11Adapter_connection();
     if (!c) return 0;
@@ -148,8 +172,8 @@ Window *Window_create(void)
     if (!w) return 0;
 
     Window *self = PSC_malloc(sizeof *self);
-    self->base.base = 0;
-    self->base.type = mo.base.id;
+    self->base.base = Widget_create(0);
+    self->base.type = OBJTYPE;
     self->closed = PSC_Event_create(self);
     self->errored = PSC_Event_create(self);
     self->title = 0;
@@ -158,11 +182,8 @@ Window *Window_create(void)
     self->bgcol.green = 0xffff;
     self->bgcol.blue = 0xffff;
     self->bgcol.alpha = 0xffff;
-    self->windowrect.x = 0;
-    self->windowrect.y = 0;
-    self->windowrect.width = 320;
-    self->windowrect.height = 200;
     self->haserror = 0;
+    Widget_setSize(self, (Size){320, 200});
 
     PSC_Event_register(X11Adapter_requestError(), self, requestError, w);
 
@@ -172,8 +193,8 @@ Window *Window_create(void)
     };
 
     CHECK(xcb_create_window(c, XCB_COPY_FROM_PARENT, w, s->root,
-		0, 0, self->windowrect.width, self->windowrect.height, 2,
-		XCB_WINDOW_CLASS_INPUT_OUTPUT, s->root_visual, mask, values),
+		0, 0, 320, 200, 2, XCB_WINDOW_CLASS_INPUT_OUTPUT,
+		s->root_visual, mask, values),
 	    "Cannot create window 0x%x", (unsigned)w);
     xcb_atom_t delwin = A(WM_DELETE_WINDOW);
     CHECK(xcb_change_property(c, XCB_PROP_MODE_REPLACE, w,
@@ -199,6 +220,7 @@ Window *Window_create(void)
     PSC_Event_register(X11Adapter_clientmsg(), self, clientmsg, w);
     PSC_Event_register(X11Adapter_configureNotify(), self, configureNotify, w);
     PSC_Event_register(X11Adapter_expose(), self, expose, w);
+    PSC_Event_register(Widget_sizeChanged(self), self, sizeChanged, 0);
 
     for (int i = 0; i < 7; ++i)
     {
@@ -219,53 +241,6 @@ PSC_Event *Window_errored(void *self)
 {
     Window *w = Object_instance(self);
     return w->errored;
-}
-
-void Window_show(void *self)
-{
-    Object_vcallv(Window, show, self);
-}
-
-void Window_hide(void *self)
-{
-    Object_vcallv(Window, hide, self);
-}
-
-uint32_t Window_width(const void *self)
-{
-    const Window *w = Object_instance(self);
-    return w->windowrect.width;
-}
-
-uint32_t Window_height(const void *self)
-{
-    const Window *w = Object_instance(self);
-    return w->windowrect.height;
-}
-
-void Window_setSize(void *self, uint32_t width, uint32_t height)
-{
-    Window *w = Object_instance(self);
-    uint16_t mask = 0;
-    uint32_t values[2];
-    int n = 0;
-    if (width != w->windowrect.width)
-    {
-	w->windowrect.width = width;
-	values[n++] = width;
-	mask |= XCB_CONFIG_WINDOW_WIDTH;
-    }
-    if (height != w->windowrect.height)
-    {
-	w->windowrect.height = height;
-	values[n++] = height;
-	mask |= XCB_CONFIG_WINDOW_HEIGHT;
-    }
-    if (n)
-    {
-	xcb_connection_t *c = X11Adapter_connection();
-	xcb_configure_window(c, w->w, mask, values);
-    }
 }
 
 void Window_setBackgroundColor(void *self, Color color)
