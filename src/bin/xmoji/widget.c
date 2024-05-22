@@ -160,8 +160,8 @@ int Widget_draw(void *self)
 {
     Widget *w = Object_instance(self);
     if (!w->drawable) return -1;
-    if (!w->visible) return 0;
     if (w->drawn) return 0;
+    if (!Widget_visible(self)) return 0;
     int rc = -1;
     if (memcmp(&w->geometry, &w->clip, sizeof w->geometry))
     {
@@ -356,7 +356,9 @@ void Widget_setDrawable(void *self, xcb_drawable_t drawable)
 int Widget_visible(const void *self)
 {
     const Widget *w = Object_instance(self);
-    return w->visible;
+    if (!w->visible) return 0;
+    if (!w->parent) return 1;
+    return Widget_visible(w->parent);
 }
 
 void Widget_requestSize(void *self)

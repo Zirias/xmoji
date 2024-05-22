@@ -8,9 +8,11 @@
 
 static void destroy(void *obj);
 static int draw(void *obj, xcb_render_picture_t picture);
+static int show(void *obj);
+static int hide(void *obj);
 
 static MetaWindow mo = MetaWindow_init("Window",
-	destroy, draw, 0, 0, 0);
+	destroy, draw, show, hide, 0);
 
 struct Window
 {
@@ -24,7 +26,24 @@ struct Window
     int haserror;
     int haveMinSize;
     int mapped;
+    int wantmap;
 };
+
+static void map(Window *self)
+{
+    CHECK(xcb_map_window(X11Adapter_connection(), self->w),
+	    "Cannot map window 0x%x", (unsigned)self->w);
+    self->mapped = 1;
+    PSC_Log_fmt(PSC_L_DEBUG, "Mapping window 0x%x", (unsigned)self->w);
+}
+
+static void unmap(Window *self)
+{
+    CHECK(xcb_unmap_window(X11Adapter_connection(), self->w),
+	    "Cannot map window 0x%x", (unsigned)self->w);
+    self->mapped = 0;
+    PSC_Log_fmt(PSC_L_DEBUG, "Unmapping window 0x%x", (unsigned)self->w);
+}
 
 static int draw(void *obj, xcb_render_picture_t picture)
 {
@@ -33,6 +52,24 @@ static int draw(void *obj, xcb_render_picture_t picture)
     Window *self = Object_instance(obj);
     if (!self->mainWidget) return -1;
     return Widget_draw(self->mainWidget);
+}
+
+static int show(void *obj)
+{
+    Window *self = Object_instance(obj);
+    if (self->mapped) return 0;
+    if (self->haveMinSize) map(self);
+    else self->wantmap = 1;
+    return 0;
+}
+
+static int hide(void *obj)
+{
+    Window *self = Object_instance(obj);
+    if (!self->mapped) return 0;
+    self->wantmap = 0;
+    unmap(self);
+    return 0;
 }
 
 static void expose(void *receiver, void *sender, void *args)
@@ -67,7 +104,7 @@ static void clientmsg(void *receiver, void *sender, void *args)
     
     if (ev->data.data32[0] == A(WM_DELETE_WINDOW))
     {
-	Widget_hideWindow(self);
+	hide(self);
     }
 }
 
@@ -129,22 +166,6 @@ static void sizeChanged(void *receiver, void *sender, void *args)
     }
 }
 
-static void map(Window *self)
-{
-    CHECK(xcb_map_window(X11Adapter_connection(), self->w),
-	    "Cannot map window 0x%x", (unsigned)self->w);
-    self->mapped = 1;
-    PSC_Log_fmt(PSC_L_DEBUG, "Mapping window 0x%x", (unsigned)self->w);
-}
-
-static void unmap(Window *self)
-{
-    CHECK(xcb_unmap_window(X11Adapter_connection(), self->w),
-	    "Cannot map window 0x%x", (unsigned)self->w);
-    self->mapped = 0;
-    PSC_Log_fmt(PSC_L_DEBUG, "Unmapping window 0x%x", (unsigned)self->w);
-}
-
 static void sizeRequested(void *receiver, void *sender, void *args)
 {
     (void)sender;
@@ -167,38 +188,40 @@ static void sizeRequested(void *receiver, void *sender, void *args)
 		self->w, XCB_ATOM_WM_NORMAL_HINTS, XCB_ATOM_WM_SIZE_HINTS,
 		32, sizeof hints >> 2, &hints),
 	    "Cannot set minimum size on 0x%x", (unsigned)self->w);
-    if (self->haveMinSize && !self->mapped && Widget_visible(self)) map(self);
-}
-
-static void shown(void *receiver, void *sender, void *args)
-{
-    (void)sender;
-    (void)args;
-
-    Window *self = receiver;
-    if (self->haveMinSize && !self->mapped) map(self);
-}
-
-static void hidden(void *receiver, void *sender, void *args)
-{
-    (void)sender;
-    (void)args;
-
-    Window *self = receiver;
-    if (self->mapped)
+    if (self->haveMinSize && !self->mapped && self->wantmap)
     {
-	unmap(self);
-	PSC_Event_raise(self->closed, 0, 0);
+	self->wantmap = 0;
+	map(self);
     }
+}
+
+static void mapped(void *receiver, void *sender, void *args)
+{
+    (void)sender;
+    (void)args;
+
+    Widget_showWindow(receiver);
+}
+
+static void unmapped(void *receiver, void *sender, void *args)
+{
+    (void)sender;
+    (void)args;
+
+    Window *self = receiver;
+    Widget_hideWindow(self);
+    PSC_Event_raise(self->closed, 0, 0);
 }
 
 static void destroy(void *window)
 {
     Window *self = window;
     PSC_Event_unregister(Widget_sizeChanged(self), self, sizeChanged, 0);
-    PSC_Event_unregister(Widget_hidden(self), self, hidden, 0);
-    PSC_Event_unregister(Widget_shown(self), self, shown, 0);
     PSC_Event_unregister(PSC_Service_eventsDone(), self, trydraw, 0);
+    PSC_Event_unregister(X11Adapter_unmapNotify(), self,
+	    unmapped, self->w);
+    PSC_Event_unregister(X11Adapter_mapNotify(), self,
+	    mapped, self->w);
     PSC_Event_unregister(X11Adapter_expose(), self,
 	    expose, self->w);
     PSC_Event_unregister(X11Adapter_configureNotify(), self,
@@ -226,16 +249,12 @@ Window *Window_createBase(void *derived, void *parent)
 
     Window *self = PSC_malloc(sizeof *self);
     if (!derived) derived = self;
+    memset(self, 0, sizeof *self);
     self->base.base = Widget_createBase(derived, parent);
     self->base.type = OBJTYPE;
     self->closed = PSC_Event_create(self);
     self->errored = PSC_Event_create(self);
-    self->title = 0;
-    self->iconName = 0;
-    self->mainWidget = 0;
     self->w = w;
-    self->haserror = 0;
-    self->haveMinSize = 0;
 
     PSC_Event_register(X11Adapter_requestError(), self, requestError, w);
 
@@ -269,9 +288,9 @@ Window *Window_createBase(void *derived, void *parent)
     PSC_Event_register(X11Adapter_clientmsg(), self, clientmsg, w);
     PSC_Event_register(X11Adapter_configureNotify(), self, configureNotify, w);
     PSC_Event_register(X11Adapter_expose(), self, expose, w);
+    PSC_Event_register(X11Adapter_mapNotify(), self, mapped, w);
+    PSC_Event_register(X11Adapter_unmapNotify(), self, unmapped, w);
     PSC_Event_register(PSC_Service_eventsDone(), self, trydraw, 0);
-    PSC_Event_register(Widget_shown(self), self, shown, 0);
-    PSC_Event_register(Widget_hidden(self), self, hidden, 0);
     PSC_Event_register(Widget_sizeChanged(self), self, sizeChanged, 0);
 
     return self;

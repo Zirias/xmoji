@@ -41,6 +41,8 @@ static size_t maxRequestSize;
 static PSC_Event *clientmsg;
 static PSC_Event *configureNotify;
 static PSC_Event *expose;
+static PSC_Event *mapNotify;
+static PSC_Event *unmapNotify;
 static PSC_Event *requestError;
 static xcb_atom_t atoms[NATOMS];
 static xcb_render_pictformat_t rootformat;
@@ -109,6 +111,16 @@ static void handleX11Event(xcb_generic_event_t *ev)
 	case XCB_EXPOSE:
 	    PSC_Event_raise(expose,
 		    ((xcb_expose_event_t *)ev)->window, ev);
+	    break;
+
+	case XCB_MAP_NOTIFY:
+	    PSC_Event_raise(mapNotify,
+		    ((xcb_map_notify_event_t *)ev)->window, ev);
+	    break;
+
+	case XCB_UNMAP_NOTIFY:
+	    PSC_Event_raise(unmapNotify,
+		    ((xcb_unmap_notify_event_t *)ev)->window, ev);
 	    break;
 
 	default:
@@ -412,6 +424,8 @@ int X11Adapter_init(int argc, char **argv, const char *classname)
     clientmsg = PSC_Event_create(0);
     configureNotify = PSC_Event_create(0);
     expose = PSC_Event_create(0);
+    mapNotify = PSC_Event_create(0);
+    unmapNotify = PSC_Event_create(0);
     requestError = PSC_Event_create(0);
     fd = xcb_get_file_descriptor(c);
     PSC_Event_register(PSC_Service_readyRead(), 0, readX11Input, fd);
@@ -543,6 +557,16 @@ PSC_Event *X11Adapter_expose(void)
     return expose;
 }
 
+PSC_Event *X11Adapter_mapNotify(void)
+{
+    return mapNotify;
+}
+
+PSC_Event *X11Adapter_unmapNotify(void)
+{
+    return unmapNotify;
+}
+
 PSC_Event *X11Adapter_requestError(void)
 {
     return requestError;
@@ -672,10 +696,14 @@ void X11Adapter_done(void)
     waitingNum = 0;
     PSC_Event_destroy(requestError);
     PSC_Event_destroy(expose);
+    PSC_Event_destroy(unmapNotify);
+    PSC_Event_destroy(mapNotify);
     PSC_Event_destroy(configureNotify);
     PSC_Event_destroy(clientmsg);
     requestError = 0;
     expose = 0;
+    unmapNotify = 0;
+    mapNotify = 0;
     configureNotify = 0;
     clientmsg = 0;
     rootformat = 0;
