@@ -306,7 +306,7 @@ int Font_uploadGlyphs(Font *self, unsigned len, GlyphRenderInfo *glyphinfo)
     for (unsigned i = 0; i < toupload; ++i)
     {
 	if (FT_Load_Glyph(self->face, glyphids[i] & of->glyphidmask,
-		    FT_LOAD_FORCE_AUTOHINT) != 0) goto done;
+		    FT_LOAD_NO_BITMAP) != 0) goto done;
 	FT_GlyphSlot slot = self->face->glyph;
 	uint32_t xshift = glyphids[i] >> of->glyphidbits
 	    << (6 - of->subpixelbits);

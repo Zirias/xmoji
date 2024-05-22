@@ -45,7 +45,10 @@ static void onprestartup(void *receiver, void *sender, void *args)
     Widget_setColor(win, COLOR_NORMAL, Color_fromRgb(200, 255, 240));
 
     TextLabel *label = TextLabel_create(win, sysfont);
-    TextLabel_setText(label, "Hello, World!");
+    TextLabel_setText(label, "Hello, World!\n\n"
+	    "This is just a quick little\n"
+	    "text rendering test.\n\n"
+	    "The quick brown fox jumps over the lazy dog");
     Widget_setAlign(label, AH_CENTER|AV_MIDDLE);
     Widget_show(label);
     Window_setMainWidget(win, label);

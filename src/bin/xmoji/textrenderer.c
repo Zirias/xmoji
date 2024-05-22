@@ -31,6 +31,7 @@ typedef struct ShapeContext
 static void doshape(void *ctx)
 {
     ShapeContext *sctx = ctx;
+    hb_buffer_set_language(sctx->hbbuffer, hb_language_from_string("en", -1));
     hb_buffer_guess_segment_properties(sctx->hbbuffer);
     hb_shape(sctx->renderer->hbfont, sctx->hbbuffer, 0, 0);
     FT_Face face = hb_ft_font_get_face(sctx->renderer->hbfont);
@@ -119,13 +120,13 @@ Size TextRenderer_size(const TextRenderer *self)
     return self->size;
 }
 
-int TextRenderer_setUtf8(TextRenderer *self, const char *utf8)
+int TextRenderer_setUtf8(TextRenderer *self, const char *utf8, int len)
 {
     if (self->haserror) return -1;
     ShapeContext *sctx = PSC_malloc(sizeof *sctx);
     sctx->renderer = self;
     sctx->hbbuffer = hb_buffer_create();
-    hb_buffer_add_utf8(sctx->hbbuffer, utf8, -1, 0, -1);
+    hb_buffer_add_utf8(sctx->hbbuffer, utf8, len, 0, -1);
     PSC_ThreadJob *shapejob = PSC_ThreadJob_create(doshape, sctx, 0);
     PSC_Event_register(PSC_ThreadJob_finished(shapejob), sctx, shapedone, 0);
     PSC_ThreadPool_enqueue(shapejob);

@@ -17,7 +17,7 @@ PSC_Event *TextRenderer_shaped(TextRenderer *self)
     CMETHOD;
 Size TextRenderer_size(const TextRenderer *self)
     CMETHOD;
-int TextRenderer_setUtf8(TextRenderer *self, const char *utf8)
+int TextRenderer_setUtf8(TextRenderer *self, const char *utf8, int len)
     CMETHOD;
 int TextRenderer_render(TextRenderer *self,
 	xcb_render_picture_t picture, Color color, Pos pos)
