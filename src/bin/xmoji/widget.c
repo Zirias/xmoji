@@ -48,26 +48,36 @@ static void destroy(void *obj)
     free(self);
 }
 
-static int show(void *obj)
+static int doshow(Widget *self, int external)
 {
-    Widget *self = Object_instance(obj);
     if (!self->visible)
     {
 	self->visible = 1;
-	PSC_Event_raise(self->shown, 0, 0);
+	WidgetEventArgs args = { external };
+	PSC_Event_raise(self->shown, 0, &args);
+    }
+    return 0;
+}
+
+static int show(void *obj)
+{
+    return doshow(Object_instance(obj), 0);
+}
+
+static int dohide(Widget *self, int external)
+{
+    if (self->visible)
+    {
+	self->visible = 0;
+	WidgetEventArgs args = { external };
+	PSC_Event_raise(self->hidden, 0, &args);
     }
     return 0;
 }
 
 static int hide(void *obj)
 {
-    Widget *self = Object_instance(obj);
-    if (self->visible)
-    {
-	self->visible = 0;
-	PSC_Event_raise(self->hidden, 0, 0);
-    }
-    return 0;
+    return dohide(Object_instance(obj), 0);
 }
 
 static Size minSize(const void *obj)
@@ -190,15 +200,19 @@ int Widget_hide(void *self)
     return rc;
 }
 
+static void setSize(Widget *self, int external, Size size)
+{
+    if (memcmp(&self->geometry.size, &size, sizeof size))
+    {
+	SizeChangedEventArgs args = { external, self->geometry.size, size };
+	self->geometry.size = size;
+	PSC_Event_raise(self->sizeChanged, 0, &args);
+    }
+}
+
 void Widget_setSize(void *self, Size size)
 {
-    Widget *w = Object_instance(self);
-    if (memcmp(&w->geometry.size, &size, sizeof size))
-    {
-	SizeChangedEventArgs args = { w->geometry.size, size };
-	w->geometry.size = size;
-	PSC_Event_raise(w->sizeChanged, 0, &args);
-    }
+    setSize(Object_instance(self), 0, size);
 }
 
 Size Widget_minSize(const void *self)
@@ -356,5 +370,20 @@ void Widget_invalidate(void *self)
     Widget *w = Object_instance(self);
     w->drawn = 0;
     PSC_Event_raise(w->invalidated, 0, 0);
+}
+
+void Widget_setWindowSize(void *self, Size size)
+{
+    setSize(Object_instance(self), 1, size);
+}
+
+void Widget_showWindow(void *self)
+{
+    doshow(Object_instance(self), 1);
+}
+
+void Widget_hideWindow(void *self)
+{
+    dohide(Object_instance(self), 1);
 }
 

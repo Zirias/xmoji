@@ -28,8 +28,14 @@ typedef struct MetaWidget
 C_CLASS_DECL(PSC_Event);
 C_CLASS_DECL(Widget);
 
+typedef struct WidgetEventArgs
+{
+    int external;
+} WidgetEventArgs;
+
 typedef struct SizeChangedEventArgs
 {
+    int external;
     Size oldSize;
     Size newSize;
 } SizeChangedEventArgs;
@@ -63,7 +69,11 @@ xcb_drawable_t Widget_drawable(const void *self) CMETHOD;
 void Widget_setDrawable(void *self, xcb_drawable_t drawable) CMETHOD;
 int Widget_visible(const void *self) CMETHOD;
 
+// "protected" API meant only for derived classes
 void Widget_requestSize(void *self) CMETHOD;
 void Widget_invalidate(void *self) CMETHOD;
+void Widget_setWindowSize(void *self, Size size) CMETHOD;
+void Widget_showWindow(void *self) CMETHOD;
+void Widget_hideWindow(void *self) CMETHOD;
 
 #endif
