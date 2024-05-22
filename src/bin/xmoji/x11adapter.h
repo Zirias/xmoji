@@ -144,6 +144,7 @@ PSC_Event *X11Adapter_expose(void) ATTR_RETNONNULL;
 PSC_Event *X11Adapter_mapNotify(void) ATTR_RETNONNULL;
 PSC_Event *X11Adapter_unmapNotify(void) ATTR_RETNONNULL;
 PSC_Event *X11Adapter_requestError(void) ATTR_RETNONNULL;
+PSC_Event *X11Adapter_eventsDone(void) ATTR_RETNONNULL;
 const char *X11Adapter_wmClass(size_t *sz) ATTR_RETNONNULL;
 char *X11Adapter_toLatin1(const char *utf8) ATTR_NONNULL((1)) ATTR_RETNONNULL;
 

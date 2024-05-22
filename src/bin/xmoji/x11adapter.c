@@ -44,6 +44,7 @@ static PSC_Event *expose;
 static PSC_Event *mapNotify;
 static PSC_Event *unmapNotify;
 static PSC_Event *requestError;
+static PSC_Event *eventsDone;
 static xcb_atom_t atoms[NATOMS];
 static xcb_render_pictformat_t rootformat;
 static xcb_render_pictformat_t alphaformat;
@@ -55,6 +56,7 @@ static unsigned waitingFront;
 static unsigned waitingBack;
 static unsigned waitingNum;
 static int waitingNoreply;
+static int gotEvents;
 
 static int enqueueWaiting(unsigned sequence, int replytype, void *ctx,
 	X11ReplyHandler handler, const char *sarg, unsigned uarg)
@@ -251,6 +253,7 @@ static void readX11Input(void *receiver, void *sender, void *args)
 	    removeWaitingBefore(ev->sequence);
 	    handleX11Event(ev);
 	    handled = 1;
+	    gotEvents = 1;
 	}
     }
 }
@@ -271,12 +274,17 @@ static void sync_cb(void *ctx, unsigned sequence,
     PSC_Log_msg(PSC_L_DEBUG, "X11 connection synced");
 }
 
-static void flushXcb(void *receiver, void *sender, void *args)
+static void flushandsync(void *receiver, void *sender, void *args)
 {
     (void)receiver;
     (void)sender;
     (void)args;
 
+    if (gotEvents)
+    {
+	gotEvents = 0;
+	PSC_Event_raise(eventsDone, 0, 0);
+    }
     if (waitingNum)
     {
 	if (waitingNoreply) AWAIT(xcb_get_input_focus(c), 0, sync_cb);
@@ -427,9 +435,10 @@ int X11Adapter_init(int argc, char **argv, const char *classname)
     mapNotify = PSC_Event_create(0);
     unmapNotify = PSC_Event_create(0);
     requestError = PSC_Event_create(0);
+    eventsDone = PSC_Event_create(0);
     fd = xcb_get_file_descriptor(c);
     PSC_Event_register(PSC_Service_readyRead(), 0, readX11Input, fd);
-    PSC_Event_register(PSC_Service_eventsDone(), 0, flushXcb, 0);
+    PSC_Event_register(PSC_Service_eventsDone(), 0, flushandsync, 0);
     PSC_Service_registerRead(fd);
 
     char *lc = setlocale(LC_ALL, "");
@@ -572,6 +581,11 @@ PSC_Event *X11Adapter_requestError(void)
     return requestError;
 }
 
+PSC_Event *X11Adapter_eventsDone(void)
+{
+    return eventsDone;
+}
+
 const char *X11Adapter_wmClass(size_t *sz)
 {
     if (sz) *sz = wmclasssz;
@@ -598,7 +612,6 @@ static unsigned await(unsigned sequence, int replytype, void *ctx,
 	    break;
 
 	default:
-	    PSC_Log_fmt(PSC_L_DEBUG, "Checking Request: %u", sequence);
 	    break;
     }
     return sequence;
@@ -687,19 +700,21 @@ char *X11Adapter_toLatin1(const char *utf8)
 void X11Adapter_done(void)
 {
     if (!c) return;
-    PSC_Event_unregister(PSC_Service_eventsDone(), 0, flushXcb, 0);
     PSC_Service_unregisterRead(fd);
+    PSC_Event_unregister(PSC_Service_eventsDone(), 0, flushandsync, 0);
     PSC_Event_unregister(PSC_Service_readyRead(), 0, readX11Input, fd);
     fd = 0;
     waitingFront = 0;
     waitingBack = 0;
     waitingNum = 0;
+    PSC_Event_destroy(eventsDone);
     PSC_Event_destroy(requestError);
     PSC_Event_destroy(expose);
     PSC_Event_destroy(unmapNotify);
     PSC_Event_destroy(mapNotify);
     PSC_Event_destroy(configureNotify);
     PSC_Event_destroy(clientmsg);
+    eventsDone = 0;
     requestError = 0;
     expose = 0;
     unmapNotify = 0;

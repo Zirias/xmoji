@@ -72,6 +72,7 @@ int Widget_visible(const void *self) CMETHOD;
 // "protected" API meant only for derived classes
 void Widget_requestSize(void *self) CMETHOD;
 void Widget_invalidate(void *self) CMETHOD;
+void Widget_disableDrawing(void *self) CMETHOD;
 void Widget_setWindowSize(void *self, Size size) CMETHOD;
 void Widget_showWindow(void *self) CMETHOD;
 void Widget_hideWindow(void *self) CMETHOD;

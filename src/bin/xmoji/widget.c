@@ -370,8 +370,14 @@ void Widget_requestSize(void *self)
 void Widget_invalidate(void *self)
 {
     Widget *w = Object_instance(self);
-    w->drawn = 0;
+    if (w->drawn > 0) w->drawn = 0;
     PSC_Event_raise(w->invalidated, 0, 0);
+}
+
+void Widget_disableDrawing(void *self)
+{
+    Widget *w = Object_instance(self);
+    w->drawn = -1;
 }
 
 void Widget_setWindowSize(void *self, Size size)
@@ -381,7 +387,9 @@ void Widget_setWindowSize(void *self, Size size)
 
 void Widget_showWindow(void *self)
 {
-    doshow(Object_instance(self), 1);
+    Widget *w = Object_instance(self);
+    if (w->drawn < 0) w->drawn = 1;
+    doshow(w, 1);
 }
 
 void Widget_hideWindow(void *self)

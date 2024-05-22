@@ -37,14 +37,6 @@ static void map(Window *self)
     PSC_Log_fmt(PSC_L_DEBUG, "Mapping window 0x%x", (unsigned)self->w);
 }
 
-static void unmap(Window *self)
-{
-    CHECK(xcb_unmap_window(X11Adapter_connection(), self->w),
-	    "Cannot map window 0x%x", (unsigned)self->w);
-    self->mapped = 0;
-    PSC_Log_fmt(PSC_L_DEBUG, "Unmapping window 0x%x", (unsigned)self->w);
-}
-
 static int draw(void *obj, xcb_render_picture_t picture)
 {
     (void)picture;
@@ -68,7 +60,10 @@ static int hide(void *obj)
     Window *self = Object_instance(obj);
     if (!self->mapped) return 0;
     self->wantmap = 0;
-    unmap(self);
+    self->mapped = 0;
+    CHECK(xcb_unmap_window(X11Adapter_connection(), self->w),
+	    "Cannot map window 0x%x", (unsigned)self->w);
+    PSC_Log_fmt(PSC_L_DEBUG, "Unmapping window 0x%x", (unsigned)self->w);
     return 0;
 }
 
@@ -77,7 +72,8 @@ static void expose(void *receiver, void *sender, void *args)
     (void)sender;
     (void)args;
 
-    Widget_invalidate(receiver);
+    Window *self = receiver;
+    if (self->mapped) Widget_invalidate(self);
 }
 
 static void configureNotify(void *receiver, void *sender, void *args)
@@ -104,6 +100,7 @@ static void clientmsg(void *receiver, void *sender, void *args)
     
     if (ev->data.data32[0] == A(WM_DELETE_WINDOW))
     {
+	Widget_disableDrawing(self);
 	hide(self);
     }
 }
@@ -135,27 +132,26 @@ static void sizeChanged(void *receiver, void *sender, void *args)
 
     Window *self = receiver;
     SizeChangedEventArgs *ea = args;
-    uint16_t mask = 0;
-    uint32_t values[2];
-    int n = 0;
-    if (ea->newSize.width != ea->oldSize.width)
-    {
-	values[n++] = ea->newSize.width;
-	mask |= XCB_CONFIG_WINDOW_WIDTH;
-    }
-    if (ea->newSize.height != ea->oldSize.height)
-    {
-	values[n++] = ea->newSize.height;
-	mask |= XCB_CONFIG_WINDOW_HEIGHT;
-    }
     if (!ea->external)
     {
+	uint16_t mask = 0;
+	uint32_t values[2];
+	int n = 0;
+	if (ea->newSize.width != ea->oldSize.width)
+	{
+	    values[n++] = ea->newSize.width;
+	    mask |= XCB_CONFIG_WINDOW_WIDTH;
+	}
+	if (ea->newSize.height != ea->oldSize.height)
+	{
+	    values[n++] = ea->newSize.height;
+	    mask |= XCB_CONFIG_WINDOW_HEIGHT;
+	}
 	CHECK(xcb_configure_window(X11Adapter_connection(),
 		    self->w, mask, values),
 		"Cannot configure window 0x%x", (unsigned)self->w);
     }
-    if (self->mainWidget) Widget_setSize(self->mainWidget, ea->newSize);
-    if (self->mapped
+    else if (self->mapped
 	    && ea->newSize.width <= ea->oldSize.width
 	    && ea->newSize.height <= ea->oldSize.height)
     {
@@ -164,6 +160,7 @@ static void sizeChanged(void *receiver, void *sender, void *args)
 	// force a redraw.
 	Widget_invalidate(self);
     }
+    if (self->mainWidget) Widget_setSize(self->mainWidget, ea->newSize);
 }
 
 static void sizeRequested(void *receiver, void *sender, void *args)
@@ -217,7 +214,7 @@ static void destroy(void *window)
 {
     Window *self = window;
     PSC_Event_unregister(Widget_sizeChanged(self), self, sizeChanged, 0);
-    PSC_Event_unregister(PSC_Service_eventsDone(), self, trydraw, 0);
+    PSC_Event_unregister(X11Adapter_eventsDone(), self, trydraw, 0);
     PSC_Event_unregister(X11Adapter_unmapNotify(), self,
 	    unmapped, self->w);
     PSC_Event_unregister(X11Adapter_mapNotify(), self,
@@ -290,7 +287,7 @@ Window *Window_createBase(void *derived, void *parent)
     PSC_Event_register(X11Adapter_expose(), self, expose, w);
     PSC_Event_register(X11Adapter_mapNotify(), self, mapped, w);
     PSC_Event_register(X11Adapter_unmapNotify(), self, unmapped, w);
-    PSC_Event_register(PSC_Service_eventsDone(), self, trydraw, 0);
+    PSC_Event_register(X11Adapter_eventsDone(), self, trydraw, 0);
     PSC_Event_register(Widget_sizeChanged(self), self, sizeChanged, 0);
 
     return self;
