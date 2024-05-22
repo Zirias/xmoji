@@ -25,6 +25,7 @@ struct Widget
     ColorSet *colorSet;
     Rect geometry;
     Rect clip;
+    Box padding;
     xcb_drawable_t drawable;
     xcb_render_picture_t picture;
     int visible;
@@ -85,6 +86,7 @@ Widget *Widget_createBase(void *derived, void *parent)
     self->sizeRequested = PSC_Event_create(self);
     self->sizeChanged = PSC_Event_create(self);
     self->parent = parent;
+    self->padding = (Box){ 3, 3, 3, 3 };
 
     if (parent) Object_own(parent, derived);
     else self->colorSet = ColorSet_create(0xffffffff, 0x000000ff);
@@ -185,6 +187,18 @@ Size Widget_size(const void *self)
 {
     const Widget *w = Object_instance(self);
     return w->geometry.size;
+}
+
+void Widget_setPadding(void *self, Box padding)
+{
+    Widget *w = Object_instance(self);
+    w->padding = padding;
+}
+
+Box Widget_padding(const void *self)
+{
+    Widget *w = Object_instance(self);
+    return w->padding;
 }
 
 void Widget_setOrigin(void *self, Pos pos)

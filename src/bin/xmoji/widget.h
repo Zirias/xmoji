@@ -47,6 +47,8 @@ int Widget_hide(void *self) CMETHOD;
 void Widget_setSize(void *self, Size size) CMETHOD;
 Size Widget_minSize(const void *self) CMETHOD;
 Size Widget_size(const void *self) CMETHOD;
+void Widget_setPadding(void *self, Box padding) CMETHOD;
+Box Widget_padding(const void *self) CMETHOD;
 void Widget_setOrigin(void *self, Pos origin) CMETHOD;
 Pos Widget_origin(const void *self) CMETHOD;
 const ColorSet *Widget_colorSet(const void *self) CMETHOD;
