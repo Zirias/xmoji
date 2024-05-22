@@ -27,6 +27,34 @@ typedef enum XAtomId
     NATOMS
 } XAtomId;
 
+typedef enum WMSizeHintFlags
+{
+    WM_SIZE_HINT_US_POSITION	= 1 << 0,
+    WM_SIZE_HINT_US_SIZE	= 1 << 1,
+    WM_SIZE_HINT_P_POSITION	= 1 << 2,
+    WM_SIZE_HINT_P_SIZE		= 1 << 3,
+    WM_SIZE_HINT_P_MIN_SIZE	= 1 << 4,
+    WM_SIZE_HINT_P_MAX_SIZE	= 1 << 5,
+    WM_SIZE_HINT_P_RESIZE_INC	= 1 << 6,
+    WM_SIZE_HINT_P_ASPECT	= 1 << 7,
+    WM_SIZE_HINT_BASE_SIZE	= 1 << 8,
+    WM_SIZE_HINT_P_WIN_GRAVITY	= 1 << 9
+} WMSizeHintFlags;
+
+typedef struct WMSizeHints
+{
+    uint32_t flags;
+    int32_t x, y;
+    int32_t width, height;
+    int32_t min_width, min_height;
+    int32_t max_width, max_height;
+    int32_t width_inc, height_inc;
+    int32_t min_aspect_num, min_aspect_den;
+    int32_t max_aspect_num, max_aspect_den;
+    int32_t base_width, base_height;
+    uint32_t win_gravity;
+} WMSizeHints;
+
 typedef void (*X11ReplyHandler)(void *ctx, unsigned sequence, void *reply,
 	xcb_generic_error_t *error);
 

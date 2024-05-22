@@ -143,6 +143,15 @@ static void sizeRequested(void *receiver, void *sender, void *args)
     if (minSize.width > newSize.width) newSize.width = minSize.width;
     if (minSize.height > newSize.height) newSize.height = minSize.height;
     Widget_setSize(self, newSize);
+    WMSizeHints hints = {
+	.flags = WM_SIZE_HINT_P_MIN_SIZE,
+	.min_width = minSize.width,
+	.min_height = minSize.height
+    };
+    CHECK(xcb_change_property(X11Adapter_connection(), XCB_PROP_MODE_REPLACE,
+		self->w, XCB_ATOM_WM_NORMAL_HINTS, XCB_ATOM_WM_SIZE_HINTS,
+		32, sizeof hints >> 2, &hints),
+	    "Cannot set minimum size on 0x%x", (unsigned)self->w);
     if (self->haveMinSize && !self->mapped && Widget_visible(self)) map(self);
 }
 
