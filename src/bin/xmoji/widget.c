@@ -1,5 +1,7 @@
 #include "widget.h"
 
+#include "x11adapter.h"
+
 #include <poser/core.h>
 #include <stdlib.h>
 #include <string.h>
@@ -22,7 +24,6 @@ struct Widget
     Widget *parent;
     ColorSet *colorSet;
     Rect geometry;
-    Size size;
     int visible;
 };
 
@@ -122,6 +123,11 @@ int Widget_draw(void *self,
     Widget *w = Object_instance(self);
     if (!w->visible) return 0;
     int rc = -1;
+    xcb_rectangle_t clip = { 0, 0,
+	w->geometry.size.width, w->geometry.size.height };
+    CHECK(xcb_render_set_picture_clip_rectangles(X11Adapter_connection(),
+		picture, w->geometry.pos.x, w->geometry.pos.y, 1, &clip),
+	    "Cannot set widget clipping region on 0x%x", (unsigned)drawable);
     Object_vcall(rc, Widget, draw, self, drawable, picture);
     return rc;
 }

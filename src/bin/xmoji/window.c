@@ -118,6 +118,7 @@ static void sizeChanged(void *receiver, void *sender, void *args)
 	mask |= XCB_CONFIG_WINDOW_HEIGHT;
     }
     xcb_configure_window(X11Adapter_connection(), self->w, mask, values);
+    if (self->mainWidget) Widget_setSize(self->mainWidget, ea->newSize);
 }
 
 static void map(Window *self)
