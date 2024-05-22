@@ -6,6 +6,9 @@
 
 C_CLASS_DECL(PSC_Event);
 
+#define _STR(x) #x
+#define STR(x) _STR(x)
+
 #define X_ENUM(a) a,
 #define X_ATOMS(X) \
     X(UTF8_STRING) \
@@ -59,6 +62,16 @@ typedef struct WMSizeHints
 typedef void (*X11ReplyHandler)(void *ctx, unsigned sequence, void *reply,
 	xcb_generic_error_t *error);
 
+#ifdef DEBUG
+#include <poser/core/log.h>
+#define priv_Trace(x) ( \
+	PSC_Log_fmt(PSC_L_DEBUG, __FILE__ ":" STR(__LINE__) \
+	    ":%s: " #x, __func__), \
+	(x).sequence)
+#else
+#define priv_Trace(x) (x).sequence
+#endif
+
 #define A(x) (X11Adapter_atom(x))
 
 /** Await the result of an X11 request
@@ -78,7 +91,7 @@ typedef void (*X11ReplyHandler)(void *ctx, unsigned sequence, void *reply,
 #define AWAIT(x,c,h) _Generic((x), \
 	    xcb_void_cookie_t: X11Adapter_awaitNoreply, \
 	    default: X11Adapter_await \
-	)((x).sequence, (c), (h))
+	)(priv_Trace(x), (c), (h))
 
 /** Check an X11 request for errors
  *
@@ -114,7 +127,7 @@ typedef void (*X11ReplyHandler)(void *ctx, unsigned sequence, void *reply,
 	    char *: X11Adapter_checkLogString, \
 	    unsigned: X11Adapter_checkLogUnsigned, \
 	    int: X11Adapter_checkLogString \
-	)((x).sequence, (c), (h))
+	)(priv_Trace(x), (c), (h))
 
 int X11Adapter_init(int argc, char **argv, const char *classname);
 

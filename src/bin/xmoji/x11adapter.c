@@ -8,8 +8,6 @@
 #include <uchar.h>
 #include <xcb/xcbext.h>
 
-#define _STR(x) #x
-#define STR(x) _STR(x)
 #define X_SZNM(a) { sizeof STR(a) - 1, STR(a) },
 
 #define MAXWAITING 128
