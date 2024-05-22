@@ -59,7 +59,7 @@ static int hide(void *obj)
 {
     Window *self = Object_instance(obj);
     if (!self->mapped) return 0;
-    self->wantmap = 0;
+    self->wantmap = -1;
     self->mapped = 0;
     CHECK(xcb_unmap_window(X11Adapter_connection(), self->w),
 	    "Cannot map window 0x%x", (unsigned)self->w);
@@ -70,10 +70,20 @@ static int hide(void *obj)
 static void expose(void *receiver, void *sender, void *args)
 {
     (void)sender;
-    (void)args;
 
     Window *self = receiver;
-    if (self->mapped) Widget_invalidate(self);
+    xcb_expose_event_t *ev = args;
+
+    PSC_Log_fmt(PSC_L_DEBUG, "Expose 0x%x: { %u, %u, %u, %u }, count %u",
+	    (unsigned)self->w, (unsigned)ev->x, (unsigned)ev->y,
+	    (unsigned)ev->width, (unsigned)ev->height, (unsigned)ev->count);
+    if (ev->count || !self->mapped) return;
+    if (self->mapped == 1)
+    {
+	Widget_showWindow(receiver);
+	self->mapped = 2;
+    }
+    Widget_invalidate(self);
 }
 
 static void configureNotify(void *receiver, void *sender, void *args)
@@ -185,7 +195,7 @@ static void sizeRequested(void *receiver, void *sender, void *args)
 		self->w, XCB_ATOM_WM_NORMAL_HINTS, XCB_ATOM_WM_SIZE_HINTS,
 		32, sizeof hints >> 2, &hints),
 	    "Cannot set minimum size on 0x%x", (unsigned)self->w);
-    if (self->haveMinSize && !self->mapped && self->wantmap)
+    if (self->haveMinSize && !self->mapped && self->wantmap > 0)
     {
 	self->wantmap = 0;
 	map(self);
@@ -197,7 +207,8 @@ static void mapped(void *receiver, void *sender, void *args)
     (void)sender;
     (void)args;
 
-    Widget_showWindow(receiver);
+    Window *self = receiver;
+    self->mapped = 1;
 }
 
 static void unmapped(void *receiver, void *sender, void *args)
@@ -207,7 +218,11 @@ static void unmapped(void *receiver, void *sender, void *args)
 
     Window *self = receiver;
     Widget_hideWindow(self);
-    PSC_Event_raise(self->closed, 0, 0);
+    if (self->wantmap < 0)
+    {
+	self->wantmap = 0;
+	PSC_Event_raise(self->closed, 0, 0);
+    }
 }
 
 static void destroy(void *window)
