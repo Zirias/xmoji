@@ -40,6 +40,7 @@ PSC_Event *Widget_shown(void *self) CMETHOD ATTR_RETNONNULL;
 PSC_Event *Widget_hidden(void *self) CMETHOD ATTR_RETNONNULL;
 PSC_Event *Widget_sizeRequested(void *self) CMETHOD ATTR_RETNONNULL;
 PSC_Event *Widget_sizeChanged(void *self) CMETHOD ATTR_RETNONNULL;
+PSC_Event *Widget_invalidated(void *self) CMETHOD ATTR_RETNONNULL;
 Widget *Widget_parent(const void *self) CMETHOD;
 int Widget_draw(void *self) CMETHOD;
 int Widget_show(void *self) CMETHOD;
@@ -49,8 +50,11 @@ Size Widget_minSize(const void *self) CMETHOD;
 Size Widget_size(const void *self) CMETHOD;
 void Widget_setPadding(void *self, Box padding) CMETHOD;
 Box Widget_padding(const void *self) CMETHOD;
+void Widget_setAlign(void *self, Align align) CMETHOD;
+Align Widget_align(const void *self) CMETHOD;
 void Widget_setOrigin(void *self, Pos origin) CMETHOD;
 Pos Widget_origin(const void *self) CMETHOD;
+Pos Widget_contentOrigin(const void *self, Size contentSize) CMETHOD;
 const ColorSet *Widget_colorSet(const void *self) CMETHOD;
 Color Widget_color(const void *self, ColorRole role) CMETHOD;
 void Widget_setColor(void *self, ColorRole role, Color color) CMETHOD;
@@ -60,5 +64,6 @@ void Widget_setDrawable(void *self, xcb_drawable_t drawable) CMETHOD;
 int Widget_visible(const void *self) CMETHOD;
 
 void Widget_requestSize(void *self) CMETHOD;
+void Widget_invalidate(void *self) CMETHOD;
 
 #endif

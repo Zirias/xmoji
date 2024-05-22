@@ -21,6 +21,7 @@ struct Widget
     PSC_Event *hidden;
     PSC_Event *sizeRequested;
     PSC_Event *sizeChanged;
+    PSC_Event *invalidated;
     Widget *parent;
     ColorSet *colorSet;
     Rect geometry;
@@ -28,15 +29,18 @@ struct Widget
     Box padding;
     xcb_drawable_t drawable;
     xcb_render_picture_t picture;
-    int visible;
     ColorRole backgroundRole;
+    Align align;
     int drawBackground;
+    int drawn;
+    int visible;
 };
 
 static void destroy(void *obj)
 {
     Widget *self = obj;
     ColorSet_destroy(self->colorSet);
+    PSC_Event_destroy(self->invalidated);
     PSC_Event_destroy(self->sizeChanged);
     PSC_Event_destroy(self->sizeRequested);
     PSC_Event_destroy(self->hidden);
@@ -72,6 +76,14 @@ static Size minSize(const void *obj)
     return (Size){0, 0};
 }
 
+static void invalidate(void *receiver, void *sender, void *args)
+{
+    (void)sender;
+    (void)args;
+
+    Widget_invalidate(receiver);
+}
+
 Widget *Widget_createBase(void *derived, void *parent)
 {
     REGTYPE(0);
@@ -85,10 +97,15 @@ Widget *Widget_createBase(void *derived, void *parent)
     self->hidden = PSC_Event_create(self);
     self->sizeRequested = PSC_Event_create(self);
     self->sizeChanged = PSC_Event_create(self);
+    self->invalidated = PSC_Event_create(self);
     self->parent = parent;
     self->padding = (Box){ 3, 3, 3, 3 };
 
-    if (parent) Object_own(parent, derived);
+    if (parent)
+    {
+	Object_own(parent, derived);
+	PSC_Event_register(Widget_invalidated(parent), self, invalidate, 0);
+    }
     else self->colorSet = ColorSet_create(0xffffffff, 0x000000ff);
     return self;
 }
@@ -117,6 +134,12 @@ PSC_Event *Widget_sizeChanged(void *self)
     return w->sizeChanged;
 }
 
+PSC_Event *Widget_invalidated(void *self)
+{
+    Widget *w = Object_instance(self);
+    return w->invalidated;
+}
+
 Widget *Widget_parent(const void *self)
 {
     const Widget *w = Object_instance(self);
@@ -128,6 +151,7 @@ int Widget_draw(void *self)
     Widget *w = Object_instance(self);
     if (!w->drawable) return -1;
     if (!w->visible) return 0;
+    if (w->drawn) return 0;
     int rc = -1;
     if (memcmp(&w->geometry, &w->clip, sizeof w->geometry))
     {
@@ -148,6 +172,7 @@ int Widget_draw(void *self)
 		"Cannot draw widget background on 0x%x", (unsigned)w->picture);
     }
     Object_vcall(rc, Widget, draw, self, w->picture);
+    w->drawn = 1;
     return rc;
 }
 
@@ -178,8 +203,14 @@ void Widget_setSize(void *self, Size size)
 
 Size Widget_minSize(const void *self)
 {
+    const Widget *w = Object_instance(self);
     Size size = { 0, 0 };
-    Object_vcall(size, Widget, minSize, self);
+    Object_vcall(size, Widget, minSize, w);
+    if (size.width || size.height)
+    {
+	size.width += w->padding.left + w->padding.right;
+	size.height += w->padding.top + w->padding.bottom;
+    }
     return size;
 }
 
@@ -197,8 +228,20 @@ void Widget_setPadding(void *self, Box padding)
 
 Box Widget_padding(const void *self)
 {
-    Widget *w = Object_instance(self);
+    const Widget *w = Object_instance(self);
     return w->padding;
+}
+
+void Widget_setAlign(void *self, Align align)
+{
+    Widget *w = Object_instance(self);
+    w->align = align;
+}
+
+Align Widget_align(const void *self)
+{
+    const Widget *w = Object_instance(self);
+    return w->align;
 }
 
 void Widget_setOrigin(void *self, Pos pos)
@@ -211,6 +254,29 @@ Pos Widget_origin(const void *self)
 {
     const Widget *w = Object_instance(self);
     return w->geometry.pos;
+}
+
+Pos Widget_contentOrigin(const void *self, Size contentSize)
+{
+    const Widget *w = Object_instance(self);
+    contentSize.width += w->padding.left + w->padding.right;
+    contentSize.height += w->padding.top + w->padding.bottom;
+    Pos contentPos = w->geometry.pos;
+    int hdiff = w->geometry.size.width - contentSize.width;
+    if (hdiff > 0)
+    {
+	if (w->align & AH_RIGHT) contentPos.x += hdiff;
+	else if (w->align & AH_CENTER) contentPos.x += hdiff / 2;
+    }
+    int vdiff = w->geometry.size.height - contentSize.height;
+    if (vdiff > 0)
+    {
+	if (w->align & AV_BOTTOM) contentPos.y += vdiff;
+	else if (w->align & AV_MIDDLE) contentPos.y += vdiff / 2;
+    }
+    contentPos.x += w->padding.left;
+    contentPos.y += w->padding.top;
+    return contentPos;
 }
 
 const ColorSet *Widget_colorSet(const void *self)
@@ -283,5 +349,12 @@ void Widget_requestSize(void *self)
 {
     Widget *w = Object_instance(self);
     PSC_Event_raise(w->sizeRequested, 0, 0);
+}
+
+void Widget_invalidate(void *self)
+{
+    Widget *w = Object_instance(self);
+    w->drawn = 0;
+    PSC_Event_raise(w->invalidated, 0, 0);
 }
 

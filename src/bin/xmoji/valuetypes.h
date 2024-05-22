@@ -58,4 +58,12 @@ typedef struct Box
     int16_t bottom;
 } Box;
 
+typedef enum Align
+{
+    AH_RIGHT	= 1 << 0,
+    AH_CENTER	= 1 << 1,
+    AV_BOTTOM	= 1 << 2,
+    AV_MIDDLE	= 1 << 3
+} Align;
+
 #endif

@@ -32,12 +32,9 @@ static int draw(void *obj, xcb_render_picture_t picture)
 {
     TextLabel *self = Object_instance(obj);
     if (!self->text) return 0;
-    Pos textOrigin = Widget_origin(self);
-    Box padding = Widget_padding(self);
-    textOrigin.x += padding.left;
-    textOrigin.y += padding.top;
     return TextRenderer_render(self->renderer, picture,
-	    Widget_color(self, COLOR_NORMAL), textOrigin);
+	    Widget_color(self, COLOR_NORMAL),
+	    Widget_contentOrigin(self, self->minSize));
 }
 
 static Size minSize(const void *obj)
@@ -53,9 +50,6 @@ static void textshaped(void *receiver, void *sender, void *args)
 
     TextLabel *self = receiver;
     self->minSize = TextRenderer_size(self->renderer);
-    Box padding = Widget_padding(self);
-    self->minSize.width += padding.left + padding.right;
-    self->minSize.height += padding.top + padding.bottom;
     Widget_requestSize(self);
 }
 

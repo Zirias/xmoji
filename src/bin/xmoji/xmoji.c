@@ -46,6 +46,7 @@ static void onprestartup(void *receiver, void *sender, void *args)
 
     TextLabel *label = TextLabel_create(win, sysfont);
     TextLabel_setText(label, "Hello, World!");
+    Widget_setAlign(label, AH_CENTER|AV_MIDDLE);
     Widget_show(label);
     Window_setMainWidget(win, label);
 

@@ -39,7 +39,7 @@ static void expose(void *receiver, void *sender, void *args)
     (void)sender;
     (void)args;
 
-    Widget_draw(receiver);
+    Widget_invalidate(receiver);
 }
 
 static void configureNotify(void *receiver, void *sender, void *args)
@@ -83,6 +83,14 @@ static void requestError(void *receiver, void *sender, void *args)
     PSC_Event_raise(self->errored, 0, 0);
 }
 
+static void trydraw(void *receiver, void *sender, void *args)
+{
+    (void)sender;
+    (void)args;
+
+    Widget_draw(receiver);
+}
+
 static void sizeChanged(void *receiver, void *sender, void *args)
 {
     (void)sender;
@@ -104,6 +112,15 @@ static void sizeChanged(void *receiver, void *sender, void *args)
     }
     xcb_configure_window(X11Adapter_connection(), self->w, mask, values);
     if (self->mainWidget) Widget_setSize(self->mainWidget, ea->newSize);
+    if (self->mapped
+	    && ea->newSize.width <= ea->oldSize.width
+	    && ea->newSize.height <= ea->oldSize.height)
+    {
+	// Only if one dimension of the new size is larger than the old size,
+	// we will get an expose event. Otherwise, invalidate our widget to
+	// force a redraw.
+	Widget_invalidate(self);
+    }
 }
 
 static void map(Window *self)
@@ -142,6 +159,8 @@ static void destroy(void *window)
 {
     Window *self = window;
     PSC_Event_unregister(Widget_sizeChanged(self), self, sizeChanged, 0);
+    PSC_Event_unregister(Widget_shown(self), self, shown, 0);
+    PSC_Event_unregister(PSC_Service_eventsDone(), self, trydraw, 0);
     PSC_Event_unregister(X11Adapter_expose(), self,
 	    expose, self->w);
     PSC_Event_unregister(X11Adapter_configureNotify(), self,
@@ -210,6 +229,7 @@ Window *Window_createBase(void *derived, void *parent)
     PSC_Event_register(X11Adapter_clientmsg(), self, clientmsg, w);
     PSC_Event_register(X11Adapter_configureNotify(), self, configureNotify, w);
     PSC_Event_register(X11Adapter_expose(), self, expose, w);
+    PSC_Event_register(PSC_Service_eventsDone(), self, trydraw, 0);
     PSC_Event_register(Widget_shown(self), self, shown, 0);
     PSC_Event_register(Widget_sizeChanged(self), self, sizeChanged, 0);
 
