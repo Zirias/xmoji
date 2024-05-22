@@ -12,6 +12,7 @@ C_CLASS_DECL(PSC_Event);
     X(WM_CLASS) \
     X(WM_DELETE_WINDOW) \
     X(WM_PROTOCOLS) \
+    X(_NET_WM_ICON_NAME) \
     X(_NET_WM_NAME) \
     X(_NET_WM_STATE) \
     X(_NET_WM_STATE_HIDDEN) \

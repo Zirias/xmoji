@@ -18,6 +18,7 @@ struct Window
     PSC_Event *closed;
     PSC_Event *errored;
     char *title;
+    char *iconName;
     void *mainWidget;
     xcb_window_t w;
     int haserror;
@@ -208,6 +209,7 @@ static void destroy(void *window)
 	    requestError, self->w);
     PSC_Event_destroy(self->closed);
     PSC_Event_destroy(self->errored);
+    free(self->iconName);
     free(self->title);
     free(self);
 }
@@ -229,6 +231,7 @@ Window *Window_createBase(void *derived, void *parent)
     self->closed = PSC_Event_create(self);
     self->errored = PSC_Event_create(self);
     self->title = 0;
+    self->iconName = 0;
     self->mainWidget = 0;
     self->w = w;
     self->haserror = 0;
@@ -313,6 +316,40 @@ void Window_setTitle(void *self, const char *title)
     {
 	w->title = 0;
 	xcb_delete_property(c, w->w, XCB_ATOM_WM_NAME);
+	xcb_delete_property(c, w->w, A(_NET_WM_NAME));
+    }
+}
+
+const char *Window_iconName(const void *self)
+{
+    const Window *w = Object_instance(self);
+    return w->iconName;
+}
+
+void Window_setIconName(void *self, const char *iconName)
+{
+    Window *w = Object_instance(self);
+    if (!w->iconName && !iconName) return;
+    if (w->iconName && iconName && !strcmp(w->iconName, iconName)) return;
+    free(w->iconName);
+    xcb_connection_t *c = X11Adapter_connection();
+    if (iconName)
+    {
+	w->iconName = PSC_copystr(iconName);
+	char *latinIconName = X11Adapter_toLatin1(w->iconName);
+	xcb_change_property(c, XCB_PROP_MODE_REPLACE, w->w,
+		XCB_ATOM_WM_ICON_NAME, XCB_ATOM_STRING, 8,
+		strlen(latinIconName), latinIconName);
+	xcb_change_property(c, XCB_PROP_MODE_REPLACE, w->w,
+		A(_NET_WM_ICON_NAME), A(UTF8_STRING), 8, strlen(w->iconName),
+		w->iconName);
+	free(latinIconName);
+    }
+    else
+    {
+	w->iconName = 0;
+	xcb_delete_property(c, w->w, XCB_ATOM_WM_ICON_NAME);
+	xcb_delete_property(c, w->w, A(_NET_WM_ICON_NAME));
     }
 }
 

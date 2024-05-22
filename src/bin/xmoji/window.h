@@ -35,6 +35,11 @@ const char *Window_title(const void *self)
 void Window_setTitle(void *self, const char *title)
     CMETHOD;
 
+const char *Window_iconName(const void *self)
+    CMETHOD;
+void Window_setIconName(void *self, const char *iconName)
+    CMETHOD;
+
 void *Window_mainWidget(const void *self)
     CMETHOD;
 void Window_setMainWidget(void *self, void *widget)
