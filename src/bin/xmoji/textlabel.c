@@ -6,8 +6,7 @@
 #include <stdlib.h>
 
 static void destroy(void *obj);
-static int draw(void *obj,
-	xcb_drawable_t drawable, xcb_render_picture_t picture);
+static int draw(void *obj, xcb_render_picture_t picture);
 static Size minSize(const void *obj);
 
 static MetaTextLabel mo = MetaTextLabel_init("TextLabel",
@@ -29,15 +28,12 @@ static void destroy(void *obj)
     free(self);
 }
 
-static int draw(void *obj,
-	xcb_drawable_t drawable, xcb_render_picture_t picture)
+static int draw(void *obj, xcb_render_picture_t picture)
 {
-    (void)drawable;
-
     TextLabel *self = Object_instance(obj);
-    if (self->text) return TextRenderer_render(self->renderer,
-	    picture, Widget_color(self, COLOR_NORMAL), Widget_origin(self));
-    return 0;
+    if (!self->text) return 0;
+    return TextRenderer_render(self->renderer, picture,
+	    Widget_color(self, COLOR_NORMAL), Widget_origin(self));
 }
 
 static Size minSize(const void *obj)

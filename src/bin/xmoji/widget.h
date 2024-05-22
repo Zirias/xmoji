@@ -11,8 +11,7 @@
 typedef struct MetaWidget
 {
     MetaObject base;
-    int (*draw)(void *widget,
-	    xcb_drawable_t drawable, xcb_render_picture_t picture);
+    int (*draw)(void *widget, xcb_render_picture_t picture);
     int (*show)(void *widget);
     int (*hide)(void *widget);
     Size (*minSize)(const void *widget);
@@ -42,8 +41,7 @@ PSC_Event *Widget_hidden(void *self) CMETHOD ATTR_RETNONNULL;
 PSC_Event *Widget_sizeRequested(void *self) CMETHOD ATTR_RETNONNULL;
 PSC_Event *Widget_sizeChanged(void *self) CMETHOD ATTR_RETNONNULL;
 Widget *Widget_parent(const void *self) CMETHOD;
-int Widget_draw(void *self,
-	xcb_drawable_t drawable, xcb_render_picture_t picture) CMETHOD;
+int Widget_draw(void *self) CMETHOD;
 int Widget_show(void *self) CMETHOD;
 int Widget_hide(void *self) CMETHOD;
 void Widget_setSize(void *self, Size size) CMETHOD;
@@ -54,6 +52,9 @@ Pos Widget_origin(const void *self) CMETHOD;
 const ColorSet *Widget_colorSet(const void *self) CMETHOD;
 Color Widget_color(const void *self, ColorRole role) CMETHOD;
 void Widget_setColor(void *self, ColorRole role, Color color) CMETHOD;
+void Widget_setBackground(void *self, int enabled, ColorRole role) CMETHOD;
+xcb_drawable_t Widget_drawable(const void *self) CMETHOD;
+void Widget_setDrawable(void *self, xcb_drawable_t drawable) CMETHOD;
 int Widget_visible(const void *self) CMETHOD;
 
 void Widget_requestSize(void *self) CMETHOD;

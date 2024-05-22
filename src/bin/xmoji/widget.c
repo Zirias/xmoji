@@ -24,7 +24,12 @@ struct Widget
     Widget *parent;
     ColorSet *colorSet;
     Rect geometry;
+    Rect clip;
+    xcb_drawable_t drawable;
+    xcb_render_picture_t picture;
     int visible;
+    ColorRole backgroundRole;
+    int drawBackground;
 };
 
 static void destroy(void *obj)
@@ -71,6 +76,7 @@ Widget *Widget_createBase(void *derived, void *parent)
     REGTYPE(0);
 
     Widget *self = PSC_malloc(sizeof *self);
+    memset(self, 0, sizeof *self);
     if (!derived) derived = self;
     self->base.base = Object_create(derived);
     self->base.type = OBJTYPE;
@@ -79,8 +85,6 @@ Widget *Widget_createBase(void *derived, void *parent)
     self->sizeRequested = PSC_Event_create(self);
     self->sizeChanged = PSC_Event_create(self);
     self->parent = parent;
-    self->geometry = (Rect){{0, 0}, {0, 0}};
-    self->visible = 0;
 
     if (parent) Object_own(parent, derived);
     else self->colorSet = ColorSet_create(0xffffffff, 0x000000ff);
@@ -117,18 +121,31 @@ Widget *Widget_parent(const void *self)
     return w->parent;
 }
 
-int Widget_draw(void *self,
-	xcb_drawable_t drawable, xcb_render_picture_t picture)
+int Widget_draw(void *self)
 {
     Widget *w = Object_instance(self);
+    if (!w->drawable) return -1;
     if (!w->visible) return 0;
     int rc = -1;
-    xcb_rectangle_t clip = { 0, 0,
-	w->geometry.size.width, w->geometry.size.height };
-    CHECK(xcb_render_set_picture_clip_rectangles(X11Adapter_connection(),
-		picture, w->geometry.pos.x, w->geometry.pos.y, 1, &clip),
-	    "Cannot set widget clipping region on 0x%x", (unsigned)drawable);
-    Object_vcall(rc, Widget, draw, self, drawable, picture);
+    if (memcmp(&w->geometry, &w->clip, sizeof w->geometry))
+    {
+	w->clip = w->geometry;
+	xcb_rectangle_t clip = {0, 0, w->clip.size.width, w->clip.size.height};
+	CHECK(xcb_render_set_picture_clip_rectangles(X11Adapter_connection(),
+		    w->picture, w->clip.pos.x, w->clip.pos.y, 1, &clip),
+		"Cannot set clipping region on 0x%x", (unsigned)w->drawable);
+    }
+    if (w->drawBackground)
+    {
+	xcb_rectangle_t rect = {w->clip.pos.x, w->clip.pos.y,
+	    w->clip.size.width, w->clip.size.height};
+	Color color = Widget_color(w, w->backgroundRole);
+	CHECK(xcb_render_fill_rectangles(X11Adapter_connection(),
+		    XCB_RENDER_PICT_OP_OVER, w->picture, Color_xcb(color),
+		    1, &rect),
+		"Cannot draw widget background on 0x%x", (unsigned)w->picture);
+    }
+    Object_vcall(rc, Widget, draw, self, w->picture);
     return rc;
 }
 
@@ -207,6 +224,39 @@ void Widget_setColor(void *self, ColorRole role, Color color)
 	else w->colorSet = ColorSet_create(0xffffffff, 0x000000ff);
     }
     ColorSet_setColor(w->colorSet, role, color);
+}
+
+void Widget_setBackground(void *self, int enabled, ColorRole role)
+{
+    Widget *w = Object_instance(self);
+    w->backgroundRole = role;
+    w->drawBackground = enabled;
+}
+
+xcb_drawable_t Widget_drawable(const void *self)
+{
+    Widget *w = Object_instance(self);
+    return w->drawable;
+}
+
+void Widget_setDrawable(void *self, xcb_drawable_t drawable)
+{
+    Widget *w = Object_instance(self);
+    xcb_connection_t *c = X11Adapter_connection();
+    if (w->drawable) xcb_render_free_picture(c, w->picture);
+    if (drawable)
+    {
+	w->drawable = drawable;
+	w->picture = xcb_generate_id(c);
+	CHECK(xcb_render_create_picture(c, w->picture, drawable,
+		    X11Adapter_rootformat(), 0, 0),
+		"Cannot create XRender picture for 0x%x", (unsigned)drawable);
+    }
+    else
+    {
+	w->drawable = 0;
+	w->picture = 0;
+    }
 }
 
 int Widget_visible(const void *self)
