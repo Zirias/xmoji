@@ -9,6 +9,8 @@
 
 FT_Library ftlib;
 int refcnt;
+FcPattern *defaultpat;
+double defaultpixelsize;
 
 struct Font
 {
@@ -35,26 +37,32 @@ int Font_init(void)
 
     if (FcInit() != FcTrue)
     {
-	--refcnt;
 	PSC_Log_msg(PSC_L_ERROR, "Could not initialize fontconfig");
-	return -1;
+	goto error;
     }
+    defaultpat = FcNameParse((FcChar8 *)"sans");
+    FcConfigSubstitute(0, defaultpat, FcMatchPattern);
+    FcDefaultSubstitute(defaultpat);
+    FcPatternGetDouble(defaultpat, FC_PIXEL_SIZE, 0, &defaultpixelsize);
 
     if (FT_Init_FreeType(&ftlib) != 0)
     {
-	--refcnt;
 	PSC_Log_msg(PSC_L_ERROR, "Could not initialize freetype");
-	FcFini();
-	return -1;
+	goto error;
     }
 
     return 0;
+
+error:
+    Font_done();
+    return -1;
 }
 
 void Font_done(void)
 {
     if (--refcnt) return;
     FT_Done_FreeType(ftlib);
+    FcPatternDestroy(defaultpat);
     FcFini();
 }
 
@@ -72,30 +80,50 @@ static void requestError(void *receiver, void *sender, void *args)
 Font *Font_create(uint8_t subpixelbits, const char *pattern)
 {
     PSC_List *patterns = 0;
-    if (pattern) patterns = PSC_List_fromString(pattern, ",");
-    if (!patterns) patterns = PSC_List_create();
-    static const char *sans = "sans";
-    PSC_List_append(patterns, (char *)sans, 0);
+    PSC_ListIterator *pi = 0;
+    if (pattern)
+    {
+	patterns = PSC_List_fromString(pattern, ",");
+	pi = PSC_List_iterator(patterns);
+    }
 
     int ismatch = 0;
     FcPattern *fcfont;
     FT_Face face;
-    double pixelsize = 0;
+    double pixelsize = defaultpixelsize;
     double fixedpixelsize = 0;
-    PSC_ListIterator *pi = PSC_List_iterator(patterns);
-    while (!ismatch && PSC_ListIterator_moveNext(pi))
+    int defstep = 1;
+    while (!ismatch && ((pi && PSC_ListIterator_moveNext(pi)) || defstep--))
     {
-	const char *patstr = PSC_ListIterator_current(pi);
-	PSC_Log_fmt(PSC_L_DEBUG, "Looking for font: %s", patstr);
-	FcPattern *fcpat = FcNameParse((FcChar8 *)patstr);
-	FcConfigSubstitute(0, fcpat, FcMatchPattern);
-	FcDefaultSubstitute(fcpat);
+	const char *patstr = defstep ? PSC_ListIterator_current(pi) : "";
+	FcPattern *fcpat;
+	if (*patstr)
+	{
+	    PSC_Log_fmt(PSC_L_DEBUG, "Looking for font: %s", patstr);
+	    fcpat = FcNameParse((FcChar8 *)patstr);
+	    double reqsize = 0;
+	    double reqpxsize = 0;
+	    FcPatternGetDouble(fcpat, FC_SIZE, 0, &reqsize);
+	    FcPatternGetDouble(fcpat, FC_PIXEL_SIZE, 0, &reqpxsize);
+	    if (!reqsize && !reqpxsize)
+	    {
+		FcPatternAddDouble(fcpat, FC_PIXEL_SIZE, pixelsize);
+	    }
+	    FcConfigSubstitute(0, fcpat, FcMatchPattern);
+	    FcDefaultSubstitute(fcpat);
+	    FcPatternGetDouble(fcpat, FC_PIXEL_SIZE, 0, &pixelsize);
+	}
+	else
+	{
+	    PSC_Log_msg(PSC_L_DEBUG, "Looking for default font");
+	    fcpat = defaultpat;
+	}
 	FcResult result;
 	fcfont = FcFontMatch(0, fcpat, &result);
 	ismatch = (result == FcResultMatch);
 	FcChar8 *foundfamily = 0;
 	if (ismatch) FcPatternGetString(fcfont, FC_FAMILY, 0, &foundfamily);
-	if (ismatch && patstr != sans)
+	if (ismatch && *patstr)
 	{
 	    FcChar8 *reqfamily = 0;
 	    FcPatternGetString(fcpat, FC_FAMILY, 0, &reqfamily);
@@ -106,14 +134,8 @@ Font *Font_create(uint8_t subpixelbits, const char *pattern)
 		ismatch = 0;
 	    }
 	}
-	pixelsize = 0;
 	fixedpixelsize = 0;
-	if (ismatch)
-	{
-	    FcPatternGetDouble(fcpat, FC_PIXEL_SIZE, 0, &pixelsize);
-	    if (!pixelsize) ismatch = 0;
-	}
-	FcPatternDestroy(fcpat);
+	if (fcpat != defaultpat) FcPatternDestroy(fcpat);
 	fcpat = 0;
 	FcChar8 *fontfile = 0;
 	if (ismatch)
