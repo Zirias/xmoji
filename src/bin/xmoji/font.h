@@ -21,7 +21,7 @@ typedef struct GlyphRenderInfo
 int Font_init(void);
 void Font_done(void);
 
-Font *Font_create(uint8_t subpixelbits, char **patterns);
+Font *Font_create(uint8_t subpixelbits, const char *pattern);
 FT_Face Font_face(const Font *self) CMETHOD ATTR_RETNONNULL;
 double Font_pixelsize(const Font *self) CMETHOD;
 uint8_t Font_glyphidbits(const Font *self) CMETHOD;

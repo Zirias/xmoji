@@ -3,6 +3,4 @@
 
 int Xmoji_run(int argc, char **argv);
 
-void *Xmoji_sysfont(void);
-
 #endif

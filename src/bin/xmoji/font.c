@@ -69,30 +69,33 @@ static void requestError(void *receiver, void *sender, void *args)
     of->haserror = 1;
 }
 
-Font *Font_create(uint8_t subpixelbits, char **patterns)
+Font *Font_create(uint8_t subpixelbits, const char *pattern)
 {
-    static char *emptypat[] = { 0 };
-    char **p = patterns;
-    if (!p) p = emptypat;
-    char *patstr;
+    PSC_List *patterns = 0;
+    if (pattern) patterns = PSC_List_fromString(pattern, ",");
+    if (!patterns) patterns = PSC_List_create();
+    static const char *sans = "sans";
+    PSC_List_append(patterns, (char *)sans, 0);
+
+    int ismatch = 0;
     FcPattern *fcfont;
     FT_Face face;
     double pixelsize = 0;
     double fixedpixelsize = 0;
-    for (;;)
+    PSC_ListIterator *pi = PSC_List_iterator(patterns);
+    while (!ismatch && PSC_ListIterator_moveNext(pi))
     {
-	patstr = *p;
-	if (!patstr) patstr = "sans";
+	const char *patstr = PSC_ListIterator_current(pi);
 	PSC_Log_fmt(PSC_L_DEBUG, "Looking for font: %s", patstr);
 	FcPattern *fcpat = FcNameParse((FcChar8 *)patstr);
 	FcConfigSubstitute(0, fcpat, FcMatchPattern);
 	FcDefaultSubstitute(fcpat);
 	FcResult result;
 	fcfont = FcFontMatch(0, fcpat, &result);
-	int ismatch = (result == FcResultMatch);
+	ismatch = (result == FcResultMatch);
 	FcChar8 *foundfamily = 0;
 	if (ismatch) FcPatternGetString(fcfont, FC_FAMILY, 0, &foundfamily);
-	if (ismatch && *p)
+	if (ismatch && patstr != sans)
 	{
 	    FcChar8 *reqfamily = 0;
 	    FcPatternGetString(fcpat, FC_FAMILY, 0, &reqfamily);
@@ -190,17 +193,20 @@ Font *Font_create(uint8_t subpixelbits, char **patterns)
 	}
 	if (ismatch)
 	{
-	    PSC_Log_fmt(PSC_L_DEBUG, "Font `%s:pixelsize=%.2f' found in `%s'",
+	    PSC_Log_fmt(PSC_L_INFO, "Font `%s:pixelsize=%.2f' found in `%s'",
 		    (const char *)foundfamily,
 		    fixedpixelsize ? fixedpixelsize : pixelsize,
 		    (const char *)fontfile);
 	}
 	FcPatternDestroy(fcfont);
 	fcfont = 0;
-	if (ismatch) break;
-	PSC_Log_fmt(PSC_L_WARNING, "No matching font found for `%s'", patstr);
-	if (!*p) return 0;
-	++p;
+    }
+    PSC_ListIterator_destroy(pi);
+    PSC_List_destroy(patterns);
+
+    if (!ismatch)
+    {
+	PSC_Log_fmt(PSC_L_WARNING, "No matching font found for `%s'", pattern);
     }
 
     Font *self;
