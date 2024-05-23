@@ -18,6 +18,7 @@ struct TextRenderer
     xcb_render_picture_t pen;
     Color color;
     Size size;
+    uint32_t baseline;
     int haserror;
 };
 
@@ -26,6 +27,7 @@ typedef struct ShapeContext
     TextRenderer *renderer;
     hb_buffer_t *hbbuffer;
     Size size;
+    uint32_t baseline;
 } ShapeContext;
 
 static void doshape(void *ctx)
@@ -42,23 +44,25 @@ static void doshape(void *ctx)
     uint32_t height = 0;
     if (HB_DIRECTION_IS_HORIZONTAL(hb_buffer_get_direction(sctx->hbbuffer)))
     {
-	for (unsigned i = 0; i < len; ++i)
+	for (unsigned i = 0; i < len-1; ++i)
 	{
 	    width += pos[i].x_advance;
 	}
-	height = face->size->metrics.ascender - face->size->metrics.descender;
+	height = FT_MulFix(face->bbox.yMax, face->size->metrics.y_scale)
+	    - FT_MulFix(face->bbox.yMin, face->size->metrics.y_scale);
     }
     else
     {
-	for (unsigned i = 0; i < len; ++i)
+	for (unsigned i = 0; i < len - 1; ++i)
 	{
 	    height += pos[i].y_advance;
 	}
 	width = FT_MulFix(face->bbox.xMax, face->size->metrics.x_scale)
 	    - FT_MulFix(face->bbox.xMin, face->size->metrics.x_scale);
     }
-    sctx->size.width = (width + 0x3fU) >> 6;
-    sctx->size.height = (height + 0x3fU) >> 6;
+    sctx->size.width = width;
+    sctx->size.height = height;
+    sctx->baseline = FT_MulFix(face->bbox.yMax, face->size->metrics.y_scale);
 }
 
 static void shapedone(void *receiver, void *sender, void *args)
@@ -69,8 +73,24 @@ static void shapedone(void *receiver, void *sender, void *args)
     ShapeContext *sctx = receiver;
     TextRenderer *self = sctx->renderer;
     hb_buffer_destroy(self->hbbuffer);
+    FT_Face face = hb_ft_font_get_face(self->hbfont);
+    unsigned len = hb_buffer_get_length(sctx->hbbuffer);
+    hb_glyph_info_t *info = hb_buffer_get_glyph_infos(sctx->hbbuffer, 0);
+    FT_Load_Glyph(face, info[len-1].codepoint, FT_LOAD_NO_BITMAP);
+    if (HB_DIRECTION_IS_HORIZONTAL(hb_buffer_get_direction(sctx->hbbuffer)))
+    {
+	sctx->size.width += face->glyph->metrics.horiBearingX
+	    + face->glyph->metrics.width;
+    }
+    else
+    {
+	sctx->size.height += face->glyph->metrics.vertBearingY
+	    + face->glyph->metrics.height;
+    }
     self->hbbuffer = sctx->hbbuffer;
-    self->size = sctx->size;
+    self->size.width = (sctx->size.width + 0x3fU) >> 6;
+    self->size.height = (sctx->size.height + 0x3fU) >> 6;
+    self->baseline = sctx->baseline;
     free(sctx);
     PSC_Event_raise(self->shaped, 0, 0);
 }
@@ -143,7 +163,7 @@ int TextRenderer_render(TextRenderer *self,
 	    self->hbbuffer, 0);
     GlyphRenderInfo *glyphs = PSC_malloc(len * sizeof *glyphs);
     uint32_t x = 0;
-    uint32_t y = (Font_pixelsize(self->font) + .5) * 64.;
+    uint32_t y = self->baseline;
     uint32_t rx = 0;
     uint32_t prx = 0;
     uint16_t ry = 0;
