@@ -349,36 +349,40 @@ void Window_setTitle(void *self, const char *title)
 	xcb_delete_property(c, w->w, XCB_ATOM_WM_NAME);
 	xcb_delete_property(c, w->w, A(_NET_WM_NAME));
     }
+    if (!w->iconName) Window_setIconName(self, title);
 }
 
 const char *Window_iconName(const void *self)
 {
     const Window *w = Object_instance(self);
-    return w->iconName;
+    if (w->iconName) return w->iconName;
+    return w->title;
 }
 
 void Window_setIconName(void *self, const char *iconName)
 {
     Window *w = Object_instance(self);
     if (!w->iconName && !iconName) return;
-    if (w->iconName && iconName && !strcmp(w->iconName, iconName)) return;
+    const char *newname = iconName;
+    if (!newname) newname = w->title;
+    if (w->iconName && newname && !strcmp(w->iconName, newname)) return;
     free(w->iconName);
+    w->iconName = 0;
     xcb_connection_t *c = X11Adapter_connection();
-    if (iconName)
+    if (newname)
     {
-	w->iconName = PSC_copystr(iconName);
-	char *latinIconName = X11Adapter_toLatin1(w->iconName);
+	if (iconName) w->iconName = PSC_copystr(iconName);
+	char *latinIconName = X11Adapter_toLatin1(newname);
 	xcb_change_property(c, XCB_PROP_MODE_REPLACE, w->w,
 		XCB_ATOM_WM_ICON_NAME, XCB_ATOM_STRING, 8,
 		strlen(latinIconName), latinIconName);
 	xcb_change_property(c, XCB_PROP_MODE_REPLACE, w->w,
-		A(_NET_WM_ICON_NAME), A(UTF8_STRING), 8, strlen(w->iconName),
-		w->iconName);
+		A(_NET_WM_ICON_NAME), A(UTF8_STRING), 8, strlen(newname),
+		newname);
 	free(latinIconName);
     }
     else
     {
-	w->iconName = 0;
 	xcb_delete_property(c, w->w, XCB_ATOM_WM_ICON_NAME);
 	xcb_delete_property(c, w->w, A(_NET_WM_ICON_NAME));
     }

@@ -41,7 +41,6 @@ static void onprestartup(void *receiver, void *sender, void *args)
     emojifont = Font_create(0, emojifontnames);
     if (!(win = Window_create(0))) goto error;
     Window_setTitle(win, "Xmoji 😀 äöüß");
-    Window_setIconName(win, "xmoji");
     Widget_setColor(win, COLOR_BG_NORMAL, Color_fromRgb(50, 60, 70));
     Widget_setColor(win, COLOR_NORMAL, Color_fromRgb(200, 255, 240));
 
