@@ -28,6 +28,9 @@ typedef struct OutlineFont
     uint32_t glyphidmask;
     uint32_t subpixelmask;
     xcb_render_glyphset_t glyphset;
+    uint32_t maxWidth;
+    uint32_t maxHeight;
+    uint32_t baseline;
     uint32_t uploaded[];
 } OutlineFont;
 
@@ -264,6 +267,19 @@ Font *Font_create(uint8_t subpixelbits, const char *pattern)
 	of->subpixelbits = subpixelbits;
 	of->glyphidmask = glyphidmask;
 	of->subpixelmask = ((1U << subpixelbits) - 1) << glyphidbits;
+	uint32_t claimedheight = face->size->metrics.ascender
+	    - face->size->metrics.descender;
+	of->maxWidth = FT_MulFix(face->bbox.xMax, face->size->metrics.x_scale)
+	    - FT_MulFix(face->bbox.xMin, face->size->metrics.x_scale);
+	of->maxHeight = FT_MulFix(face->bbox.yMax, face->size->metrics.y_scale)
+	    - FT_MulFix(face->bbox.yMin, face->size->metrics.y_scale);
+	if (of->maxHeight >= claimedheight << 1)
+	{
+	    of->maxHeight = claimedheight;
+	    of->baseline = face->size->metrics.ascender;
+	}
+	else of->baseline = FT_MulFix(face->bbox.yMax,
+		face->size->metrics.y_scale);
 	self = (Font *)of;
 	self->pixelsize = pixelsize;
     }
@@ -298,6 +314,27 @@ uint8_t Font_subpixelbits(const Font *self)
     if (!(self->face->face_flags & FT_FACE_FLAG_SCALABLE)) return 0;
     OutlineFont *of = (OutlineFont *)self;
     return of->subpixelbits;
+}
+
+uint32_t Font_maxWidth(const Font *self)
+{
+    if (!(self->face->face_flags & FT_FACE_FLAG_SCALABLE)) return 0;
+    OutlineFont *of = (OutlineFont *)self;
+    return of->maxWidth;
+}
+
+uint32_t Font_maxHeight(const Font *self)
+{
+    if (!(self->face->face_flags & FT_FACE_FLAG_SCALABLE)) return 0;
+    OutlineFont *of = (OutlineFont *)self;
+    return of->maxHeight;
+}
+
+uint32_t Font_baseline(const Font *self)
+{
+    if (!(self->face->face_flags & FT_FACE_FLAG_SCALABLE)) return 0;
+    OutlineFont *of = (OutlineFont *)self;
+    return of->baseline;
 }
 
 int Font_uploadGlyphs(Font *self, unsigned len, GlyphRenderInfo *glyphinfo)

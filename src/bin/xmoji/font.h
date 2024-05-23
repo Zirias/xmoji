@@ -27,6 +27,9 @@ double Font_pixelsize(const Font *self) CMETHOD;
 uint8_t Font_glyphidbits(const Font *self) CMETHOD;
 uint8_t Font_subpixelbits(const Font *self) CMETHOD;
 uint16_t Font_linespace(const Font *self) CMETHOD;
+uint32_t Font_maxWidth(const Font *self) CMETHOD;
+uint32_t Font_maxHeight(const Font *self) CMETHOD;
+uint32_t Font_baseline(const Font *self) CMETHOD;
 int Font_uploadGlyphs(Font *self, unsigned len, GlyphRenderInfo *glyphinfo)
     CMETHOD ATTR_NONNULL((3));
 xcb_render_glyphset_t Font_glyphset(const Font *self) CMETHOD;

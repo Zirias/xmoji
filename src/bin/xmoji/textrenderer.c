@@ -18,7 +18,6 @@ struct TextRenderer
     xcb_render_picture_t pen;
     Color color;
     Size size;
-    uint32_t baseline;
     int haserror;
 };
 
@@ -27,7 +26,6 @@ typedef struct ShapeContext
     TextRenderer *renderer;
     hb_buffer_t *hbbuffer;
     Size size;
-    uint32_t baseline;
 } ShapeContext;
 
 static void doshape(void *ctx)
@@ -36,28 +34,18 @@ static void doshape(void *ctx)
     hb_buffer_set_language(sctx->hbbuffer, hb_language_from_string("en", -1));
     hb_buffer_guess_segment_properties(sctx->hbbuffer);
     hb_shape(sctx->renderer->hbfont, sctx->hbbuffer, 0, 0);
-    FT_Face face = hb_ft_font_get_face(sctx->renderer->hbfont);
     unsigned len = hb_buffer_get_length(sctx->hbbuffer);
     hb_glyph_position_t *pos = hb_buffer_get_glyph_positions(
 	    sctx->hbbuffer, 0);
     uint32_t width = 0;
     uint32_t height = 0;
-    int useclaimedheight = 0;
     if (HB_DIRECTION_IS_HORIZONTAL(hb_buffer_get_direction(sctx->hbbuffer)))
     {
 	for (unsigned i = 0; i < len-1; ++i)
 	{
 	    width += pos[i].x_advance;
 	}
-	uint32_t claimedheight = face->size->metrics.ascender
-	    - face->size->metrics.descender;
-	height = FT_MulFix(face->bbox.yMax, face->size->metrics.y_scale)
-	    - FT_MulFix(face->bbox.yMin, face->size->metrics.y_scale);
-	if (height >= claimedheight << 1)
-	{
-	    height = claimedheight;
-	    useclaimedheight = 1;
-	}
+	height = Font_maxHeight(sctx->renderer->font);
     }
     else
     {
@@ -65,13 +53,10 @@ static void doshape(void *ctx)
 	{
 	    height += pos[i].y_advance;
 	}
-	width = FT_MulFix(face->bbox.xMax, face->size->metrics.x_scale)
-	    - FT_MulFix(face->bbox.xMin, face->size->metrics.x_scale);
+	width = Font_maxWidth(sctx->renderer->font);
     }
     sctx->size.width = width;
     sctx->size.height = height;
-    sctx->baseline = useclaimedheight ? face->size->metrics.ascender
-	: FT_MulFix(face->bbox.yMax, face->size->metrics.y_scale);
 }
 
 static void shapedone(void *receiver, void *sender, void *args)
@@ -99,7 +84,6 @@ static void shapedone(void *receiver, void *sender, void *args)
     self->hbbuffer = sctx->hbbuffer;
     self->size.width = (sctx->size.width + 0x3fU) >> 6;
     self->size.height = (sctx->size.height + 0x3fU) >> 6;
-    self->baseline = sctx->baseline;
     free(sctx);
     PSC_Event_raise(self->shaped, 0, 0);
 }
@@ -172,7 +156,7 @@ int TextRenderer_render(TextRenderer *self,
 	    self->hbbuffer, 0);
     GlyphRenderInfo *glyphs = PSC_malloc(len * sizeof *glyphs);
     uint32_t x = 0;
-    uint32_t y = self->baseline;
+    uint32_t y = Font_baseline(self->font);
     uint32_t rx = 0;
     uint32_t prx = 0;
     uint16_t ry = 0;
