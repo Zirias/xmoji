@@ -319,7 +319,7 @@ int X11Adapter_init(int argc, char **argv, const char *classname)
     if (version)
     {
 	formatscookie = xcb_render_query_pict_formats(c);
-	PSC_Log_fmt(PSC_L_DEBUG, "using XRender version %"PRIu32".%"PRIu32,
+	PSC_Log_fmt(PSC_L_INFO, "using XRender version %"PRIu32".%"PRIu32,
 		version->major_version, version->minor_version);
 	free(version);
     }
@@ -383,7 +383,7 @@ int X11Adapter_init(int argc, char **argv, const char *classname)
 	    if (fi.data->type == XCB_RENDER_PICT_TYPE_DIRECT
 		    && fi.data->depth >= 24)
 	    {
-		PSC_Log_fmt(PSC_L_DEBUG,
+		PSC_Log_fmt(PSC_L_INFO,
 			"Root visual picture format ok (DIRECT, %"PRIu32"bpp)",
 			fi.data->depth);
 	    }
@@ -449,13 +449,13 @@ int X11Adapter_init(int argc, char **argv, const char *classname)
 	char utf8lc[32];
 	if (lcdot) *lcdot = 0;
 	snprintf(utf8lc, sizeof utf8lc, "%s.UTF-8", lc);
-	PSC_Log_fmt(PSC_L_INFO, "Configured locale doesn't use UTF-8 "
+	PSC_Log_fmt(PSC_L_WARNING, "Configured locale doesn't use UTF-8 "
 		"encoding, trying `%s' instead", utf8lc);
 	lc = setlocale(LC_ALL, utf8lc);
     }
     if (lc)
     {
-	PSC_Log_fmt(PSC_L_DEBUG, "Starting with locale `%s'", lc);
+	PSC_Log_fmt(PSC_L_INFO, "Starting with locale `%s'", lc);
     }
     else
     {
@@ -495,7 +495,7 @@ int X11Adapter_init(int argc, char **argv, const char *classname)
     int len2 = snprintf(wmclass+pos, sizeof wmclass / 2, "%s", classname);
     wmclasssz = pos + len2 + 1;
     if (wmclasssz > sizeof wmclass) wmclasssz = sizeof wmclass;
-    PSC_Log_fmt(PSC_L_DEBUG,
+    PSC_Log_fmt(PSC_L_INFO,
 	    "starting with window class \"%s\", \"%s\"", nm, classname);
     free(clnm);
     free(nm);

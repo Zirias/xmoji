@@ -11,6 +11,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+static const char *fontname;
+static PSC_LogLevel loglevel = PSC_L_WARNING;
+
 static Font *font;
 static Font *emojifont;
 static Window *win;
@@ -26,18 +29,6 @@ static void onclose(void *receiver, void *sender, void *args)
     PSC_Service_quit();
 }
 
-static const char *fontname(void)
-{
-    for (int i = 1; i < startupargs.argc - 1; ++i)
-    {
-	if (!strcmp(startupargs.argv[i], "-font"))
-	{
-	    return startupargs.argv[i+1];
-	}
-    }
-    return 0;
-}
-
 static void onprestartup(void *receiver, void *sender, void *args)
 {
     (void)receiver;
@@ -48,7 +39,7 @@ static void onprestartup(void *receiver, void *sender, void *args)
     if (X11Adapter_init(
 		startupargs.argc, startupargs.argv, "Xmoji") < 0) goto error;
     if (Font_init() < 0) goto error;
-    font = Font_create(3, fontname());
+    font = Font_create(3, fontname);
     emojifont = Font_create(0, "Noto Color Emoji,Noto Emoji");
     if (!(win = Window_create(0))) goto error;
     Window_setTitle(win, "Xmoji 😀 äöüß");
@@ -104,9 +95,25 @@ SOLOCAL int Xmoji_run(int argc, char **argv)
     startupargs.argc = argc;
     startupargs.argv = argv;
 
+    for (int i = 1; i < argc; ++i)
+    {
+	if (i < argc - 1 && !strcmp(argv[i], "-font"))
+	{
+	    fontname = argv[i+1];
+	}
+	else if (loglevel < PSC_L_INFO && !strcmp(argv[i], "-v"))
+	{
+	    loglevel = PSC_L_INFO;
+	}
+	else if (loglevel < PSC_L_DEBUG && !strcmp(argv[i], "-vv"))
+	{
+	    loglevel = PSC_L_DEBUG;
+	}
+    }
+
     PSC_RunOpts_foreground();
     PSC_Log_setFileLogger(stderr);
-    PSC_Log_setMaxLogLevel(PSC_L_DEBUG);
+    PSC_Log_setMaxLogLevel(loglevel);
     PSC_Event_register(PSC_Service_prestartup(), 0, onprestartup, 0);
     PSC_Event_register(PSC_Service_startup(), 0, onstartup, 0);
     PSC_Event_register(PSC_Service_shutdown(), 0, onshutdown, 0);
