@@ -8,13 +8,10 @@
 #include <xcb/render.h>
 
 C_CLASS_DECL(Font);
-C_CLASS_DECL(PSC_Event);
 C_CLASS_DECL(TextRenderer);
 
 TextRenderer *TextRenderer_create(Font *font)
     ATTR_NONNULL((1));
-PSC_Event *TextRenderer_shaped(TextRenderer *self)
-    CMETHOD;
 Size TextRenderer_size(const TextRenderer *self)
     CMETHOD;
 int TextRenderer_setUtf8(TextRenderer *self, const char *utf8, int len)

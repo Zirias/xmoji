@@ -11,7 +11,6 @@
 struct TextRenderer
 {
     Font *font;
-    PSC_Event *shaped;
     hb_font_t *hbfont;
     hb_buffer_t *hbbuffer;
     xcb_pixmap_t pixmap;
@@ -27,66 +26,6 @@ typedef struct ShapeContext
     hb_buffer_t *hbbuffer;
     Size size;
 } ShapeContext;
-
-static void doshape(void *ctx)
-{
-    ShapeContext *sctx = ctx;
-    hb_buffer_set_language(sctx->hbbuffer, hb_language_from_string("en", -1));
-    hb_buffer_guess_segment_properties(sctx->hbbuffer);
-    hb_shape(sctx->renderer->hbfont, sctx->hbbuffer, 0, 0);
-    unsigned len = hb_buffer_get_length(sctx->hbbuffer);
-    hb_glyph_position_t *pos = hb_buffer_get_glyph_positions(
-	    sctx->hbbuffer, 0);
-    uint32_t width = 0;
-    uint32_t height = 0;
-    if (HB_DIRECTION_IS_HORIZONTAL(hb_buffer_get_direction(sctx->hbbuffer)))
-    {
-	for (unsigned i = 0; i < len-1; ++i)
-	{
-	    width += pos[i].x_advance;
-	}
-	height = Font_maxHeight(sctx->renderer->font);
-    }
-    else
-    {
-	for (unsigned i = 0; i < len - 1; ++i)
-	{
-	    height += pos[i].y_advance;
-	}
-	width = Font_maxWidth(sctx->renderer->font);
-    }
-    sctx->size.width = width;
-    sctx->size.height = height;
-}
-
-static void shapedone(void *receiver, void *sender, void *args)
-{
-    (void)sender;
-    (void)args;
-
-    ShapeContext *sctx = receiver;
-    TextRenderer *self = sctx->renderer;
-    hb_buffer_destroy(self->hbbuffer);
-    FT_Face face = hb_ft_font_get_face(self->hbfont);
-    unsigned len = hb_buffer_get_length(sctx->hbbuffer);
-    hb_glyph_info_t *info = hb_buffer_get_glyph_infos(sctx->hbbuffer, 0);
-    FT_Load_Glyph(face, info[len-1].codepoint, FT_LOAD_NO_BITMAP);
-    if (HB_DIRECTION_IS_HORIZONTAL(hb_buffer_get_direction(sctx->hbbuffer)))
-    {
-	sctx->size.width += face->glyph->metrics.horiBearingX
-	    + face->glyph->metrics.width;
-    }
-    else
-    {
-	sctx->size.height += face->glyph->metrics.vertBearingY
-	    + face->glyph->metrics.height;
-    }
-    self->hbbuffer = sctx->hbbuffer;
-    self->size.width = (sctx->size.width + 0x3fU) >> 6;
-    self->size.height = (sctx->size.height + 0x3fU) >> 6;
-    free(sctx);
-    PSC_Event_raise(self->shaped, 0, 0);
-}
 
 static void requestError(void *receiver, void *sender, void *args)
 {
@@ -104,7 +43,6 @@ TextRenderer *TextRenderer_create(Font *font)
     TextRenderer *self = PSC_malloc(sizeof *self);
     memset(self, 0, sizeof *self);
     self->font = font;
-    self->shaped = PSC_Event_create(self);
     self->hbfont = hb_ft_font_create_referenced(Font_face(font));
     xcb_connection_t *c = X11Adapter_connection();
     self->pixmap = xcb_generate_id(c);
@@ -123,11 +61,6 @@ TextRenderer *TextRenderer_create(Font *font)
     return self;
 }
 
-PSC_Event *TextRenderer_shaped(TextRenderer *self)
-{
-    return self->shaped;
-}
-
 Size TextRenderer_size(const TextRenderer *self)
 {
     return self->size;
@@ -136,13 +69,42 @@ Size TextRenderer_size(const TextRenderer *self)
 int TextRenderer_setUtf8(TextRenderer *self, const char *utf8, int len)
 {
     if (self->haserror) return -1;
-    ShapeContext *sctx = PSC_malloc(sizeof *sctx);
-    sctx->renderer = self;
-    sctx->hbbuffer = hb_buffer_create();
-    hb_buffer_add_utf8(sctx->hbbuffer, utf8, len, 0, -1);
-    PSC_ThreadJob *shapejob = PSC_ThreadJob_create(doshape, sctx, 0);
-    PSC_Event_register(PSC_ThreadJob_finished(shapejob), sctx, shapedone, 0);
-    PSC_ThreadPool_enqueue(shapejob);
+    hb_buffer_destroy(self->hbbuffer);
+    self->hbbuffer = hb_buffer_create();
+    hb_buffer_add_utf8(self->hbbuffer, utf8, len, 0, -1);
+    hb_buffer_set_language(self->hbbuffer, hb_language_from_string("en", -1));
+    hb_buffer_guess_segment_properties(self->hbbuffer);
+    hb_shape(self->hbfont, self->hbbuffer, 0, 0);
+    unsigned slen = hb_buffer_get_length(self->hbbuffer);
+    hb_glyph_info_t *info = hb_buffer_get_glyph_infos(self->hbbuffer, 0);
+    hb_glyph_position_t *pos = hb_buffer_get_glyph_positions(
+	    self->hbbuffer, 0);
+    uint32_t width = 0;
+    uint32_t height = 0;
+    FT_Face face = hb_ft_font_get_face(self->hbfont);
+    FT_Load_Glyph(face, info[slen-1].codepoint, FT_LOAD_NO_BITMAP);
+    if (HB_DIRECTION_IS_HORIZONTAL(hb_buffer_get_direction(self->hbbuffer)))
+    {
+	for (unsigned i = 0; i < slen-1; ++i)
+	{
+	    width += pos[i].x_advance;
+	}
+	width += face->glyph->metrics.horiBearingX
+	    + face->glyph->metrics.width;
+	height = Font_maxHeight(self->font);
+    }
+    else
+    {
+	for (unsigned i = 0; i < slen - 1; ++i)
+	{
+	    height += pos[i].y_advance;
+	}
+	height += face->glyph->metrics.vertBearingY
+	    + face->glyph->metrics.height;
+	width = Font_maxWidth(self->font);
+    }
+    self->size.width = (width + 0x3fU) >> 6;
+    self->size.height = (height + 0x3fU) >> 6;
     return 0;
 }
 
@@ -212,6 +174,5 @@ void TextRenderer_destroy(TextRenderer *self)
     xcb_connection_t *c = X11Adapter_connection();
     xcb_render_free_picture(c, self->pen);
     xcb_free_pixmap(c, self->pixmap);
-    PSC_Event_destroy(self->shaped);
     free(self);
 }

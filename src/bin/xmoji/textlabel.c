@@ -22,7 +22,6 @@ struct TextLabel
     char *text;
     PSC_List *renderers;
     Size minSize;
-    unsigned awaiting;
 };
 
 static void destroy(void *obj)
@@ -68,40 +67,6 @@ static Size minSize(const void *obj)
     return self->minSize;
 }
 
-static void textshaped(void *receiver, void *sender, void *args)
-{
-    (void)sender;
-    (void)args;
-
-    TextLabel *self = receiver;
-    if (self->awaiting && !--self->awaiting)
-    {
-	size_t lines = PSC_List_size(self->renderers);
-	self->minSize = (Size){0, 0};
-	for (size_t i = 0; i < lines; ++i)
-	{
-	    TextRenderer *r = PSC_List_at(self->renderers, i);
-	    if (r != dummy)
-	    {
-		Size lineSize = TextRenderer_size(r);
-		if (!self->minSize.height)
-		{
-		    self->minSize.height = lineSize.height;
-		}
-		if (lineSize.width > self->minSize.width)
-		{
-		    self->minSize.width = lineSize.width;
-		}
-	    }
-	}
-	if (self->minSize.height && lines > 1)
-	{
-	    self->minSize.height += (lines-1) * Font_linespace(self->font);
-	}
-	Widget_requestSize(self);
-    }
-}
-
 static void freerenderer(void *renderer)
 {
     TextRenderer_destroy(renderer);
@@ -119,7 +84,6 @@ TextLabel *TextLabel_createBase(void *derived, void *parent, Font *font)
     self->text = 0;
     self->renderers = PSC_List_create();
     self->minSize = (Size){0, 0};
-    self->awaiting = 0;
 
     return self;
 }
@@ -136,7 +100,7 @@ void TextLabel_setText(void *self, const char *text)
     PSC_List_destroy(l->renderers);
     free(l->text);
     l->text = PSC_copystr(text);
-    l->awaiting = 0;
+    l->minSize = (Size){0, 0};
     if (text)
     {
 	l->renderers = PSC_List_create();
@@ -148,19 +112,26 @@ void TextLabel_setText(void *self, const char *text)
 	    {
 		TextRenderer *renderer = TextRenderer_create(l->font);
 		PSC_List_append(l->renderers, renderer, freerenderer);
-		PSC_Event_register(TextRenderer_shaped(renderer),
-			self, textshaped, 0);
-		++l->awaiting;
 		TextRenderer_setUtf8(renderer, line, len);
+		Size linesize = TextRenderer_size(renderer);
+		if (!l->minSize.height)
+		{
+		    l->minSize.height = linesize.height;
+		}
+		if (linesize.width > l->minSize.width)
+		{
+		    l->minSize.width = linesize.width;
+		}
 	    }
 	    else PSC_List_append(l->renderers, dummy, 0);
 	    if (line[len]) ++len;
 	}
+	size_t lines = PSC_List_size(l->renderers);
+	if (lines > 1)
+	{
+	    l->minSize.height += (lines - 1) * Font_linespace(l->font);
+	}
     }
-    else
-    {
-	l->minSize = (Size){0, 0};
-	Widget_requestSize(self);
-    }
+    Widget_requestSize(self);
 }
 
