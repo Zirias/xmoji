@@ -42,14 +42,22 @@ static void doshape(void *ctx)
 	    sctx->hbbuffer, 0);
     uint32_t width = 0;
     uint32_t height = 0;
+    int useclaimedheight = 0;
     if (HB_DIRECTION_IS_HORIZONTAL(hb_buffer_get_direction(sctx->hbbuffer)))
     {
 	for (unsigned i = 0; i < len-1; ++i)
 	{
 	    width += pos[i].x_advance;
 	}
+	uint32_t claimedheight = face->size->metrics.ascender
+	    - face->size->metrics.descender;
 	height = FT_MulFix(face->bbox.yMax, face->size->metrics.y_scale)
 	    - FT_MulFix(face->bbox.yMin, face->size->metrics.y_scale);
+	if (height >= claimedheight << 1)
+	{
+	    height = claimedheight;
+	    useclaimedheight = 1;
+	}
     }
     else
     {
@@ -62,7 +70,8 @@ static void doshape(void *ctx)
     }
     sctx->size.width = width;
     sctx->size.height = height;
-    sctx->baseline = FT_MulFix(face->bbox.yMax, face->size->metrics.y_scale);
+    sctx->baseline = useclaimedheight ? face->size->metrics.ascender
+	: FT_MulFix(face->bbox.yMax, face->size->metrics.y_scale);
 }
 
 static void shapedone(void *receiver, void *sender, void *args)
