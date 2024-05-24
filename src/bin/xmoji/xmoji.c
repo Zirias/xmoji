@@ -54,7 +54,7 @@ static void onprestartup(void *receiver, void *sender, void *args)
 	    "The quick brown fox jumps over the lazy dog");
     */
     TextLabel *label = TextLabel_create(win, emojifont);
-    TextLabel_setText(label, "😀🤡🇩🇪🧑🏾‍🤝‍🧑🏻");
+    TextLabel_setText(label, "😀🤡🇩🇪👺🧩🔮🐅🍻🧑🏾‍🤝‍🧑🏻");
     Widget_setAlign(label, AH_CENTER|AV_MIDDLE);
     Widget_show(label);
     Window_setMainWidget(win, label);

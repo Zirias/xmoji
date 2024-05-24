@@ -383,11 +383,11 @@ static const uint8_t m3x3[] = {
 };
 
 static const uint8_t m5x5[] = {
-    1, 2, 3, 2, 1,
-    2, 4, 6, 4, 2,
-    3, 6, 9, 6, 3,
-    2, 4, 6, 4, 2,
-    1, 2, 3, 2, 1
+    1, 2, 2, 2, 1,
+    2, 2, 3, 2, 2,
+    2, 3, 4, 3, 2,
+    2, 2, 3, 2, 2,
+    1, 2, 2, 2, 1
 };
 
 static uint8_t fetch(const uint8_t *b, int stride, int w, int h,
