@@ -376,6 +376,45 @@ int32_t Font_ftLoadFlags(const Font *self)
     return loadflags;
 }
 
+static const uint8_t m3x3[] = {
+    1, 2, 1,
+    2, 3, 2,
+    1, 2, 1
+};
+
+static const uint8_t m5x5[] = {
+    1, 2, 3, 2, 1,
+    2, 4, 6, 4, 2,
+    3, 6, 9, 6, 3,
+    2, 4, 6, 4, 2,
+    1, 2, 3, 2, 1
+};
+
+static uint8_t fetch(const uint8_t *b, int stride, int w, int h,
+	int x, int y, int nc, int c)
+{
+    if (x < 0) x = 0;
+    if (x >= w) x = w-1;
+    if (y < 0) y = 0;
+    if (y >= h) y = h-1;
+    return b[stride*y+nc*x+c];
+}
+
+static uint8_t filter(int k, const uint8_t *m, const uint8_t *b, int stride,
+	int w, int h, int x, int y, int nc, int c)
+{
+    uint32_t num = 0;
+    uint32_t den = 0;
+    int off = k/2;
+    for (int my = 0; my < k; ++my) for (int mx = 0; mx < k; ++mx)
+    {
+	uint8_t mv = m[k*my+mx];
+	den += mv;
+	num += mv * fetch(b, stride, w, h, x+mx-off, y+my-off, nc, c);
+    }
+    return ((num + den/2)/den) & 0xffU;
+}
+
 int Font_uploadGlyphs(Font *self, unsigned len, GlyphRenderInfo *glyphinfo)
 {
     int rc = -1;
@@ -486,31 +525,37 @@ int Font_uploadGlyphs(Font *self, unsigned len, GlyphRenderInfo *glyphinfo)
 	if (self->fixedpixelsize)
 	{
 	    double scale = self->fixedpixelsize / self->pixelsize;
+	    const uint8_t *m = m3x3;
+	    int k = 3;
+	    if (scale > 4)
+	    {
+		m = m5x5;
+		k = 5;
+	    }
 	    for (unsigned y = 0; y < glyphs[i].height; ++y)
 	    {
-		unsigned sy = scale * ((double)y + .5);
-		if (sy < 0) sy = 0;
-		if (sy >= slot->bitmap.rows) sy = slot->bitmap.rows - 1;
-		const uint8_t *src = slot->bitmap.buffer
-		    + sy * slot->bitmap.pitch;
-		uint8_t *dst = bitmapdata + bitmapdatapos
-		    + y * stride;
-		uint8_t *mask = maskdata + maskdatapos
-		    + y * maskstride;
+		uint8_t *dst = bitmapdata + bitmapdatapos + y * stride;
+		uint8_t *mask = maskdata + maskdatapos + y * maskstride;
+		unsigned sy = scale * (double)y + scale / 2.;
 		for (unsigned x = 0; x < glyphs[i].width; ++x)
 		{
-		    unsigned sx = scale * ((double)x + .5);
-		    if (sx < 0) sx = 0;
-		    if (sx >= slot->bitmap.width) sx = slot->bitmap.width - 1;
+		    unsigned sx = scale * (double)x + scale / 2.;
 		    if (self->glyphtype == FGT_BITMAP_BGRA)
 		    {
-			dst[x*pixelsize] = src[sx*pixelsize];
-			dst[x*pixelsize+1] = src[sx*pixelsize+1];
-			dst[x*pixelsize+2] = src[sx*pixelsize+2];
+			for (int b = 0; b < 4; ++b)
+			{
+			    dst[x*pixelsize+b] = filter(k, m,
+				    slot->bitmap.buffer, slot->bitmap.pitch,
+				    slot->bitmap.width, slot->bitmap.rows,
+				    sx, sy, 4, b);
+			}
+			mask[x] = dst[x*pixelsize+3];
 			dst[x*pixelsize+3] = 0xffU;
-			mask[x] = src[sx*pixelsize+3];
 		    }
-		    else dst[x] = src[sx];
+		    else dst[x] = filter(k, m,
+			    slot->bitmap.buffer, slot->bitmap.pitch,
+			    slot->bitmap.width, slot->bitmap.rows,
+			    sx, sy, 1, 1);
 		}
 	    }
 	}
