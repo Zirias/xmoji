@@ -253,12 +253,6 @@ Window *Window_createBase(void *derived, void *parent)
 {
     REGTYPE(0);
 
-    xcb_connection_t *c = X11Adapter_connection();
-    if (!c) return 0;
-    xcb_screen_t *s = X11Adapter_screen();
-    xcb_window_t w = xcb_generate_id(c);
-    if (!w) return 0;
-
     Window *self = PSC_malloc(sizeof *self);
     if (!derived) derived = self;
     memset(self, 0, sizeof *self);
@@ -266,44 +260,52 @@ Window *Window_createBase(void *derived, void *parent)
     self->base.type = OBJTYPE;
     self->closed = PSC_Event_create(self);
     self->errored = PSC_Event_create(self);
-    self->w = w;
 
-    PSC_Event_register(X11Adapter_requestError(), self, requestError, w);
+    xcb_connection_t *c = X11Adapter_connection();
+    self->w = xcb_generate_id(c);
+    PSC_Event_register(X11Adapter_requestError(), self, requestError, self->w);
 
+    xcb_screen_t *s = X11Adapter_screen();
     uint32_t mask = XCB_CW_EVENT_MASK;
     uint32_t values[] = { 
 	XCB_EVENT_MASK_EXPOSURE | XCB_EVENT_MASK_STRUCTURE_NOTIFY
     };
-
-    CHECK(xcb_create_window(c, XCB_COPY_FROM_PARENT, w, s->root,
+    CHECK(xcb_create_window(c, XCB_COPY_FROM_PARENT, self->w, s->root,
 		0, 0, 1, 1, 2, XCB_WINDOW_CLASS_INPUT_OUTPUT,
 		s->root_visual, mask, values),
-	    "Cannot create window 0x%x", (unsigned)w);
+	    "Cannot create window 0x%x", (unsigned)self->w);
     xcb_atom_t delwin = A(WM_DELETE_WINDOW);
-    CHECK(xcb_change_property(c, XCB_PROP_MODE_REPLACE, w,
+    CHECK(xcb_change_property(c, XCB_PROP_MODE_REPLACE, self->w,
 		A(WM_PROTOCOLS), 4, 32, 1, &delwin),
-	    "Cannot set supported protocols on 0x%x", (unsigned)w);
+	    "Cannot set supported protocols on 0x%x", (unsigned)self->w);
     size_t sz;
     const char *wmclass = X11Adapter_wmClass(&sz);
-    CHECK(xcb_change_property(c, XCB_PROP_MODE_REPLACE, w,
+    CHECK(xcb_change_property(c, XCB_PROP_MODE_REPLACE, self->w,
 		XCB_ATOM_WM_CLASS, XCB_ATOM_STRING, 8, sz, wmclass),
-	    "Cannot set window class for 0x%x", (unsigned)w);
+	    "Cannot set window class for 0x%x", (unsigned)self->w);
     xcb_atom_t wtnorm = A(_NET_WM_WINDOW_TYPE_NORMAL);
-    CHECK(xcb_change_property(c, XCB_PROP_MODE_REPLACE, w,
+    CHECK(xcb_change_property(c, XCB_PROP_MODE_REPLACE, self->w,
 		A(_NET_WM_WINDOW_TYPE), 4, 32, 1, &wtnorm),
-	    "Cannot set window type for 0x%x", (unsigned)w);
+	    "Cannot set window type for 0x%x", (unsigned)self->w);
 
     Widget_setSize(self, (Size){1, 1});
-    Widget_setDrawable(self, w);
+    Widget_setDrawable(self, self->w);
     Widget_setBackground(self, 1, COLOR_BG_NORMAL);
 
-    PSC_Event_register(X11Adapter_clientmsg(), self, clientmsg, w);
-    PSC_Event_register(X11Adapter_configureNotify(), self, configureNotify, w);
-    PSC_Event_register(X11Adapter_expose(), self, expose, w);
-    PSC_Event_register(X11Adapter_mapNotify(), self, mapped, w);
-    PSC_Event_register(X11Adapter_unmapNotify(), self, unmapped, w);
-    PSC_Event_register(X11Adapter_eventsDone(), self, trydraw, 0);
-    PSC_Event_register(Widget_sizeChanged(self), self, sizeChanged, 0);
+    PSC_Event_register(X11Adapter_clientmsg(), self,
+	    clientmsg, self->w);
+    PSC_Event_register(X11Adapter_configureNotify(), self,
+	    configureNotify, self->w);
+    PSC_Event_register(X11Adapter_expose(), self,
+	    expose, self->w);
+    PSC_Event_register(X11Adapter_mapNotify(), self,
+	    mapped, self->w);
+    PSC_Event_register(X11Adapter_unmapNotify(), self,
+	    unmapped, self->w);
+    PSC_Event_register(X11Adapter_eventsDone(), self,
+	    trydraw, 0);
+    PSC_Event_register(Widget_sizeChanged(self), self,
+	    sizeChanged, 0);
 
     return self;
 }
