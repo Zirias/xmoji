@@ -40,17 +40,21 @@ static void onprestartup(void *receiver, void *sender, void *args)
 		startupargs.argc, startupargs.argv, "Xmoji") < 0) goto error;
     if (Font_init() < 0) goto error;
     font = Font_create(3, fontname);
-    emojifont = Font_create(0, "Noto Color Emoji,Noto Emoji");
+    emojifont = Font_create(0, "emoji:pixelsize=109");
     if (!(win = Window_create(0))) goto error;
     Window_setTitle(win, "Xmoji 😀 äöüß");
     Widget_setColor(win, COLOR_BG_NORMAL, Color_fromRgb(50, 60, 70));
     Widget_setColor(win, COLOR_NORMAL, Color_fromRgb(200, 255, 240));
 
+    /*
     TextLabel *label = TextLabel_create(win, font);
     TextLabel_setText(label, "Hello, World!\n\n"
 	    "This is just a quick little\n"
 	    "text rendering test.\n\n"
 	    "The quick brown fox jumps over the lazy dog");
+    */
+    TextLabel *label = TextLabel_create(win, emojifont);
+    TextLabel_setText(label, "😀🤡🇩🇪🧑🏾‍🤝‍🧑🏻");
     Widget_setAlign(label, AH_CENTER|AV_MIDDLE);
     Widget_show(label);
     Window_setMainWidget(win, label);
@@ -69,7 +73,9 @@ static void onstartup(void *receiver, void *sender, void *args)
     (void)sender;
     (void)args;
 
+#ifndef DEBUG
     PSC_Log_setAsync(1);
+#endif
     Widget_show(win);
 }
 

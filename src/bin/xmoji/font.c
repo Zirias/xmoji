@@ -15,12 +15,9 @@ double defaultpixelsize;
 struct Font
 {
     FT_Face face;
+    FontGlyphType glyphtype;
     double pixelsize;
-};
-
-typedef struct OutlineFont
-{
-    Font base;
+    double fixedpixelsize;
     int haserror;
     uint16_t uploading;
     uint8_t glyphidbits;
@@ -28,11 +25,12 @@ typedef struct OutlineFont
     uint32_t glyphidmask;
     uint32_t subpixelmask;
     xcb_render_glyphset_t glyphset;
+    xcb_render_glyphset_t maskglyphset;
     uint32_t maxWidth;
     uint32_t maxHeight;
     uint32_t baseline;
     uint32_t uploaded[];
-} OutlineFont;
+};
 
 int Font_init(void)
 {
@@ -74,10 +72,10 @@ static void requestError(void *receiver, void *sender, void *args)
     (void)sender;
     (void)args;
 
-    OutlineFont *of = receiver;
+    Font *self = receiver;
     PSC_Log_fmt(PSC_L_ERROR, "Font glyphset 0x%x failed",
-	    (unsigned)of->glyphset);
-    of->haserror = 1;
+	    (unsigned)self->glyphset);
+    self->haserror = 1;
 }
 
 Font *Font_create(uint8_t subpixelbits, const char *pattern)
@@ -234,56 +232,78 @@ Font *Font_create(uint8_t subpixelbits, const char *pattern)
 	PSC_Log_fmt(PSC_L_WARNING, "No matching font found for `%s'", pattern);
     }
 
-    Font *self;
+    if (fixedpixelsize) subpixelbits = 0;
+    else if (subpixelbits > 6) subpixelbits = 6;
+    uint8_t glyphidbits = 1;
+    uint32_t glyphidmask = 1;
+    while ((face->num_glyphs & glyphidmask) != face->num_glyphs)
+    {
+	++glyphidbits;
+	glyphidmask <<= 1;
+	glyphidmask |= 1;
+    }
+    size_t fsz;
+    Font *self = PSC_malloc(((fsz = sizeof *self +
+		    (1U << (glyphidbits + subpixelbits - 5))
+		    * sizeof *self->uploaded)));
+    memset(self, 0, fsz);
+
+    self->face = face;
+    double scale = 0;
     if (fixedpixelsize)
     {
-	self = PSC_malloc(sizeof *self);
-	self->pixelsize = fixedpixelsize;
+	self->glyphtype = face->face_flags & FT_FACE_FLAG_COLOR ?
+	    FGT_BITMAP_BGRA : FGT_BITMAP_GRAY;
+	scale = pixelsize / fixedpixelsize;
+	face->size->metrics.x_scale = 
+	    face->size->metrics.x_scale * scale + 1.;
+	face->size->metrics.y_scale = 
+	    face->size->metrics.y_scale * scale + 1.;
+    }
+    self->pixelsize = pixelsize;
+    self->fixedpixelsize = fixedpixelsize;
+    xcb_connection_t *c = X11Adapter_connection();
+    self->glyphset = xcb_generate_id(c);
+    PSC_Event_register(X11Adapter_requestError(), self,
+	    requestError, self->glyphset);
+    if (self->glyphtype == FGT_BITMAP_BGRA)
+    {
+	CHECK(xcb_render_create_glyph_set(c,
+		    self->glyphset, X11Adapter_argbformat()),
+		"Font: Cannot create glyphset 0x%x", (unsigned)self->glyphset);
+	self->maskglyphset = xcb_generate_id(c);
+	CHECK(xcb_render_create_glyph_set(c,
+		    self->maskglyphset, X11Adapter_alphaformat()),
+		"Font: Cannot create mask glyphset 0x%x",
+		(unsigned)self->glyphset);
     }
     else
     {
-	uint8_t glyphidbits = 1;
-	uint32_t glyphidmask = 1;
-	while ((face->num_glyphs & glyphidmask) != face->num_glyphs)
-	{
-	    ++glyphidbits;
-	    glyphidmask <<= 1;
-	    glyphidmask |= 1;
-	}
-	if (subpixelbits > 6) subpixelbits = 6;
-	size_t ofsz;
-	OutlineFont *of = PSC_malloc(((ofsz = sizeof *of +
-			(1U << (glyphidbits + subpixelbits - 5))
-			* sizeof *of->uploaded)));
-	memset(of, 0, ofsz);
-	xcb_connection_t *c = X11Adapter_connection();
-	of->glyphset = xcb_generate_id(c);
-	PSC_Event_register(X11Adapter_requestError(), of,
-		requestError, of->glyphset);
 	CHECK(xcb_render_create_glyph_set(c,
-		    of->glyphset, X11Adapter_alphaformat()),
-		"Font: Cannot create glyphset 0x%x", (unsigned)of->glyphset);
-	of->glyphidbits = glyphidbits;
-	of->subpixelbits = subpixelbits;
-	of->glyphidmask = glyphidmask;
-	of->subpixelmask = ((1U << subpixelbits) - 1) << glyphidbits;
-	uint32_t claimedheight = face->size->metrics.ascender
-	    - face->size->metrics.descender;
-	of->maxWidth = FT_MulFix(face->bbox.xMax, face->size->metrics.x_scale)
-	    - FT_MulFix(face->bbox.xMin, face->size->metrics.x_scale);
-	of->maxHeight = FT_MulFix(face->bbox.yMax, face->size->metrics.y_scale)
-	    - FT_MulFix(face->bbox.yMin, face->size->metrics.y_scale);
-	if (of->maxHeight >= claimedheight << 1)
-	{
-	    of->maxHeight = claimedheight;
-	    of->baseline = face->size->metrics.ascender;
-	}
-	else of->baseline = FT_MulFix(face->bbox.yMax,
-		face->size->metrics.y_scale);
-	self = (Font *)of;
-	self->pixelsize = pixelsize;
+		    self->glyphset, X11Adapter_alphaformat()),
+		"Font: Cannot create glyphset 0x%x", (unsigned)self->glyphset);
     }
-    self->face = face;
+    self->glyphidbits = glyphidbits;
+    self->subpixelbits = subpixelbits;
+    self->glyphidmask = glyphidmask;
+    self->subpixelmask = ((1U << subpixelbits) - 1) << glyphidbits;
+    uint32_t claimedheight;
+    if (scale) claimedheight = scale * (face->size->metrics.ascender
+	    - face->size->metrics.descender) + 1.;
+    else claimedheight = face->size->metrics.ascender
+	- face->size->metrics.descender;
+    self->maxWidth = FT_MulFix(face->bbox.xMax, face->size->metrics.x_scale)
+	- FT_MulFix(face->bbox.xMin, face->size->metrics.x_scale);
+    self->maxHeight = FT_MulFix(face->bbox.yMax, face->size->metrics.y_scale)
+	- FT_MulFix(face->bbox.yMin, face->size->metrics.y_scale);
+    if (!self->maxHeight ||
+	    (claimedheight && self->maxHeight >= claimedheight << 1))
+    {
+	self->maxHeight = claimedheight;
+	self->baseline = scale * face->size->metrics.ascender + 1.;
+    }
+    else self->baseline = FT_MulFix(face->bbox.yMax,
+	    face->size->metrics.y_scale);
     return self;
 }
 
@@ -292,9 +312,19 @@ FT_Face Font_face(const Font *self)
     return self->face;
 }
 
+FontGlyphType Font_glyphtype(const Font *self)
+{
+    return self->glyphtype;
+}
+
 double Font_pixelsize(const Font *self)
 {
     return self->pixelsize;
+}
+
+double Font_fixedpixelsize(const Font *self)
+{
+    return self->fixedpixelsize;
 }
 
 uint16_t Font_linespace(const Font *self)
@@ -304,105 +334,141 @@ uint16_t Font_linespace(const Font *self)
 
 uint8_t Font_glyphidbits(const Font *self)
 {
-    if (!(self->face->face_flags & FT_FACE_FLAG_SCALABLE)) return 16;
-    OutlineFont *of = (OutlineFont *)self;
-    return of->glyphidbits;
+    return self->glyphidbits;
 }
 
 uint8_t Font_subpixelbits(const Font *self)
 {
-    if (!(self->face->face_flags & FT_FACE_FLAG_SCALABLE)) return 0;
-    OutlineFont *of = (OutlineFont *)self;
-    return of->subpixelbits;
+    return self->subpixelbits;
 }
 
 uint32_t Font_maxWidth(const Font *self)
 {
-    if (!(self->face->face_flags & FT_FACE_FLAG_SCALABLE)) return 0;
-    OutlineFont *of = (OutlineFont *)self;
-    return of->maxWidth;
+    return self->maxWidth;
 }
 
 uint32_t Font_maxHeight(const Font *self)
 {
-    if (!(self->face->face_flags & FT_FACE_FLAG_SCALABLE)) return 0;
-    OutlineFont *of = (OutlineFont *)self;
-    return of->maxHeight;
+    return self->maxHeight;
 }
 
 uint32_t Font_baseline(const Font *self)
 {
-    if (!(self->face->face_flags & FT_FACE_FLAG_SCALABLE)) return 0;
-    OutlineFont *of = (OutlineFont *)self;
-    return of->baseline;
+    return self->baseline;
+}
+
+uint32_t Font_scale(const Font *self, uint32_t val)
+{
+    if (!self->fixedpixelsize) return val;
+    double scale = self->pixelsize / self->fixedpixelsize;
+    return val * scale + 1.;
+}
+
+int32_t Font_ftLoadFlags(const Font *self)
+{
+    int32_t loadflags = FT_LOAD_DEFAULT;
+    switch (self->glyphtype)
+    {
+	case FGT_OUTLINE:	loadflags |= FT_LOAD_NO_BITMAP; break;
+	case FGT_BITMAP_BGRA:	loadflags |= FT_LOAD_COLOR; break;
+	default:		break;
+    }
+    return loadflags;
 }
 
 int Font_uploadGlyphs(Font *self, unsigned len, GlyphRenderInfo *glyphinfo)
 {
-    if (!(self->face->face_flags & FT_FACE_FLAG_SCALABLE)) return -1;
-    OutlineFont *of = (OutlineFont *)self;
     int rc = -1;
     unsigned toupload = 0;
     uint32_t *glyphids = PSC_malloc(len * sizeof *glyphids);
     xcb_render_glyphinfo_t *glyphs = 0;
     unsigned firstglyph = 0;
     uint8_t *bitmapdata = 0;
+    uint8_t *maskdata = 0;
     size_t bitmapdatasz = 0;
-    uint32_t maxglyphid = of->glyphidmask | of->subpixelmask;
+    size_t maskdatasz = 0;
+    uint32_t maxglyphid = self->glyphidmask | self->subpixelmask;
     for (unsigned i = 0; i < len; ++i)
     {
 	if (glyphinfo[i].glyphid > maxglyphid) goto done;
 	uint32_t word = glyphinfo[i].glyphid >> 5;
 	uint32_t bit = 1U << (glyphinfo[i].glyphid & 0x1fU);
-	if (of->uploaded[word] & bit) continue;
+	if (self->uploaded[word] & bit) continue;
 	glyphids[toupload++] = glyphinfo[i].glyphid;
     }
     if (!toupload)
     {
 	PSC_Log_fmt(PSC_L_DEBUG, "Font: Nothing to upload for glyphset 0x%x",
-		(unsigned)of->glyphset);
+		(unsigned)self->glyphset);
 	rc = 0;
 	goto done;
     }
     glyphs = PSC_malloc(toupload * sizeof *glyphs);
     memset(glyphs, 0, toupload * sizeof *glyphs);
     size_t bitmapdatapos = 0;
+    size_t maskdatapos = 0;
     xcb_connection_t *c = X11Adapter_connection();
+    int32_t loadflags = Font_ftLoadFlags(self);
     for (unsigned i = 0; i < toupload; ++i)
     {
-	if (FT_Load_Glyph(self->face, glyphids[i] & of->glyphidmask,
-		    FT_LOAD_NO_BITMAP) != 0) goto done;
+	if (FT_Load_Glyph(self->face, glyphids[i] & self->glyphidmask,
+		    loadflags) != 0) goto done;
 	FT_GlyphSlot slot = self->face->glyph;
-	uint32_t xshift = glyphids[i] >> of->glyphidbits
-	    << (6 - of->subpixelbits);
-	if (xshift)
+	int pixelsize = 1;
+	if (self->glyphtype == FGT_OUTLINE)
 	{
-	    FT_Outline_Translate(&slot->outline, xshift, 0);
+	    uint32_t xshift = glyphids[i] >> self->glyphidbits
+		<< (6 - self->subpixelbits);
+	    if (xshift)
+	    {
+		FT_Outline_Translate(&slot->outline, xshift, 0);
+	    }
+	}
+	else if (self->glyphtype == FGT_BITMAP_BGRA)
+	{
+	    pixelsize = 4;
 	}
 	FT_Render_Glyph(slot, FT_RENDER_MODE_NORMAL);
-	glyphs[i].x = -slot->bitmap_left;
-	glyphs[i].y = slot->bitmap_top;
-	glyphs[i].width = slot->bitmap.width;
-	glyphs[i].height = slot->bitmap.rows;
-	unsigned stride = (slot->bitmap.width+3)&~3;
-	size_t bitmapsz = stride * slot->bitmap.rows;
+	glyphs[i].x = Font_scale(self, -slot->bitmap_left);
+	glyphs[i].y = Font_scale(self, slot->bitmap_top);
+	glyphs[i].width = Font_scale(self, slot->bitmap.width);
+	glyphs[i].height = Font_scale(self, slot->bitmap.rows);
+	unsigned stride = (glyphs[i].width * pixelsize + 3) & ~3;
+	size_t bitmapsz = stride * glyphs[i].height;
+	unsigned maskstride = 0;
+	size_t masksz = 0;
+	if (self->glyphtype == FGT_BITMAP_BGRA)
+	{
+	    maskstride = (glyphs[i].width + 3) & ~3;
+	    masksz = maskstride * glyphs[i].height;
+	}
 	if (sizeof (xcb_render_add_glyphs_request_t)
 		+ (i - firstglyph) * (sizeof *glyphids + sizeof *glyphs)
 		+ bitmapdatapos
 		+ bitmapsz
 		> X11Adapter_maxRequestSize())
 	{
-	    CHECK(xcb_render_add_glyphs(c, of->glyphset, i - firstglyph,
+	    CHECK(xcb_render_add_glyphs(c, self->glyphset, i - firstglyph,
 			glyphids + firstglyph, glyphs + firstglyph,
 			bitmapdatapos, bitmapdata),
-		    "Cannot upload to glyphset 0x%x", (unsigned)of->glyphset);
+		    "Cannot upload to glyphset 0x%x",
+		    (unsigned)self->glyphset);
+	    if (maskdatapos)
+	    {
+		CHECK(xcb_render_add_glyphs(c, self->maskglyphset,
+			    i - firstglyph, glyphids + firstglyph,
+			    glyphs + firstglyph, maskdatapos, maskdata),
+			"Cannot upload to glyphset 0x%x",
+			(unsigned)self->glyphset);
+	    }
 	    for (unsigned j = firstglyph; j < i; ++j)
 	    {
 		uint32_t word = glyphids[j] >> 5;
 		uint32_t bit = 1U << (glyphids[j] & 0x1fU);
-		of->uploaded[word] |= bit;
+		self->uploaded[word] |= bit;
 	    }
 	    bitmapdatapos = 0;
+	    maskdatapos = 0;
 	    firstglyph = i;
 	}
 	if (bitmapdatapos + bitmapsz > bitmapdatasz)
@@ -410,26 +476,68 @@ int Font_uploadGlyphs(Font *self, unsigned len, GlyphRenderInfo *glyphinfo)
 	    bitmapdata = PSC_realloc(bitmapdata, bitmapdatapos + bitmapsz);
 	    bitmapdatasz = bitmapdatapos + bitmapsz;
 	}
-	for (unsigned y = 0; y < slot->bitmap.rows; ++y)
+	if (maskdatapos + masksz > maskdatasz)
 	{
-	    memcpy(bitmapdata + bitmapdatapos + y * stride,
-		    slot->bitmap.buffer + y * slot->bitmap.width,
-		    slot->bitmap.width);
+	    maskdata = PSC_realloc(maskdata, maskdatapos + masksz);
+	    maskdatasz = maskdatapos + masksz;
+	}
+	for (unsigned y = 0; y < glyphs[i].height; ++y)
+	{
+	    if (self->fixedpixelsize)
+	    {
+		unsigned sy = ((double)y + .5)
+		    * self->fixedpixelsize / self->pixelsize;
+		for (unsigned x = 0; x < glyphs[i].width; ++x)
+		{
+		    unsigned sx = ((double)x + .5) *
+			self->fixedpixelsize / self->pixelsize;
+		    uint8_t *pixel = bitmapdata + bitmapdatapos + y * stride
+			+ x * pixelsize;
+		    const uint8_t *spixel = slot->bitmap.buffer
+			+ sy * slot->bitmap.pitch + sx * pixelsize;
+		    if (self->glyphtype == FGT_BITMAP_BGRA)
+		    {
+			pixel[0] = spixel[0];
+			pixel[1] = spixel[1];
+			pixel[2] = spixel[2];
+			pixel[3] = 0xffU;
+			uint8_t *mpixel = maskdata + maskdatapos
+			    + y * maskstride + x;
+			*mpixel = spixel[3];
+		    }
+		    else *pixel = *spixel;
+		}
+	    }
+	    else
+	    {
+		memcpy(bitmapdata + bitmapdatapos + y * stride,
+			slot->bitmap.buffer + y * slot->bitmap.pitch,
+			glyphs[i].width * pixelsize);
+	    }
 	}
 	bitmapdatapos += bitmapsz;
+	maskdatapos += masksz;
     }
-    CHECK(xcb_render_add_glyphs(c, of->glyphset, toupload - firstglyph,
+    CHECK(xcb_render_add_glyphs(c, self->glyphset, toupload - firstglyph,
 		glyphids + firstglyph, glyphs + firstglyph,
 		bitmapdatapos, bitmapdata),
-	    "Cannot upload to glyphset 0x%x", (unsigned)of->glyphset);
+	    "Cannot upload to glyphset 0x%x", (unsigned)self->glyphset);
+    if (maskdatapos)
+    {
+	CHECK(xcb_render_add_glyphs(c, self->maskglyphset,
+		    toupload - firstglyph, glyphids + firstglyph,
+		    glyphs + firstglyph, maskdatapos, maskdata),
+		"Cannot upload to glyphset 0x%x", (unsigned)self->glyphset);
+    }
     for (unsigned i = firstglyph; i < toupload; ++i)
     {
 	uint32_t word = glyphids[i] >> 5;
 	uint32_t bit = 1U << (glyphids[i] & 0x1fU);
-	of->uploaded[word] |= bit;
+	self->uploaded[word] |= bit;
     }
     rc = 0;
 done:
+    free(maskdata);
     free(bitmapdata);
     free(glyphs);
     free(glyphids);
@@ -438,20 +546,25 @@ done:
 
 xcb_render_glyphset_t Font_glyphset(const Font *self)
 {
-    if (!(self->face->face_flags & FT_FACE_FLAG_SCALABLE)) return 0;
-    const OutlineFont *of = (const OutlineFont *)self;
-    return of->glyphset;
+    return self->glyphset;
+}
+
+xcb_render_glyphset_t Font_maskGlyphset(const Font *self)
+{
+    return self->maskglyphset;
 }
 
 void Font_destroy(Font *self)
 {
     if (!self) return;
-    if (self->face->face_flags & FT_FACE_FLAG_SCALABLE)
+    PSC_Event_unregister(X11Adapter_requestError(), self,
+	    requestError, self->glyphset);
+    xcb_connection_t *c = X11Adapter_connection();
+    if (self->glyphtype == FGT_BITMAP_BGRA)
     {
-	OutlineFont *of = (OutlineFont *)self;
-	PSC_Event_unregister(X11Adapter_requestError(), of,
-		requestError, of->glyphset);
+	xcb_render_free_glyph_set(c, self->maskglyphset);
     }
+    xcb_render_free_glyph_set(c, self->glyphset);
     FT_Done_Face(self->face);
     free(self);
 }

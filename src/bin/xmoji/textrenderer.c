@@ -14,18 +14,13 @@ struct TextRenderer
     hb_font_t *hbfont;
     hb_buffer_t *hbbuffer;
     xcb_pixmap_t pixmap;
+    xcb_pixmap_t tmp;
     xcb_render_picture_t pen;
+    xcb_render_picture_t tpic;
     Color color;
     Size size;
     int haserror;
 };
-
-typedef struct ShapeContext
-{
-    TextRenderer *renderer;
-    hb_buffer_t *hbbuffer;
-    Size size;
-} ShapeContext;
 
 static void requestError(void *receiver, void *sender, void *args)
 {
@@ -48,8 +43,8 @@ TextRenderer *TextRenderer_create(Font *font)
     self->pixmap = xcb_generate_id(c);
     PSC_Event_register(X11Adapter_requestError(), self, requestError,
 	    self->pixmap);
-    CHECK(xcb_create_pixmap(c, 32, self->pixmap, X11Adapter_screen()->root,
-		1, 1),
+    CHECK(xcb_create_pixmap(c, 32, self->pixmap,
+		X11Adapter_screen()->root, 1, 1),
 	    "TextRenderer: Cannot create drawing pixmap 0x%x",
 	    (unsigned)self->pixmap);
     self->pen = xcb_generate_id(c);
@@ -81,16 +76,16 @@ int TextRenderer_setUtf8(TextRenderer *self, const char *utf8, int len)
 	    self->hbbuffer, 0);
     uint32_t width = 0;
     uint32_t height = 0;
-    FT_Face face = hb_ft_font_get_face(self->hbfont);
-    FT_Load_Glyph(face, info[slen-1].codepoint, FT_LOAD_NO_BITMAP);
+    FT_Face face = Font_face(self->font);
+    FT_Load_Glyph(face, info[slen-1].codepoint, Font_ftLoadFlags(self->font));
     if (HB_DIRECTION_IS_HORIZONTAL(hb_buffer_get_direction(self->hbbuffer)))
     {
 	for (unsigned i = 0; i < slen-1; ++i)
 	{
 	    width += pos[i].x_advance;
 	}
-	width += face->glyph->metrics.horiBearingX
-	    + face->glyph->metrics.width;
+	width += Font_scale(self->font, face->glyph->metrics.horiBearingX
+		+ face->glyph->metrics.width);
 	height = Font_maxHeight(self->font);
     }
     else
@@ -99,12 +94,17 @@ int TextRenderer_setUtf8(TextRenderer *self, const char *utf8, int len)
 	{
 	    height += pos[i].y_advance;
 	}
-	height += face->glyph->metrics.vertBearingY
-	    + face->glyph->metrics.height;
+	height += Font_scale(self->font, face->glyph->metrics.vertBearingY
+		+ face->glyph->metrics.height);
 	width = Font_maxWidth(self->font);
     }
     self->size.width = (width + 0x3fU) >> 6;
     self->size.height = (height + 0x3fU) >> 6;
+    xcb_connection_t *c = X11Adapter_connection();
+    if (self->tpic) xcb_render_free_picture(c, self->tpic);
+    if (self->tmp) xcb_free_pixmap(c, self->tmp);
+    self->tpic = 0;
+    self->tmp = 0;
     return 0;
 }
 
@@ -144,9 +144,9 @@ int TextRenderer_render(TextRenderer *self,
 	x += gpos[i].x_advance;
 	y += gpos[i].y_advance;
     }
-    glyphs[0].dx += pos.x;
-    glyphs[0].dy += pos.y;
     xcb_connection_t *c = X11Adapter_connection();
+    int isColor = Font_glyphtype(self->font) == FGT_BITMAP_BGRA;
+    if (isColor) color = 0xffffffff;
     if (color != self->color)
     {
 	xcb_rectangle_t rect = { 0, 0, 1, 1 };
@@ -157,11 +157,53 @@ int TextRenderer_render(TextRenderer *self,
 	self->color = color;
     }
     Font_uploadGlyphs(self->font, len, glyphs);
-    CHECK(xcb_render_composite_glyphs_32(c, XCB_RENDER_PICT_OP_OVER,
-		self->pen, picture, 0, Font_glyphset(self->font), 0, 0,
-		len * sizeof *glyphs, (const uint8_t *)glyphs),
-	    "TextRenderer: Cannot render glyphs for 0x%x",
-	    (unsigned)self->pixmap);
+    if (isColor)
+    {
+	if (!self->tpic)
+	{
+	    self->tmp = xcb_generate_id(c);
+	    CHECK(xcb_create_pixmap(c, 32, self->tmp,
+			X11Adapter_screen()->root,
+			self->size.width, self->size.height),
+		    "TextRenderer: Cannot create temporary pixmap for 0x%x",
+		    (unsigned)self->pixmap);
+	    self->tpic = xcb_generate_id(c);
+	    CHECK(xcb_render_create_picture(c, self->tpic, self->tmp,
+			X11Adapter_argbformat(), 0, 0),
+		    "TextRenderer: Cannot create temporary picture for 0x%x",
+		    (unsigned)self->pixmap);
+	    CHECK(xcb_render_composite_glyphs_32(c, XCB_RENDER_PICT_OP_IN,
+			self->pen, self->tpic, 0, Font_glyphset(self->font),
+			0, 0, len * sizeof *glyphs, (const uint8_t *)glyphs),
+		    "TextRenderer: Cannot render glyphs for 0x%x",
+		    (unsigned)self->pixmap);
+	}
+	xcb_render_transform_t shift = {
+	    1 << 16, 0, -pos.x << 16,
+	    0, 1 << 16, -pos.y << 16,
+	    0, 0, 1 << 16
+	};
+	CHECK(xcb_render_set_picture_transform(c, self->tpic, shift),
+		"TextRenderer: Cannot shift temporary picture for 0x%x",
+		(unsigned)self->pixmap);
+	glyphs[0].dx += pos.x;
+	glyphs[0].dy += pos.y;
+	CHECK(xcb_render_composite_glyphs_32(c, XCB_RENDER_PICT_OP_OVER,
+		    self->tpic, picture, 0, Font_maskGlyphset(self->font),
+		    0, 0, len * sizeof *glyphs, (const uint8_t *)glyphs),
+		"TextRenderer: Cannot blend glyphs for 0x%x",
+		(unsigned)self->pixmap);
+    }
+    else
+    {
+	glyphs[0].dx += pos.x;
+	glyphs[0].dy += pos.y;
+	CHECK(xcb_render_composite_glyphs_32(c, XCB_RENDER_PICT_OP_OVER,
+		    self->pen, picture, 0, Font_glyphset(self->font), 0, 0,
+		    len * sizeof *glyphs, (const uint8_t *)glyphs),
+		"TextRenderer: Cannot render glyphs for 0x%x",
+		(unsigned)self->pixmap);
+    }
     free(glyphs);
     return 0;
 }
@@ -172,7 +214,9 @@ void TextRenderer_destroy(TextRenderer *self)
     hb_buffer_destroy(self->hbbuffer);
     hb_font_destroy(self->hbfont);
     xcb_connection_t *c = X11Adapter_connection();
+    if (self->tpic) xcb_render_free_picture(c, self->tpic);
     xcb_render_free_picture(c, self->pen);
+    if (self->tmp) xcb_free_pixmap(c, self->tmp);
     xcb_free_pixmap(c, self->pixmap);
     free(self);
 }
