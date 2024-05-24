@@ -474,41 +474,49 @@ int Font_uploadGlyphs(Font *self, unsigned len, GlyphRenderInfo *glyphinfo)
 	if (bitmapdatapos + bitmapsz > bitmapdatasz)
 	{
 	    bitmapdata = PSC_realloc(bitmapdata, bitmapdatapos + bitmapsz);
+	    memset(bitmapdata + bitmapdatapos, 0, bitmapsz);
 	    bitmapdatasz = bitmapdatapos + bitmapsz;
 	}
 	if (maskdatapos + masksz > maskdatasz)
 	{
 	    maskdata = PSC_realloc(maskdata, maskdatapos + masksz);
+	    memset(maskdata + maskdatapos, 0, masksz);
 	    maskdatasz = maskdatapos + masksz;
 	}
-	for (unsigned y = 0; y < glyphs[i].height; ++y)
+	if (self->fixedpixelsize)
 	{
-	    if (self->fixedpixelsize)
+	    double scale = self->fixedpixelsize / self->pixelsize;
+	    for (unsigned y = 0; y < glyphs[i].height; ++y)
 	    {
-		unsigned sy = ((double)y + .5)
-		    * self->fixedpixelsize / self->pixelsize;
+		unsigned sy = scale * ((double)y + .5);
+		if (sy < 0) sy = 0;
+		if (sy >= slot->bitmap.rows) sy = slot->bitmap.rows - 1;
+		const uint8_t *src = slot->bitmap.buffer
+		    + sy * slot->bitmap.pitch;
+		uint8_t *dst = bitmapdata + bitmapdatapos
+		    + y * stride;
+		uint8_t *mask = maskdata + maskdatapos
+		    + y * maskstride;
 		for (unsigned x = 0; x < glyphs[i].width; ++x)
 		{
-		    unsigned sx = ((double)x + .5) *
-			self->fixedpixelsize / self->pixelsize;
-		    uint8_t *pixel = bitmapdata + bitmapdatapos + y * stride
-			+ x * pixelsize;
-		    const uint8_t *spixel = slot->bitmap.buffer
-			+ sy * slot->bitmap.pitch + sx * pixelsize;
+		    unsigned sx = scale * ((double)x + .5);
+		    if (sx < 0) sx = 0;
+		    if (sx >= slot->bitmap.width) sx = slot->bitmap.width - 1;
 		    if (self->glyphtype == FGT_BITMAP_BGRA)
 		    {
-			pixel[0] = spixel[0];
-			pixel[1] = spixel[1];
-			pixel[2] = spixel[2];
-			pixel[3] = 0xffU;
-			uint8_t *mpixel = maskdata + maskdatapos
-			    + y * maskstride + x;
-			*mpixel = spixel[3];
+			dst[x*pixelsize] = src[sx*pixelsize];
+			dst[x*pixelsize+1] = src[sx*pixelsize+1];
+			dst[x*pixelsize+2] = src[sx*pixelsize+2];
+			dst[x*pixelsize+3] = 0xffU;
+			mask[x] = src[sx*pixelsize+3];
 		    }
-		    else *pixel = *spixel;
+		    else dst[x] = src[sx];
 		}
 	    }
-	    else
+	}
+	else
+	{
+	    for (unsigned y = 0; y < glyphs[i].height; ++y)
 	    {
 		memcpy(bitmapdata + bitmapdatapos + y * stride,
 			slot->bitmap.buffer + y * slot->bitmap.pitch,

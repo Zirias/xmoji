@@ -40,7 +40,7 @@ static void onprestartup(void *receiver, void *sender, void *args)
 		startupargs.argc, startupargs.argv, "Xmoji") < 0) goto error;
     if (Font_init() < 0) goto error;
     font = Font_create(3, fontname);
-    emojifont = Font_create(0, "emoji:pixelsize=109");
+    emojifont = Font_create(0, "emoji-24");
     if (!(win = Window_create(0))) goto error;
     Window_setTitle(win, "Xmoji 😀 äöüß");
     Widget_setColor(win, COLOR_BG_NORMAL, Color_fromRgb(50, 60, 70));
