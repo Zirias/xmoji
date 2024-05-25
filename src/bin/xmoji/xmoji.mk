@@ -4,6 +4,7 @@ xmoji_MODULES=		colorset \
 			object \
 			textlabel \
 			textrenderer \
+			vbox \
 			widget \
 			window \
 			x11adapter \

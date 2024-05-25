@@ -3,6 +3,7 @@
 #include "font.h"
 #include "textlabel.h"
 #include "valuetypes.h"
+#include "vbox.h"
 #include "window.h"
 #include "x11adapter.h"
 
@@ -12,6 +13,7 @@
 #include <stdlib.h>
 
 static const char *fontname;
+static const char *emojifontname = "emoji";
 static PSC_LogLevel loglevel = PSC_L_WARNING;
 
 static Font *font;
@@ -40,24 +42,31 @@ static void onprestartup(void *receiver, void *sender, void *args)
 		startupargs.argc, startupargs.argv, "Xmoji") < 0) goto error;
     if (Font_init() < 0) goto error;
     font = Font_create(3, fontname);
-    emojifont = Font_create(0, "emoji-24");
+    emojifont = Font_create(0, emojifontname);
     if (!(win = Window_create(0))) goto error;
     Window_setTitle(win, "Xmoji 😀 äöüß");
     Widget_setColor(win, COLOR_BG_NORMAL, Color_fromRgb(50, 60, 70));
     Widget_setColor(win, COLOR_NORMAL, Color_fromRgb(200, 255, 240));
 
-    /*
-    TextLabel *label = TextLabel_create(win, font);
+    VBox *box = VBox_create(win);
+    Window_setMainWidget(win, box);
+
+    TextLabel *label = TextLabel_create(box, font);
     TextLabel_setText(label, "Hello, World!\n\n"
 	    "This is just a quick little\n"
 	    "text rendering test.\n\n"
 	    "The quick brown fox jumps over the lazy dog");
-    */
-    TextLabel *label = TextLabel_create(win, emojifont);
+    Widget_setAlign(label, AH_CENTER|AV_MIDDLE);
+    Widget_show(label);
+    VBox_addWidget(box, label);
+
+    label = TextLabel_create(box, emojifont);
     TextLabel_setText(label, "😀🤡🇩🇪👺🧩🔮🐅🍻🧑🏾‍🤝‍🧑🏻");
     Widget_setAlign(label, AH_CENTER|AV_MIDDLE);
     Widget_show(label);
-    Window_setMainWidget(win, label);
+    VBox_addWidget(box, label);
+
+    Widget_show(box);
 
     PSC_Event_register(Window_closed(win), 0, onclose, 0);
     PSC_Event_register(Window_errored(win), 0, onclose, 0);
@@ -106,6 +115,10 @@ SOLOCAL int Xmoji_run(int argc, char **argv)
 	if (i < argc - 1 && !strcmp(argv[i], "-font"))
 	{
 	    fontname = argv[i+1];
+	}
+	else if (i < argc - 1 && !strcmp(argv[i], "-emojifont"))
+	{
+	    emojifontname = argv[i+1];
 	}
 	else if (loglevel < PSC_L_INFO && !strcmp(argv[i], "-v"))
 	{
