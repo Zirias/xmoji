@@ -300,7 +300,8 @@ Font *Font_create(uint8_t subpixelbits, const char *pattern)
 	    (claimedheight && self->maxHeight >= claimedheight << 1))
     {
 	self->maxHeight = claimedheight;
-	self->baseline = scale * face->size->metrics.ascender + 1.;
+	if (scale) self->baseline = scale * face->size->metrics.ascender + 1.;
+	else self->baseline = face->size->metrics.ascender;
     }
     else self->baseline = FT_MulFix(face->bbox.yMax,
 	    face->size->metrics.y_scale);
