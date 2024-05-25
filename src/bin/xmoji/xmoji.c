@@ -40,7 +40,7 @@ static void onprestartup(void *receiver, void *sender, void *args)
 
     if (X11Adapter_init(
 		startupargs.argc, startupargs.argv, "Xmoji") < 0) goto error;
-    if (Font_init() < 0) goto error;
+    if (Font_init(.15) < 0) goto error;
     font = Font_create(3, fontname);
     emojifont = Font_create(0, emojifontname);
     if (!(win = Window_create(0))) goto error;

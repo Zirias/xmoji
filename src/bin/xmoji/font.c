@@ -3,6 +3,7 @@
 
 #include <fontconfig/fontconfig.h>
 #include FT_OUTLINE_H
+#include <math.h>
 #include <poser/core.h>
 #include <stdlib.h>
 #include <string.h>
@@ -11,6 +12,7 @@ FT_Library ftlib;
 int refcnt;
 FcPattern *defaultpat;
 double defaultpixelsize;
+double maxunscaleddeviation;
 
 struct Font
 {
@@ -32,7 +34,7 @@ struct Font
     uint32_t uploaded[];
 };
 
-int Font_init(void)
+int Font_init(double maxUnscaledDeviation)
 {
     if (refcnt++) return 0;
 
@@ -52,6 +54,7 @@ int Font_init(void)
 	goto error;
     }
 
+    maxunscaleddeviation = maxUnscaledDeviation;
     return 0;
 
 error:
@@ -157,47 +160,37 @@ Font *Font_create(uint8_t subpixelbits, const char *pattern)
 	    {
 		if (!(face->face_flags & FT_FACE_FLAG_SCALABLE))
 		{
-		    unsigned targetpx = (unsigned)(64.0 * pixelsize);
-		    int bestdiff = INT_MIN;
-		    int bestidx = 0;
+		    /* Check available fixed sizes, pick the best match.
+		     * Prefer the smallest deviation within the configured
+		     * range allowed to be used unscaled. Otherwise prefer
+		     * the largest available size.
+		     */
+		    double bestdeviation = HUGE_VAL;
+		    int bestidx = -1;
 		    for (int i = 0; i < face->num_fixed_sizes; ++i)
 		    {
-			int diff = face->available_sizes[i].y_ppem - targetpx;
-			if (!diff)
+			double fpx =
+			    (double)face->available_sizes[i].y_ppem / 64.;
+			double dev = (fpx > pixelsize ? fpx / pixelsize :
+				pixelsize / fpx) - 1.;
+			if (bestidx < 0 || dev < bestdeviation ||
+				(fpx > fixedpixelsize &&
+				 bestdeviation > maxunscaleddeviation))
 			{
-			    bestdiff = diff;
+			    fixedpixelsize = fpx;
+			    bestdeviation = dev;
 			    bestidx = i;
-			    break;
-			}
-			if (diff < 0)
-			{
-			    if (bestdiff > 0) continue;
-			    if (diff > bestdiff)
-			    {
-				bestdiff = diff;
-				bestidx = i;
-			    }
-			}
-			else
-			{
-			    if (bestdiff < 0 || diff < bestdiff)
-			    {
-				bestdiff = diff;
-				bestidx = i;
-			    }
 			}
 		    }
-		    if (FT_Select_Size(face, bestidx) == 0)
-		    {
-			fixedpixelsize =
-			    (double)face->available_sizes[bestidx].y_ppem
-			    / 64.0;
-		    }
-		    else
+		    if (FT_Select_Size(face, bestidx) != 0)
 		    {
 			PSC_Log_msg(PSC_L_WARNING,
 				"Cannot select best matching font size");
 			ismatch = 0;
+		    }
+		    if (bestdeviation <= maxunscaleddeviation)
+		    {
+			pixelsize = fixedpixelsize;
 		    }
 		}
 		else if (FT_Set_Char_Size(face, 0,
@@ -216,10 +209,19 @@ Font *Font_create(uint8_t subpixelbits, const char *pattern)
 	}
 	if (ismatch)
 	{
-	    PSC_Log_fmt(PSC_L_INFO, "Font `%s:pixelsize=%.2f' found in `%s'",
-		    (const char *)foundfamily,
-		    fixedpixelsize ? fixedpixelsize : pixelsize,
-		    (const char *)fontfile);
+	    if (fixedpixelsize && fixedpixelsize != pixelsize)
+	    {
+		PSC_Log_fmt(PSC_L_INFO, "Font `%s:pixelsize=%.2f' "
+			"(scaled from pixelsize=%.2f) found in `%s'",
+			(const char *)foundfamily, pixelsize, fixedpixelsize,
+			(const char *)fontfile);
+	    }
+	    else
+	    {
+		PSC_Log_fmt(PSC_L_INFO, "Font `%s:pixelsize=%.2f' "
+			"found in `%s'", (const char *)foundfamily, pixelsize,
+			(const char *)fontfile);
+	    }
 	}
 	FcPatternDestroy(fcfont);
 	fcfont = 0;

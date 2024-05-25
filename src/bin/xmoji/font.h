@@ -25,7 +25,7 @@ typedef enum FontGlyphType
     FGT_BITMAP_BGRA
 } FontGlyphType;
 
-int Font_init(void);
+int Font_init(double maxUnscaledDeviation);
 void Font_done(void);
 
 Font *Font_create(uint8_t subpixelbits, const char *pattern);
