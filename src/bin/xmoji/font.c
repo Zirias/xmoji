@@ -377,6 +377,10 @@ int32_t Font_ftLoadFlags(const Font *self)
     return loadflags;
 }
 
+static const uint8_t mid[] = {
+    1
+};
+
 static const uint8_t m3x3[] = {
     1, 2, 1,
     2, 3, 2,
@@ -532,6 +536,11 @@ int Font_uploadGlyphs(Font *self, unsigned len, GlyphRenderInfo *glyphinfo)
 	    {
 		m = m5x5;
 		k = 5;
+	    }
+	    else if (self->fixedpixelsize == self->pixelsize)
+	    {
+		m = mid;
+		k = 1;
 	    }
 	    for (unsigned y = 0; y < glyphs[i].height; ++y)
 	    {
