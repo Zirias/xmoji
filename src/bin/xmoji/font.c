@@ -1,7 +1,10 @@
 #include "font.h"
+
+#include "svghooks.h"
 #include "x11adapter.h"
 
 #include <fontconfig/fontconfig.h>
+#include FT_MODULE_H
 #include FT_OUTLINE_H
 #include <math.h>
 #include <poser/core.h>
@@ -52,6 +55,11 @@ int Font_init(double maxUnscaledDeviation)
     {
 	PSC_Log_msg(PSC_L_ERROR, "Could not initialize freetype");
 	goto error;
+    }
+
+    if (FT_Property_Set(ftlib, "ot-svg", "svg-hooks", SvgHooks_get()) != 0)
+    {
+	PSC_Log_msg(PSC_L_WARNING, "Could not add SVG rendering hooks");
     }
 
     maxunscaleddeviation = maxUnscaledDeviation;
@@ -262,6 +270,8 @@ Font *Font_create(uint8_t subpixelbits, const char *pattern)
 	face->size->metrics.y_scale = 
 	    face->size->metrics.y_scale * scale + 1.;
     }
+    else self->glyphtype = face->face_flags & FT_FACE_FLAG_COLOR ?
+	FGT_BITMAP_BGRA : FGT_OUTLINE;
     self->pixelsize = pixelsize;
     self->fixedpixelsize = fixedpixelsize;
     xcb_connection_t *c = X11Adapter_connection();
@@ -529,9 +539,14 @@ int Font_uploadGlyphs(Font *self, unsigned len, GlyphRenderInfo *glyphinfo)
 	    memset(maskdata + maskdatapos, 0, masksz);
 	    maskdatasz = maskdatapos + masksz;
 	}
-	if (self->fixedpixelsize)
+	if (self->glyphtype != FGT_OUTLINE)
 	{
-	    double scale = self->fixedpixelsize / self->pixelsize;
+	    double scale;
+	    if (self->fixedpixelsize)
+	    {
+		scale = self->fixedpixelsize / self->pixelsize;
+	    }
+	    else scale = 1.;
 	    const uint8_t *m = m3x3;
 	    int k = 3;
 	    if (scale > 4)
@@ -539,7 +554,7 @@ int Font_uploadGlyphs(Font *self, unsigned len, GlyphRenderInfo *glyphinfo)
 		m = m5x5;
 		k = 5;
 	    }
-	    else if (self->fixedpixelsize == self->pixelsize)
+	    else if (scale == 1.)
 	    {
 		m = mid;
 		k = 1;
