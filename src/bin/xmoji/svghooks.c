@@ -10,7 +10,7 @@
 typedef struct SvgRenderer
 {
     NSVGimage *svg;
-    float scale;
+    uint32_t scale;
     float xoff;
     float yoff;
 } SvgRenderer;
@@ -42,7 +42,7 @@ static FT_Error render_svg(FT_GlyphSlot slot, FT_Pointer *data_pointer)
     SvgRenderer *renderer = slot->generic.data;
     if (!renderer) return FT_Err_Invalid_SVG_Document;
     NSVGrasterizer *rast = *data_pointer;
-    float scale = renderer->scale * .95;
+    float scale = (float)renderer->scale / (float)(1<<22);
     nsvgRasterize(rast, renderer->svg, renderer->xoff * scale,
 	    renderer->yoff * scale, scale, slot->bitmap.buffer,
 	    slot->bitmap.width, slot->bitmap.rows, slot->bitmap.pitch);
@@ -108,46 +108,41 @@ static FT_Error preset_slot(FT_GlyphSlot slot,
 	if (shape->bounds[2] > xmax) xmax = shape->bounds[2];
 	if (shape->bounds[3] > ymax) ymax = shape->bounds[3];
     }
-    float svgwidth = xmax - xmin;
-    float svgheight = ymax - ymin;
+    uint16_t svgwidth = ceilf(xmax - xmin);
+    uint16_t svgheight = ceilf(ymax - ymin);
     if (!svgwidth || !svgheight)
     {
 	svgwidth = doc->units_per_EM;
 	svgheight = doc->units_per_EM;
     }
-    float xscale = (float)doc->metrics.x_ppem / floorf(svgwidth);
-    float yscale = (float)doc->metrics.y_ppem / floorf(svgheight);
-    renderer->scale = xscale < yscale ? xscale : yscale;
+    renderer->scale = doc->metrics.x_scale < doc->metrics.y_scale
+	    ? doc->metrics.x_scale : doc->metrics.y_scale;
     renderer->xoff = -xmin;
     renderer->yoff = -ymin;
 
-    float width = floorf(svgwidth) * renderer->scale;
-    float height = floorf(svgheight) * renderer->scale;
-    float emwidth = (float)doc->metrics.x_ppem * .95;
+    uint32_t width = FT_MulFix(svgwidth, renderer->scale);
+    uint32_t height = FT_MulFix(svgheight, renderer->scale);
 
-    slot->bitmap.rows = ceilf(height);
-    slot->bitmap.width = ceilf(width);
+    slot->bitmap.rows = (height + 0x3fU) >> 6;
+    slot->bitmap.width = (width + 0x3fU) >> 6;
     slot->bitmap.pitch = slot->bitmap.width << 2;
     slot->bitmap.pixel_mode = FT_PIXEL_MODE_BGRA;
     slot->bitmap.num_grays = 256;
-    slot->bitmap_left = emwidth > width ? (emwidth - width) / 2. : 0;
+    slot->bitmap_left = slot->metrics.horiAdvance > width ?
+	(slot->metrics.horiAdvance - width) >> 7 : 0;
     slot->bitmap_top = (doc->metrics.height +
 	    doc->metrics.descender + 0x3f) >> 6;
     if (slot->bitmap_top > (int)slot->bitmap.rows)
     {
 	slot->bitmap_top = slot->bitmap.rows;
     }
-    slot->metrics.width = ceilf(width * 64.);
-    slot->metrics.height = ceilf(height * 64.);
-    slot->metrics.horiBearingX = 0;
+    slot->metrics.width = width;
+    slot->metrics.height = height;
+    slot->metrics.horiBearingX = slot->bitmap_left * 64;
     slot->metrics.horiBearingY = -slot->bitmap_top * 64;
     slot->metrics.vertBearingX = -slot->metrics.horiAdvance * 32;
     slot->metrics.vertBearingY =
 	(slot->metrics.vertAdvance - slot->metrics.height) *32;
-    if (!slot->metrics.vertAdvance)
-    {
-	slot->metrics.vertAdvance = height * 1.2f * 64.f;
-    }
 
     return FT_Err_Ok;
 }
