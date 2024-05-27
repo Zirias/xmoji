@@ -7,44 +7,58 @@
 #include FT_OTSVG_H
 #include <poser/core.h>
 
-typedef struct SvgRenderer
+typedef struct SvgGlyph
 {
     NSVGimage *svg;
     uint32_t scale;
     float xoff;
     float yoff;
+} SvgGlyph;
+
+typedef struct SvgRenderer
+{
+    NSVGrasterizer *rast;
+    SvgGlyph *glyph;
 } SvgRenderer;
 
-static void finalize_slot(void *obj)
+static void destroyGlyph(SvgGlyph *self)
 {
-    FT_GlyphSlot slot = obj;
-    SvgRenderer *renderer = slot->generic.data;
-    nsvgDelete(renderer->svg);
-    free(renderer);
-    slot->generic.data = 0;
-    slot->generic.finalizer = 0;
+    if (!self) return;
+    nsvgDelete(self->svg);
+    free(self);
+}
+
+static void destroyRenderer(SvgRenderer *self)
+{
+    if (!self) return;
+    destroyGlyph(self->glyph);
+    nsvgDeleteRasterizer(self->rast);
+    free(self);
 }
 
 static FT_Error init_svg(FT_Pointer *data_pointer)
 {
-    *data_pointer = nsvgCreateRasterizer();
+    SvgRenderer *renderer = PSC_malloc(sizeof *renderer);
+    renderer->rast = nsvgCreateRasterizer();
+    renderer->glyph = 0;
+    *data_pointer = renderer;
     return FT_Err_Ok;
 }
 
 static void free_svg(FT_Pointer *data_pointer)
 {
-    nsvgDeleteRasterizer(*data_pointer);
+    destroyRenderer(*data_pointer);
     *data_pointer = 0;
 }
 
 static FT_Error render_svg(FT_GlyphSlot slot, FT_Pointer *data_pointer)
 {
-    SvgRenderer *renderer = slot->generic.data;
-    if (!renderer) return FT_Err_Invalid_SVG_Document;
-    NSVGrasterizer *rast = *data_pointer;
-    float scale = (float)renderer->scale / (float)(1<<22);
-    nsvgRasterize(rast, renderer->svg, renderer->xoff * scale,
-	    renderer->yoff * scale, scale, slot->bitmap.buffer,
+    SvgRenderer *renderer = *data_pointer;
+    SvgGlyph *glyph = renderer->glyph;
+    if (!glyph) return FT_Err_Invalid_SVG_Document;
+    float scale = (float)glyph->scale / (float)(1<<22);
+    nsvgRasterize(renderer->rast, glyph->svg, glyph->xoff * scale,
+	    glyph->yoff * scale, scale, slot->bitmap.buffer,
 	    slot->bitmap.width, slot->bitmap.rows, slot->bitmap.pitch);
     for (unsigned y = 0; y < slot->bitmap.rows; ++y)
     {
@@ -73,11 +87,8 @@ static FT_Error render_svg(FT_GlyphSlot slot, FT_Pointer *data_pointer)
 }
 
 static FT_Error preset_slot(FT_GlyphSlot slot,
-	FT_Bool cache, FT_Pointer *state)
+	FT_Bool cache, FT_Pointer *data_pointer)
 {
-    (void)cache;
-    (void)state;
-
     FT_SVG_Document doc = (FT_SVG_Document)slot->other;
     if (doc->start_glyph_id != doc->end_glyph_id)
     {
@@ -91,10 +102,8 @@ static FT_Error preset_slot(FT_GlyphSlot slot,
     free(svgstr);
     if (!svg) return FT_Err_Invalid_SVG_Document;
 
-    SvgRenderer *renderer = PSC_malloc(sizeof *renderer);
-    renderer->svg = svg;
-    slot->generic.data = renderer;
-    slot->generic.finalizer = finalize_slot;
+    SvgGlyph glyph;
+    glyph.svg = svg;
 
     float xmin = HUGE_VALF;
     float ymin = HUGE_VALF;
@@ -115,13 +124,13 @@ static FT_Error preset_slot(FT_GlyphSlot slot,
 	svgwidth = doc->units_per_EM;
 	svgheight = doc->units_per_EM;
     }
-    renderer->scale = doc->metrics.x_scale < doc->metrics.y_scale
+    glyph.scale = doc->metrics.x_scale < doc->metrics.y_scale
 	    ? doc->metrics.x_scale : doc->metrics.y_scale;
-    renderer->xoff = -xmin;
-    renderer->yoff = -ymin;
+    glyph.xoff = -xmin;
+    glyph.yoff = -ymin;
 
-    uint32_t width = FT_MulFix(svgwidth, renderer->scale);
-    uint32_t height = FT_MulFix(svgheight, renderer->scale);
+    uint32_t width = FT_MulFix(svgwidth, glyph.scale);
+    uint32_t height = FT_MulFix(svgheight, glyph.scale);
 
     slot->bitmap.rows = (height + 0x3fU) >> 6;
     slot->bitmap.width = (width + 0x3fU) >> 6;
@@ -144,6 +153,13 @@ static FT_Error preset_slot(FT_GlyphSlot slot,
     slot->metrics.vertBearingY =
 	(slot->metrics.vertAdvance - slot->metrics.height) *32;
 
+    if (cache)
+    {
+	SvgRenderer *renderer = *data_pointer;
+	destroyGlyph(renderer->glyph);
+	renderer->glyph = PSC_malloc(sizeof *renderer->glyph);
+	memcpy(renderer->glyph, &glyph, sizeof *renderer->glyph);
+    }
     return FT_Err_Ok;
 }
 
