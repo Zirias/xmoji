@@ -82,23 +82,15 @@ static void removeFirstWaiting(void)
     if (++waitingFront == MAXWAITING) waitingFront = 0;
 }
 
-static void removeWaitingBefore(unsigned sequence)
-{
-    while (waitingNum)
-    {
-	unsigned currentseq = waitingReplies[waitingFront].sequence;
-	if ((int)(sequence - currentseq) <= 0) return;
-	PSC_Log_fmt(PSC_L_DEBUG, "Discard reply: %u", currentseq);
-	waitingReplies[waitingFront].handler(
-		waitingReplies[waitingFront].ctx, currentseq, 0, 0);
-	--waitingNum;
-	if (++waitingFront == MAXWAITING) waitingFront = 0;
-    }
-}
-
 static void handleX11Event(xcb_generic_event_t *ev)
 {
-    switch (ev->response_type & 0x7f)
+    if (ev->response_type == 0)
+    {
+	PSC_Log_fmt(PSC_L_WARNING, "Unhandled X11 error %d: %u",
+		((xcb_generic_error_t *)ev)->error_code,
+		ev->sequence);
+    }
+    else switch (ev->response_type & 0x7f)
     {
 	case XCB_CLIENT_MESSAGE:
 	    PSC_Event_raise(clientmsg,
@@ -159,101 +151,90 @@ static void readX11Input(void *receiver, void *sender, void *args)
     (void)sender;
     (void)args;
 
-    int handled = 1;
-    while (handled)
+    int polled = !!waitingNum;
+    while (waitingNum)
     {
-	handled = 0;
-	xcb_generic_event_t *ev = xcb_poll_for_event(c);
-
-	while (waitingNum)
+	void *reply = 0;
+	xcb_generic_error_t *error = 0;
+	if (xcb_poll_for_reply(c,
+		    waitingReplies[waitingFront].sequence,
+		    &reply, &error))
 	{
-	    if (ev && ev->response_type == 0)
+	    if (reply)
 	    {
-		if (ev->sequence == waitingReplies[waitingFront].sequence)
+		if (waitingReplies[waitingFront].replytype != RQ_AWAIT_REPLY)
 		{
-		    PSC_Log_fmt(PSC_L_DEBUG, "Received error: %u",
-			    ev->sequence);
-		    handleRequestError(waitingReplies + waitingFront,
-			    (xcb_generic_error_t *)ev);
-		    free(ev);
-		    ev = xcb_poll_for_event(c);
-		    handled = 1;
-		    removeFirstWaiting();
-		    continue;
+		    PSC_Log_fmt(PSC_L_ERROR, "Received unexpected reply: %u",
+			    waitingReplies[waitingFront].sequence);
+		    free(reply);
+		    reply = 0;
 		}
-		if ((int)(waitingReplies[waitingFront].sequence
-			    - ev->sequence) > 0)
+		else
 		{
-		    PSC_Log_fmt(PSC_L_WARNING, "Unhandled X11 error %d: %u",
-			    ((xcb_generic_error_t *)ev)->error_code,
-			    ev->sequence);
-		    free(ev);
-		    ev = xcb_poll_for_event(c);
-		    handled = 1;
-		    continue;
-		}
-	    }
-
-	    void *reply = 0;
-	    xcb_generic_error_t *error = 0;
-	    if (xcb_poll_for_reply(c,
-			waitingReplies[waitingFront].sequence,
-			&reply, &error))
-	    {
-		if (reply)
-		{
-		    if (waitingReplies[waitingFront].replytype !=
-			    RQ_AWAIT_REPLY)
-		    {
-			PSC_Log_fmt(PSC_L_ERROR,
-				"Received unexpected reply: %u",
-				waitingReplies[waitingFront].sequence);
-			free(reply);
-			reply = 0;
-		    }
-		    else
-		    {
-			PSC_Log_fmt(PSC_L_DEBUG, "Received reply: %u",
-				waitingReplies[waitingFront].sequence);
-		    }
-		}
-		else if (error)
-		{
-		    PSC_Log_fmt(PSC_L_DEBUG, "Received error: %u",
+		    PSC_Log_fmt(PSC_L_DEBUG, "Received reply: %u",
 			    waitingReplies[waitingFront].sequence);
 		}
-		else if (waitingReplies[waitingFront].replytype ==
-			RQ_AWAIT_NOREPLY)
-		{
-		    PSC_Log_fmt(PSC_L_DEBUG, "Confirmed request: %u",
-			    waitingReplies[waitingFront].sequence);
-		}
-		if (reply || error || waitingReplies[waitingFront].replytype
-			== RQ_AWAIT_NOREPLY)
-		{
-		    X11ReplyHandlerRecord *rec = waitingReplies + waitingFront;
-		    if (error && !reply)
-		    {
-			handleRequestError(rec, error);
-		    }
-		    else
-		    {
-			rec->handler(rec->ctx, rec->sequence, reply, error);
-		    }
-		}
-		free(reply);
-		free(error);
-		handled = 1;
 	    }
-	    else break;
+	    else if (error)
+	    {
+		PSC_Log_fmt(PSC_L_DEBUG, "Received error: %u",
+			waitingReplies[waitingFront].sequence);
+	    }
+	    else if (waitingReplies[waitingFront].replytype
+		    == RQ_AWAIT_NOREPLY)
+	    {
+		PSC_Log_fmt(PSC_L_DEBUG, "Confirmed request: %u",
+			waitingReplies[waitingFront].sequence);
+	    }
+	    if (reply || error ||
+		    waitingReplies[waitingFront].replytype == RQ_AWAIT_NOREPLY)
+	    {
+		X11ReplyHandlerRecord *rec = waitingReplies + waitingFront;
+		if (error && !reply)
+		{
+		    handleRequestError(rec, error);
+		}
+		else
+		{
+		    rec->handler(rec->ctx, rec->sequence, reply, error);
+		}
+	    }
+	    free(reply);
+	    free(error);
 	    removeFirstWaiting();
 	}
-	if (ev)
+	else
 	{
-	    removeWaitingBefore(ev->sequence);
+	    xcb_generic_event_t *ev = xcb_poll_for_queued_event(c);
+	    if (ev) gotEvents = 1;
+	    else break;
+	    while (ev && waitingReplies[waitingFront].sequence
+		    - ev->sequence > 0)
+	    {
+		handleX11Event(ev);
+		ev = xcb_poll_for_queued_event(c);
+	    }
+	    if (ev && ev->response_type == 0 &&
+		    ev->sequence == waitingReplies[waitingFront].sequence)
+	    {
+		PSC_Log_fmt(PSC_L_DEBUG, "Received error: %u", ev->sequence);
+		handleRequestError(waitingReplies + waitingFront,
+			(xcb_generic_error_t *)ev);
+		free(ev);
+		removeFirstWaiting();
+	    }
+	    else if (ev) handleX11Event(ev);
+	}
+    }
+    if (!waitingNum)
+    {
+	xcb_generic_event_t *ev = polled ?
+	    xcb_poll_for_queued_event(c) : xcb_poll_for_event(c);
+	if (ev) gotEvents = 1;
+	while (ev)
+	{
 	    handleX11Event(ev);
-	    handled = 1;
-	    gotEvents = 1;
+	    ev = xcb_poll_for_queued_event(c);
 	}
     }
 }
