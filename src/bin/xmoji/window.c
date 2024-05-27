@@ -209,6 +209,7 @@ static void mapped(void *receiver, void *sender, void *args)
 
     Window *self = receiver;
     self->mapped = 1;
+    PSC_Log_fmt(PSC_L_DEBUG, "Window 0x%x mapped", (unsigned)self->w);
 }
 
 static void unmapped(void *receiver, void *sender, void *args)
