@@ -34,11 +34,7 @@ static size_t toutf8(char **utf8, size_t pos,
 	    (*utf8)[pos + utf8len++] = c;
 	    continue;
 	}
-	if (c > 0x10ffffU)
-	{
-	    (*utf8)[pos + utf8len++] = '?';
-	    continue;
-	}
+	if (c > 0x10ffffU) c = 0xfffdU;
 	unsigned char b[] = {
 	    c & 0xffU,
 	    c >> 8 & 0xffU,
@@ -106,7 +102,7 @@ static size_t decodeutf8(void **out, int csz, size_t pos,
 	}
 	else
 	{
-	    storechar(*out, csz, pos + outlen++, '?');
+	    storechar(*out, csz, pos + outlen++, 0xfffdU);
 	    continue;
 	}
 	for (; f && ++i < len; --f)
@@ -115,7 +111,7 @@ static size_t decodeutf8(void **out, int csz, size_t pos,
 	    c <<= 6;
 	    c |= (b[i] & 0x3fU);
 	}
-	storechar(*out, csz, pos + outlen++, f ? '?' : c);
+	storechar(*out, csz, pos + outlen++, f ? 0xfffdU : c);
     }
     *out = PSC_realloc(*out, (pos + outlen + 1) * csz);
     storechar(*out, csz, pos + outlen, 0);
