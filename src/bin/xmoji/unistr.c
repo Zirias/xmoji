@@ -185,39 +185,65 @@ void UniStr_appendUtf32(UniStr *self, const char32_t *utf32)
     self->utf32[self->utf32len] = 0;
 }
 
-static void initutf8(UniStr *self)
-{
-    if (self->utf8len || !self->utf32len) return;
-    self->utf8len = toutf8(&self->utf8, 0, self->utf32, self->utf32len);
-}
-
 static void initutf32(UniStr *self)
 {
     if (self->utf32len || !self->utf8len) return;
     self->utf32len = toutf32(&self->utf32, 0, self->utf8, self->utf8len);
 }
 
-size_t UniStr_utf8len(UniStr *self)
+static void initutf8(UniStr *self)
+{
+    if (self->utf8len || !self->utf32len) return;
+    self->utf8len = toutf8(&self->utf8, 0, self->utf32, self->utf32len);
+}
+
+void UniStr_convert(UniStr *self)
+{
+    initutf32(self);
+    initutf8(self);
+}
+
+size_t UniStr_mutf8len(UniStr *self)
 {
     initutf8(self);
     return self->utf8len;
 }
 
-const char *UniStr_utf8(UniStr *self)
+const char *UniStr_mutf8(UniStr *self)
 {
     initutf8(self);
     return self->utf8;
 }
 
-size_t UniStr_utf32len(UniStr *self)
+size_t UniStr_mutf32len(UniStr *self)
 {
     initutf32(self);
     return self->utf32len;
 }
 
-const char32_t *UniStr_utf32(UniStr *self)
+const char32_t *UniStr_mutf32(UniStr *self)
 {
     initutf32(self);
+    return self->utf32;
+}
+
+size_t UniStr_cutf8len(const UniStr *self)
+{
+    return self->utf8len;
+}
+
+const char *UniStr_cutf8(const UniStr *self)
+{
+    return self->utf8;
+}
+
+size_t UniStr_cutf32len(const UniStr *self)
+{
+    return self->utf32len;
+}
+
+const char32_t *UniStr_cutf32(const UniStr *self)
+{
     return self->utf32;
 }
 
@@ -229,7 +255,7 @@ void UniStr_destroy(UniStr *self)
     free(self);
 }
 
-char *UniStr_toLatin1(UniStr *self)
+char *UniStr_toLatin1(const UniStr *self)
 {
     char *latin1 = 0;
     if (self->utf32)
