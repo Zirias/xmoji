@@ -6,6 +6,7 @@ xmoji_MODULES=		colorset \
 			svghooks \
 			textlabel \
 			textrenderer \
+			unistr \
 			vbox \
 			widget \
 			window \

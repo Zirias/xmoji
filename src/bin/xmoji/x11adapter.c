@@ -1,11 +1,12 @@
 #include "x11adapter.h"
 
+#include "unistr.h"
+
 #include <inttypes.h>
 #include <locale.h>
 #include <poser/core.h>
 #include <stdlib.h>
 #include <string.h>
-#include <uchar.h>
 #include <xcb/xcbext.h>
 
 #define X_SZNM(a) { sizeof STR(a) - 1, STR(a) },
@@ -508,11 +509,11 @@ int X11Adapter_init(int argc, char **argv, const char *classname)
 	if (!*nm) nm = 0;
     }
     if (!nm) nm = "unknown";
-    nm = X11Adapter_toLatin1(nm);
+    nm = LATIN1(nm);
     char *clnm = 0;
     if (classname)
     {
-	clnm = X11Adapter_toLatin1(classname);
+	clnm = LATIN1(classname);
 	classname = clnm;
     }
     else classname = nm;
@@ -672,56 +673,6 @@ unsigned X11Adapter_checkLogString(unsigned sequence, const char *msg,
 	const char *arg)
 {
     return await(sequence, RQ_CHECK_ERROR_STRING, (void *)msg, 0, arg, 0);
-}
-
-char *X11Adapter_toLatin1(const char *utf8)
-{
-    size_t len = strlen(utf8);
-    char *latin1 = PSC_malloc(len+1);
-
-    const unsigned char *in = (const unsigned char *)utf8;
-    char *out = latin1;
-    for (; *in; ++in, ++out)
-    {
-	if (*in < 0x80)
-	{
-	    *out = *in;
-	    continue;
-	}
-	char32_t uc = 0;
-	int f = 0;
-	if ((*in & 0xe0) == 0xc0)
-	{
-	    uc = (*in & 0x1f);
-	    f = 1;
-	}
-	else if ((*in & 0xf0) == 0xe0)
-	{
-	    uc = (*in & 0xf);
-	    f = 2;
-	}
-	else if ((*in & 0xf8) == 0xf0)
-	{
-	    uc = (*in & 0x7);
-	    f = 3;
-	}
-	else
-	{
-	    *out = '?';
-	    continue;
-	}
-	for (; f && *++in; --f)
-	{
-	    if ((*in & 0xc0) != 0x80) break;
-	    uc <<= 6;
-	    uc |= (*in & 0x3f);
-	}
-	if (f || uc > 0xff) *out = '?';
-	else *out = uc;
-    }
-    *out = 0;
-
-    return latin1;
 }
 
 void X11Adapter_done(void)

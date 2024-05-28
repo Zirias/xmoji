@@ -1,5 +1,6 @@
 #include "window.h"
 
+#include "unistr.h"
 #include "x11adapter.h"
 
 #include <poser/core.h>
@@ -339,7 +340,7 @@ void Window_setTitle(void *self, const char *title)
     if (title)
     {
 	w->title = PSC_copystr(title);
-	char *latintitle = X11Adapter_toLatin1(w->title);
+	char *latintitle = LATIN1(w->title);
 	xcb_change_property(c, XCB_PROP_MODE_REPLACE, w->w, XCB_ATOM_WM_NAME,
 		XCB_ATOM_STRING, 8, strlen(latintitle), latintitle);
 	xcb_change_property(c, XCB_PROP_MODE_REPLACE, w->w, A(_NET_WM_NAME),
@@ -375,7 +376,7 @@ void Window_setIconName(void *self, const char *iconName)
     if (newname)
     {
 	if (iconName) w->iconName = PSC_copystr(iconName);
-	char *latinIconName = X11Adapter_toLatin1(newname);
+	char *latinIconName = LATIN1(newname);
 	xcb_change_property(c, XCB_PROP_MODE_REPLACE, w->w,
 		XCB_ATOM_WM_ICON_NAME, XCB_ATOM_STRING, 8,
 		strlen(latinIconName), latinIconName);
