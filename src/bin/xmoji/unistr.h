@@ -102,4 +102,7 @@ char *UniStr_utf8ToLatin1(const char *utf8);
 char *UniStr_toUtf8(const UniStr *str, size_t *len)
     ATTR_NONNULL((1)) ATTR_RETNONNULL;
 
+size_t UniStr_utf32len(const char32_t *s)
+    ATTR_NONNULL((1));
+
 #endif

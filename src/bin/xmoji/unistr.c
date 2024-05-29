@@ -4,13 +4,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-static size_t utf32len(const char32_t *utf32)
-{
-    const char32_t *endp;
-    for (endp = utf32; *endp; ++endp);
-    return endp - utf32;
-}
-
 static size_t toutf8(char **utf8, size_t pos,
 	const char32_t *utf32, size_t len)
 {
@@ -139,7 +132,7 @@ UniStr *UniStr_createFromUtf8(const char *utf8)
 UniStr *UniStr_createFromUtf32(const char32_t *utf32)
 {
     if (!*utf32) return create(0, 0);
-    size_t len = utf32len(utf32);
+    size_t len = UniStr_utf32len(utf32);
     char32_t *str = PSC_malloc((len + 1) * sizeof *str);
     memcpy(str, utf32, len * sizeof *str);
     return create(str, len);
@@ -147,7 +140,7 @@ UniStr *UniStr_createFromUtf32(const char32_t *utf32)
 
 UniStr *UniStr_createOwned(char32_t *utf32)
 {
-    return create(utf32, utf32len(utf32));
+    return create(utf32, UniStr_utf32len(utf32));
 }
 
 UniStr *UniStr_ref(const UniStr *self)
@@ -187,7 +180,7 @@ UniStr *UniStr_appendUtf8(const UniStr *self, const char *utf8)
 
 UniStr *UniStr_appendUtf32(const UniStr *self, const char32_t *utf32)
 {
-    size_t addlen = utf32len(utf32);
+    size_t addlen = UniStr_utf32len(utf32);
     UniStr *ustr = PSC_malloc(sizeof *ustr);
     ustr->len = self->len + addlen;
     ustr->str = PSC_malloc((self->len + addlen + 1) * sizeof *ustr->str);
@@ -228,7 +221,7 @@ PSC_List *UniStr_splitByUtf32(const UniStr *self, const char32_t *delim)
 	PSC_List_append(split, clone(self, 0), destroy);
 	goto done;
     }
-    size_t delimlen = utf32len(delim);
+    size_t delimlen = UniStr_utf32len(delim);
     size_t pos = 0;
     size_t start = 0;
     while (pos + delimlen <= self->len)
@@ -303,5 +296,12 @@ char *UniStr_toUtf8(const UniStr *self, size_t *len)
     size_t utf8len = toutf8(&utf8, 0, self->str, self->len);
     if (len) *len = utf8len;
     return utf8;
+}
+
+size_t UniStr_utf32len(const char32_t *s)
+{
+    const char32_t *endp;
+    for (endp = s; *endp; ++endp);
+    return endp - s;
 }
 
