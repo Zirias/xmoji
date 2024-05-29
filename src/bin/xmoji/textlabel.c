@@ -2,6 +2,7 @@
 
 #include "font.h"
 #include "textrenderer.h"
+#include "unistr.h"
 
 #include <poser/core.h>
 #include <stdlib.h>
@@ -19,7 +20,7 @@ struct TextLabel
 {
     Object base;
     Font *font;
-    char *text;
+    UniStr *text;
     PSC_List *renderers;
     Size minSize;
 };
@@ -28,7 +29,7 @@ static void destroy(void *obj)
 {
     TextLabel *self = obj;
     PSC_List_destroy(self->renderers);
-    free(self->text);
+    UniStr_destroy(self->text);
     free(self);
 }
 
@@ -88,31 +89,34 @@ TextLabel *TextLabel_createBase(void *derived, void *parent, Font *font)
     return self;
 }
 
-const char *TextLabel_text(const void *self)
+const UniStr *TextLabel_text(const void *self)
 {
     TextLabel *l = Object_instance(self);
     return l->text;
 }
 
-void TextLabel_setText(void *self, const char *text)
+void TextLabel_setText(void *self, const UniStr *text)
 {
     TextLabel *l = Object_instance(self);
     PSC_List_destroy(l->renderers);
-    free(l->text);
-    l->text = PSC_copystr(text);
+    UniStr_destroy(l->text);
+    l->renderers = 0;
+    l->text = 0;
     l->minSize = (Size){0, 0};
     if (text)
     {
+	l->text = UniStr_ref(text);
 	l->renderers = PSC_List_create();
-	int len = 0;
-	for (const char *line = text; *line; line += len)
+	PSC_List *lines = UniStr_split(text, "\n");
+	PSC_ListIterator *i = PSC_List_iterator(lines);
+	while (PSC_ListIterator_moveNext(i))
 	{
-	    for (len = 0; line[len] && line[len] != '\n'; ++len);
-	    if (len)
+	    const UniStr *line = PSC_ListIterator_current(i);
+	    if (UniStr_len(line))
 	    {
 		TextRenderer *renderer = TextRenderer_create(l->font);
 		PSC_List_append(l->renderers, renderer, freerenderer);
-		TextRenderer_setUtf8(renderer, line, len);
+		TextRenderer_setText(renderer, line);
 		Size linesize = TextRenderer_size(renderer);
 		if (!l->minSize.height)
 		{
@@ -124,12 +128,13 @@ void TextLabel_setText(void *self, const char *text)
 		}
 	    }
 	    else PSC_List_append(l->renderers, dummy, 0);
-	    if (line[len]) ++len;
 	}
-	size_t lines = PSC_List_size(l->renderers);
-	if (lines > 1)
+	PSC_ListIterator_destroy(i);
+	PSC_List_destroy(lines);
+	size_t nlines = PSC_List_size(l->renderers);
+	if (nlines > 1)
 	{
-	    l->minSize.height += (lines - 1) * Font_linespace(l->font);
+	    l->minSize.height += (nlines - 1) * Font_linespace(l->font);
 	}
     }
     Widget_requestSize(self);

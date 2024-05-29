@@ -9,8 +9,6 @@
 #include <string.h>
 #include <xcb/xcbext.h>
 
-#define X_SZNM(a) { sizeof STR(a) - 1, STR(a) },
-
 #define MAXWAITING 128
 
 #define RQ_AWAIT_REPLY 1

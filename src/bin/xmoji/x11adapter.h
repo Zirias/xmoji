@@ -1,15 +1,13 @@
 #ifndef XMOJI_X11ADAPTER_H
 #define XMOJI_X11ADAPTER_H
 
+#include "macros.h"
+
 #include <poser/decl.h>
 #include <xcb/render.h>
 
 C_CLASS_DECL(PSC_Event);
 
-#define _STR(x) #x
-#define STR(x) _STR(x)
-
-#define X_ENUM(a) a,
 #define X_ATOMS(X) \
     X(UTF8_STRING) \
     X(WM_CLASS) \

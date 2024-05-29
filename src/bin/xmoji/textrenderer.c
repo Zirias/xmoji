@@ -1,6 +1,7 @@
 #include "textrenderer.h"
 
 #include "font.h"
+#include "unistr.h"
 #include "x11adapter.h"
 
 #include <hb.h>
@@ -71,12 +72,13 @@ Size TextRenderer_size(const TextRenderer *self)
     return self->size;
 }
 
-int TextRenderer_setUtf8(TextRenderer *self, const char *utf8, int len)
+int TextRenderer_setText(TextRenderer *self, const UniStr *text)
 {
     if (self->haserror) return -1;
     hb_buffer_destroy(self->hbbuffer);
     self->hbbuffer = hb_buffer_create();
-    hb_buffer_add_utf8(self->hbbuffer, utf8, len, 0, -1);
+    unsigned len = UniStr_len(text);
+    hb_buffer_add_codepoints(self->hbbuffer, UniStr_str(text), len, 0, -1);
     hb_buffer_set_language(self->hbbuffer, hb_language_from_string("en", -1));
     hb_buffer_guess_segment_properties(self->hbbuffer);
     hb_shape(self->hbfont, self->hbbuffer, 0, 0);

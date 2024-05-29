@@ -2,6 +2,7 @@
 
 #include "font.h"
 #include "textlabel.h"
+#include "unistr.h"
 #include "valuetypes.h"
 #include "vbox.h"
 #include "window.h"
@@ -52,16 +53,18 @@ static void onprestartup(void *receiver, void *sender, void *args)
     Window_setMainWidget(win, box);
 
     TextLabel *label = TextLabel_create(box, font);
-    TextLabel_setText(label, "Hello, World!\n\n"
+    UniStr(hello, "Hello, World!\n\n"
 	    "This is just a quick little\n"
 	    "text rendering test.\n\n"
 	    "The quick brown fox jumps over the lazy dog");
+    TextLabel_setText(label, hello);
     Widget_setAlign(label, AH_CENTER|AV_MIDDLE);
     Widget_show(label);
     VBox_addWidget(box, label);
 
     label = TextLabel_create(box, emojifont);
-    TextLabel_setText(label, "😀🤡🇩🇪👺🧩🔮🐅🍻🧑🏾‍🤝‍🧑🏻");
+    UniStr(emojis, "😀🤡🇩🇪👺🧩🔮🐅🍻🧑🏾‍🤝‍🧑🏻");
+    TextLabel_setText(label, emojis);
     Widget_setAlign(label, AH_CENTER|AV_MIDDLE);
     Widget_show(label);
     VBox_addWidget(box, label);

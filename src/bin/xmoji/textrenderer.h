@@ -9,12 +9,13 @@
 
 C_CLASS_DECL(Font);
 C_CLASS_DECL(TextRenderer);
+C_CLASS_DECL(UniStr);
 
 TextRenderer *TextRenderer_create(Font *font)
     ATTR_NONNULL((1));
 Size TextRenderer_size(const TextRenderer *self)
     CMETHOD;
-int TextRenderer_setUtf8(TextRenderer *self, const char *utf8, int len)
+int TextRenderer_setText(TextRenderer *self, const UniStr *text)
     CMETHOD;
 int TextRenderer_render(TextRenderer *self,
 	xcb_render_picture_t picture, Color color, Pos pos)
