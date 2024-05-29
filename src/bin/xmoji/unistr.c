@@ -206,7 +206,7 @@ PSC_List *UniStr_splitByUtf8(const UniStr *self, const char *delim)
 {
     if (!self->len) return PSC_List_create();
     size_t delimlen = strlen(delim);
-    if (delimlen > self->len)
+    if (!delimlen || delimlen > self->len)
     {
 	PSC_List *split = PSC_List_create();
 	PSC_List_append(split, clone(self, 0), destroy);
@@ -223,10 +223,15 @@ PSC_List *UniStr_splitByUtf32(const UniStr *self, const char32_t *delim)
 {
     PSC_List *split = PSC_List_create();
     if (!self->len) goto done;
+    if (!*delim)
+    {
+	PSC_List_append(split, clone(self, 0), destroy);
+	goto done;
+    }
     size_t delimlen = utf32len(delim);
     size_t pos = 0;
     size_t start = 0;
-    while (pos + delimlen < self->len)
+    while (pos + delimlen <= self->len)
     {
 	if (!memcmp(self->str + pos, delim, delimlen))
 	{
