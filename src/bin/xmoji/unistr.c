@@ -167,8 +167,9 @@ const char32_t *UniStr_str(const UniStr *self)
     return self->len ? self->str : U"";
 }
 
-static UniStr *clone(const UniStr *self)
+static UniStr *clone(const UniStr *self, int always)
 {
+    if (self->refcnt < 0 && !always) return (UniStr *)self;
     UniStr *ustr = PSC_malloc(sizeof *ustr);
     ustr->len = self->len;
     ustr->str = PSC_malloc((self->len + 1) * sizeof *ustr->str);
@@ -179,7 +180,7 @@ static UniStr *clone(const UniStr *self)
 
 UniStr *UniStr_appendUtf8(const UniStr *self, const char *utf8)
 {
-    UniStr *ustr = clone(self);
+    UniStr *ustr = clone(self, 1);
     ustr->len = toutf32(&ustr->str, ustr->len, utf8, strlen(utf8));
     return ustr;
 }
@@ -208,7 +209,7 @@ PSC_List *UniStr_splitByUtf8(const UniStr *self, const char *delim)
     if (delimlen > self->len)
     {
 	PSC_List *split = PSC_List_create();
-	PSC_List_append(split, clone(self), destroy);
+	PSC_List_append(split, clone(self, 0), destroy);
 	return split;
     }
     char32_t *utf32delim = 0;
@@ -244,7 +245,8 @@ PSC_List *UniStr_splitByUtf32(const UniStr *self, const char32_t *delim)
 	}
 	else ++pos;
     }
-    if (start < self->len)
+    if (start == 0) PSC_List_append(split, clone(self, 0), destroy);
+    else if (start < self->len)
     {
 	char32_t *splitstr = PSC_malloc(
 		(self->len - start + 1) * sizeof *splitstr);
