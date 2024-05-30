@@ -267,7 +267,7 @@ void UniStr_destroy(UniStr *self)
 
 char *UniStr_toLatin1(const UniStr *self)
 {
-    if (!self->len) return "";
+    if (!self->len) return 0;
     char *latin1 = PSC_malloc(self->len+1);
     for (size_t i = 0; i < self->len; ++i)
     {
@@ -281,7 +281,7 @@ char *UniStr_toLatin1(const UniStr *self)
 char *UniStr_utf8ToLatin1(const char *utf8)
 {
     void *out = 0;
-    if (utf8) decodeutf8(&out, 1, 0, utf8, 0);
+    if (utf8 && *utf8) decodeutf8(&out, 1, 0, utf8, 0);
     return out;
 }
 
@@ -290,7 +290,7 @@ char *UniStr_toUtf8(const UniStr *self, size_t *len)
     if (!self->len)
     {
 	if (len) *len = 0;
-	return "";
+	return 0;
     }
     char *utf8 = 0;
     size_t utf8len = toutf8(&utf8, 0, self->str, self->len);
