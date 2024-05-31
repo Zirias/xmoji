@@ -6,7 +6,7 @@
 #include <poser/core.h>
 #include <stdlib.h>
 #include <string.h>
-#include <xkbcommon/xkbcommon.h>
+#include <xkbcommon/xkbcommon-compose.h>
 
 static void destroy(void *obj);
 static int draw(void *obj, xcb_render_picture_t picture);
@@ -21,6 +21,7 @@ struct Window
     Object base;
     PSC_Event *closed;
     PSC_Event *errored;
+    struct xkb_compose_state *kbcompose;
     char *title;
     char *iconName;
     void *mainWidget;
@@ -90,15 +91,36 @@ static void expose(void *receiver, void *sender, void *args)
 
 static void keypress(void *receiver, void *sender, void *args)
 {
-    (void)receiver;
     (void)sender;
+
+    Window *self = receiver;
+    XkbKeyEventArgs *ea = args;
+    xkb_keysym_t key = ea->keysym;
+
+    xkb_compose_state_feed(self->kbcompose, key);
+    switch (xkb_compose_state_get_status(self->kbcompose))
+    {
+	case XKB_COMPOSE_COMPOSED:
+	    key = xkb_compose_state_get_one_sym(self->kbcompose);
+	    xkb_compose_state_reset(self->kbcompose);
+	    break;
+
+	case XKB_COMPOSE_CANCELLED:
+	    xkb_compose_state_reset(self->kbcompose);
+	    ATTR_FALLTHROUGH;
+
+	case XKB_COMPOSE_COMPOSING:
+	    return;
+
+	default:
+	    break;
+    }
 
     char keyname[64] = "<invalid>";
     char keystr[7] = "<none>";
     char mods[64] = "";
-    XkbKeyEventArgs *ea = args;
-    xkb_keysym_get_name(ea->keysym, keyname, sizeof keyname);
-    xkb_keysym_to_utf8(ea->keysym, keystr, sizeof keystr);
+    xkb_keysym_get_name(key, keyname, sizeof keyname);
+    xkb_keysym_to_utf8(key, keystr, sizeof keystr);
     if (ea->modifiers & XM_SHIFT) strcat(mods, "shift ");
     if (ea->modifiers & XM_CAPSLOCK) strcat(mods, "capslock ");
     if (ea->modifiers & XM_CONTROL) strcat(mods, "control ");
@@ -266,8 +288,9 @@ static void destroy(void *window)
 	    clientmsg, self->w);
     PSC_Event_unregister(X11Adapter_requestError(), self,
 	    requestError, self->w);
-    PSC_Event_destroy(self->closed);
+    xkb_compose_state_unref(self->kbcompose);
     PSC_Event_destroy(self->errored);
+    PSC_Event_destroy(self->closed);
     free(self->iconName);
     free(self->title);
     free(self);
@@ -284,6 +307,8 @@ Window *Window_createBase(void *derived, void *parent)
     self->base.type = OBJTYPE;
     self->closed = PSC_Event_create(self);
     self->errored = PSC_Event_create(self);
+    self->kbcompose = xkb_compose_state_new(
+	    X11Adapter_kbdcompose(), XKB_COMPOSE_STATE_NO_FLAGS);
 
     xcb_connection_t *c = X11Adapter_connection();
     self->w = xcb_generate_id(c);
