@@ -7,6 +7,7 @@
 #include <xcb/render.h>
 
 C_CLASS_DECL(PSC_Event);
+struct xkb_compose_table;
 
 #define X_ATOMS(X) \
     X(UTF8_STRING) \
@@ -56,6 +57,24 @@ typedef struct WMSizeHints
     int32_t base_width, base_height;
     uint32_t win_gravity;
 } WMSizeHints;
+
+typedef enum XkbModifier
+{
+    XM_NONE	    = 0,
+    XM_SHIFT	    = 1 << 0,
+    XM_CAPSLOCK	    = 1 << 1,
+    XM_CONTROL	    = 1 << 2,
+    XM_ALT	    = 1 << 3,
+    XM_NUMLOCK	    = 1 << 4,
+    XM_LOGO	    = 1 << 5
+} XkbModifier;
+
+typedef struct XkbKeyEventArgs
+{
+    uint32_t keycode;
+    uint32_t keysym;
+    XkbModifier modifiers;
+} XkbKeyEventArgs;
 
 typedef void (*X11ReplyHandler)(void *ctx, unsigned sequence, void *reply,
 	xcb_generic_error_t *error);
@@ -136,9 +155,11 @@ xcb_atom_t X11Adapter_atom(XAtomId id);
 xcb_render_pictformat_t X11Adapter_rootformat(void);
 xcb_render_pictformat_t X11Adapter_alphaformat(void);
 xcb_render_pictformat_t X11Adapter_argbformat(void);
+struct xkb_compose_table *X11Adapter_kbdcompose(void);
 PSC_Event *X11Adapter_clientmsg(void) ATTR_RETNONNULL;
 PSC_Event *X11Adapter_configureNotify(void) ATTR_RETNONNULL;
 PSC_Event *X11Adapter_expose(void) ATTR_RETNONNULL;
+PSC_Event *X11Adapter_keypress(void) ATTR_RETNONNULL;
 PSC_Event *X11Adapter_mapNotify(void) ATTR_RETNONNULL;
 PSC_Event *X11Adapter_unmapNotify(void) ATTR_RETNONNULL;
 PSC_Event *X11Adapter_requestError(void) ATTR_RETNONNULL;

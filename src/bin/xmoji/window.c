@@ -6,6 +6,7 @@
 #include <poser/core.h>
 #include <stdlib.h>
 #include <string.h>
+#include <xkbcommon/xkbcommon.h>
 
 static void destroy(void *obj);
 static int draw(void *obj, xcb_render_picture_t picture);
@@ -85,6 +86,27 @@ static void expose(void *receiver, void *sender, void *args)
 	self->mapped = 2;
     }
     Widget_invalidate(self);
+}
+
+static void keypress(void *receiver, void *sender, void *args)
+{
+    (void)receiver;
+    (void)sender;
+
+    char keyname[64] = "<invalid>";
+    char keystr[7] = "<none>";
+    char mods[64] = "";
+    XkbKeyEventArgs *ea = args;
+    xkb_keysym_get_name(ea->keysym, keyname, sizeof keyname);
+    xkb_keysym_to_utf8(ea->keysym, keystr, sizeof keystr);
+    if (ea->modifiers & XM_SHIFT) strcat(mods, "shift ");
+    if (ea->modifiers & XM_CAPSLOCK) strcat(mods, "capslock ");
+    if (ea->modifiers & XM_CONTROL) strcat(mods, "control ");
+    if (ea->modifiers & XM_ALT) strcat(mods, "alt ");
+    if (ea->modifiers & XM_NUMLOCK) strcat(mods, "numlock ");
+    if (ea->modifiers & XM_LOGO) strcat(mods, "logo ");
+    PSC_Log_fmt(PSC_L_DEBUG, "Key pressed. Name: %s\tMods: %s\tText: %s",
+	    keyname, mods, keystr);
 }
 
 static void configureNotify(void *receiver, void *sender, void *args)
@@ -270,7 +292,9 @@ Window *Window_createBase(void *derived, void *parent)
     xcb_screen_t *s = X11Adapter_screen();
     uint32_t mask = XCB_CW_EVENT_MASK;
     uint32_t values[] = { 
-	XCB_EVENT_MASK_EXPOSURE | XCB_EVENT_MASK_STRUCTURE_NOTIFY
+	XCB_EVENT_MASK_EXPOSURE
+	    | XCB_EVENT_MASK_KEY_PRESS
+	    | XCB_EVENT_MASK_STRUCTURE_NOTIFY
     };
     CHECK(xcb_create_window(c, XCB_COPY_FROM_PARENT, self->w, s->root,
 		0, 0, 1, 1, 2, XCB_WINDOW_CLASS_INPUT_OUTPUT,
@@ -300,6 +324,8 @@ Window *Window_createBase(void *derived, void *parent)
 	    configureNotify, self->w);
     PSC_Event_register(X11Adapter_expose(), self,
 	    expose, self->w);
+    PSC_Event_register(X11Adapter_keypress(), self,
+	    keypress, self->w);
     PSC_Event_register(X11Adapter_mapNotify(), self,
 	    mapped, self->w);
     PSC_Event_register(X11Adapter_unmapNotify(), self,

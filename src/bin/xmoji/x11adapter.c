@@ -1,5 +1,6 @@
 #include "x11adapter.h"
 
+#include "suppress.h"
 #include "unistr.h"
 
 #include <inttypes.h>
@@ -8,6 +9,11 @@
 #include <stdlib.h>
 #include <string.h>
 #include <xcb/xcbext.h>
+SUPPRESS(pedantic)
+#include <xcb/xkb.h>
+ENDSUPPRESS
+#include <xkbcommon/xkbcommon-compose.h>
+#include <xkbcommon/xkbcommon-x11.h>
 
 #define MAXWAITING 128
 
@@ -27,8 +33,55 @@ typedef struct X11ReplyHandlerRecord
     unsigned uarg;
 } X11ReplyHandlerRecord;
 
+typedef struct XkbEvent
+{
+    uint8_t response_type;
+    uint8_t xkbType;
+    uint16_t sequence;
+    xcb_timestamp_t time;
+    uint8_t deviceId;
+} XkbEvent;
+
 static const struct { int len; const char *nm; } atomnm[] = {
     X_ATOMS(X_SZNM)
+};
+
+static const char *modnm[] = {
+    XKB_MOD_NAME_LOGO,
+    XKB_MOD_NAME_NUM,
+    XKB_MOD_NAME_ALT,
+    XKB_MOD_NAME_CTRL,
+    XKB_MOD_NAME_CAPS,
+    XKB_MOD_NAME_SHIFT
+};
+#define NUMMODS (sizeof modnm / sizeof *modnm)
+
+#define XKBEVENTS ( \
+	XCB_XKB_EVENT_TYPE_NEW_KEYBOARD_NOTIFY | \
+	XCB_XKB_EVENT_TYPE_MAP_NOTIFY | \
+	XCB_XKB_EVENT_TYPE_STATE_NOTIFY )
+#define XKBMAPPARTS ( \
+	XCB_XKB_MAP_PART_KEY_TYPES | \
+	XCB_XKB_MAP_PART_KEY_SYMS | \
+	XCB_XKB_MAP_PART_MODIFIER_MAP | \
+	XCB_XKB_MAP_PART_EXPLICIT_COMPONENTS | \
+	XCB_XKB_MAP_PART_KEY_ACTIONS | \
+	XCB_XKB_MAP_PART_VIRTUAL_MODS | \
+	XCB_XKB_MAP_PART_VIRTUAL_MOD_MAP )
+#define XKBKBDETAILS ( \
+	XCB_XKB_NKN_DETAIL_KEYCODES )
+#define XKBSTDETAILS ( \
+	XCB_XKB_STATE_PART_MODIFIER_BASE | \
+	XCB_XKB_STATE_PART_MODIFIER_LATCH | \
+	XCB_XKB_STATE_PART_MODIFIER_LOCK | \
+	XCB_XKB_STATE_PART_GROUP_BASE | \
+	XCB_XKB_STATE_PART_GROUP_LATCH | \
+	XCB_XKB_STATE_PART_GROUP_LOCK )
+static const xcb_xkb_select_events_details_t xkbevdetails = {
+    .affectNewKeyboard = XKBKBDETAILS,
+    .newKeyboardDetails = XKBKBDETAILS,
+    .affectState = XKBSTDETAILS,
+    .stateDetails = XKBSTDETAILS
 };
 
 static char wmclass[512];
@@ -36,10 +89,15 @@ static size_t wmclasssz;
 
 static xcb_connection_t *c;
 static xcb_screen_t *s;
+static struct xkb_context *kbdctx;
+static struct xkb_keymap *keymap;
+static struct xkb_compose_table *kbdcompose;
+static struct xkb_state *kbdstate;
 static size_t maxRequestSize;
 static PSC_Event *clientmsg;
 static PSC_Event *configureNotify;
 static PSC_Event *expose;
+static PSC_Event *keypress;
 static PSC_Event *mapNotify;
 static PSC_Event *unmapNotify;
 static PSC_Event *requestError;
@@ -48,7 +106,10 @@ static xcb_atom_t atoms[NATOMS];
 static xcb_render_pictformat_t rootformat;
 static xcb_render_pictformat_t alphaformat;
 static xcb_render_pictformat_t argbformat;
+static int32_t kbdid;
 static int fd;
+static uint8_t xkbevbase;
+static int modmap[NUMMODS];
 
 static X11ReplyHandlerRecord waitingReplies[MAXWAITING];
 static unsigned waitingFront;
@@ -81,6 +142,63 @@ static void removeFirstWaiting(void)
     if (++waitingFront == MAXWAITING) waitingFront = 0;
 }
 
+static void updateKeymap(void)
+{
+    struct xkb_keymap *newKeymap = xkb_x11_keymap_new_from_device(kbdctx,
+	    c, kbdid, XKB_KEYMAP_COMPILE_NO_FLAGS);
+    if (!newKeymap)
+    {
+	PSC_Log_msg(PSC_L_WARNING, "Could not update keymap");
+	return;
+    }
+    struct xkb_state *newKbdstate = xkb_x11_state_new_from_device(newKeymap,
+	    c, kbdid);
+    if (!newKbdstate)
+    {
+	PSC_Log_msg(PSC_L_WARNING,
+		"Could not initialize state for new kexymap");
+	xkb_keymap_unref(newKeymap);
+	return;
+    }
+    xkb_state_unref(kbdstate);
+    xkb_keymap_unref(keymap);
+    keymap = newKeymap;
+    kbdstate = newKbdstate;
+    for (unsigned i = 0; i < NUMMODS; ++i)
+    {
+	modmap[i] = xkb_keymap_mod_get_index(keymap, modnm[i]);
+    }
+}
+
+static void handleXkbEvent(XkbEvent *ev)
+{
+    xcb_xkb_state_notify_event_t *snev;
+
+    if (ev->deviceId != kbdid) return;
+
+    switch (ev->xkbType)
+    {
+	case XCB_XKB_NEW_KEYBOARD_NOTIFY:
+	    if (((xcb_xkb_new_keyboard_notify_event_t *)ev)->changed
+		    & XCB_XKB_NKN_DETAIL_KEYCODES) updateKeymap();
+	    break;
+
+	case XCB_XKB_MAP_NOTIFY:
+	    updateKeymap();
+	    break;
+
+	case XCB_XKB_STATE_NOTIFY:
+	    snev = (xcb_xkb_state_notify_event_t *)ev;
+	    xkb_state_update_mask(kbdstate, snev->baseMods, snev->latchedMods,
+		    snev->lockedMods, snev->baseGroup, snev->latchedGroup,
+		    snev->lockedGroup);
+	    break;
+
+	default:
+	    break;
+    }
+}
+
 static void handleX11Event(xcb_generic_event_t *ev)
 {
     if (ev->response_type == 0)
@@ -88,6 +206,10 @@ static void handleX11Event(xcb_generic_event_t *ev)
 	PSC_Log_fmt(PSC_L_WARNING, "Unhandled X11 error %d: %u",
 		((xcb_generic_error_t *)ev)->error_code,
 		ev->sequence);
+    }
+    else if (ev->response_type == xkbevbase)
+    {
+	handleXkbEvent((XkbEvent *)ev);
     }
     else switch (ev->response_type & 0x7f)
     {
@@ -104,6 +226,29 @@ static void handleX11Event(xcb_generic_event_t *ev)
 	case XCB_EXPOSE:
 	    PSC_Event_raise(expose,
 		    ((xcb_expose_event_t *)ev)->window, ev);
+	    break;
+
+	case XCB_KEY_PRESS:
+	    {
+		xcb_key_press_event_t *kpev = (xcb_key_press_event_t *)ev;
+		xkb_keycode_t key = kpev->detail;
+		XkbModifier mods = XM_NONE;
+		for (unsigned i = 0; i < NUMMODS; ++i)
+		{
+		    mods <<= 1;
+		    if (modmap[i] >= 0 && xkb_state_mod_index_is_active(
+				kbdstate, modmap[i], XKB_STATE_MODS_EFFECTIVE))
+		    {
+			mods |= 1;
+		    }
+		}
+		XkbKeyEventArgs ea = {
+		    .keycode = key,
+		    .keysym = xkb_state_key_get_one_sym(kbdstate, key),
+		    .modifiers = mods
+		};
+		PSC_Event_raise(keypress, kpev->event, &ea);
+	    }
 	    break;
 
 	case XCB_MAP_NOTIFY:
@@ -442,6 +587,8 @@ int X11Adapter_init(int argc, char **argv, const char *classname)
 	    argbformat = fi.data->id;
 	}
     }
+    free(pf);
+    pf = 0;
     if (!alphaformat)
     {
 	PSC_Log_msg(PSC_L_ERROR, "No 8bit alpha format found");
@@ -452,20 +599,32 @@ int X11Adapter_init(int argc, char **argv, const char *classname)
 	PSC_Log_msg(PSC_L_ERROR, "No 32bit ARGB format found");
 	goto error;
     }
-    free(pf);
-    pf = 0;
 
-    clientmsg = PSC_Event_create(0);
-    configureNotify = PSC_Event_create(0);
-    expose = PSC_Event_create(0);
-    mapNotify = PSC_Event_create(0);
-    unmapNotify = PSC_Event_create(0);
-    requestError = PSC_Event_create(0);
-    eventsDone = PSC_Event_create(0);
-    fd = xcb_get_file_descriptor(c);
-    PSC_Event_register(PSC_Service_readyRead(), 0, readX11Input, fd);
-    PSC_Event_register(PSC_Service_eventsDone(), 0, flushandsync, 0);
-    PSC_Service_registerRead(fd);
+    uint16_t xkbmaj;
+    uint16_t xkbmin;
+    if (xkb_x11_setup_xkb_extension(c, XKB_X11_MIN_MAJOR_XKB_VERSION,
+		XKB_X11_MIN_MINOR_XKB_VERSION,
+		XKB_X11_SETUP_XKB_EXTENSION_NO_FLAGS, &xkbmaj, &xkbmin,
+		&xkbevbase, 0))
+    {
+	PSC_Log_fmt(PSC_L_INFO, "using XKB version %"PRIu16".%"PRIu16,
+		xkbmaj, xkbmin);
+    }
+    else goto error;
+    kbdid = xkb_x11_get_core_keyboard_device_id(c);
+    if (kbdid == -1)
+    {
+	PSC_Log_msg(PSC_L_ERROR, "No core keyboard found");
+	goto error;
+    }
+    xcb_void_cookie_t xkbeventscookie = xcb_xkb_select_events_aux_checked(c,
+	    kbdid, XKBEVENTS, 0, 0, XKBMAPPARTS, XKBMAPPARTS, &xkbevdetails);
+    kbdctx = xkb_context_new(XKB_CONTEXT_NO_FLAGS);
+    if (!kbdctx)
+    {
+	PSC_Log_msg(PSC_L_ERROR, "Could not create XKB context");
+	goto error;
+    }
 
     char *lc = setlocale(LC_ALL, "");
     if (!lc) lc = "C";
@@ -485,8 +644,22 @@ int X11Adapter_init(int argc, char **argv, const char *classname)
     }
     else
     {
-	PSC_Log_msg(PSC_L_WARNING,
-		"Couldn't set locale, problems might occur");
+	PSC_Log_msg(PSC_L_ERROR, "Couldn't set locale");
+	goto error;
+    }
+    kbdcompose = xkb_compose_table_new_from_locale(kbdctx, lc,
+	    XKB_COMPOSE_COMPILE_NO_FLAGS);
+    if (!kbdcompose)
+    {
+	PSC_Log_fmt(PSC_L_ERROR, "Couldn't create compose table for `%s'", lc);
+	goto error;
+    }
+    xcb_generic_error_t *rqerr = xcb_request_check(c, xkbeventscookie);
+    if (rqerr)
+    {
+	PSC_Log_msg(PSC_L_ERROR, "Could not request XKB events");
+	free(rqerr);
+	goto error;
     }
 
     char *nm = 0;
@@ -525,6 +698,21 @@ int X11Adapter_init(int argc, char **argv, const char *classname)
 	    "starting with window class \"%s\", \"%s\"", nm, classname);
     free(clnm);
     free(nm);
+
+    clientmsg = PSC_Event_create(0);
+    configureNotify = PSC_Event_create(0);
+    expose = PSC_Event_create(0);
+    keypress = PSC_Event_create(0);
+    mapNotify = PSC_Event_create(0);
+    unmapNotify = PSC_Event_create(0);
+    requestError = PSC_Event_create(0);
+    eventsDone = PSC_Event_create(0);
+    fd = xcb_get_file_descriptor(c);
+    PSC_Event_register(PSC_Service_readyRead(), 0, readX11Input, fd);
+    PSC_Event_register(PSC_Service_eventsDone(), 0, flushandsync, 0);
+    PSC_Service_registerRead(fd);
+
+    updateKeymap();
 
     return 0;
 
@@ -577,6 +765,11 @@ xcb_render_pictformat_t X11Adapter_argbformat(void)
     return argbformat;
 }
 
+struct xkb_compose_table *X11Adapter_kbdcompose(void)
+{
+    return kbdcompose;
+}
+
 PSC_Event *X11Adapter_clientmsg(void)
 {
     return clientmsg;
@@ -590,6 +783,11 @@ PSC_Event *X11Adapter_configureNotify(void)
 PSC_Event *X11Adapter_expose(void)
 {
     return expose;
+}
+
+PSC_Event *X11Adapter_keypress(void)
+{
+    return keypress;
 }
 
 PSC_Event *X11Adapter_mapNotify(void)
@@ -685,21 +883,31 @@ void X11Adapter_done(void)
     waitingNum = 0;
     PSC_Event_destroy(eventsDone);
     PSC_Event_destroy(requestError);
-    PSC_Event_destroy(expose);
     PSC_Event_destroy(unmapNotify);
     PSC_Event_destroy(mapNotify);
+    PSC_Event_destroy(keypress);
+    PSC_Event_destroy(expose);
     PSC_Event_destroy(configureNotify);
     PSC_Event_destroy(clientmsg);
     eventsDone = 0;
     requestError = 0;
-    expose = 0;
     unmapNotify = 0;
     mapNotify = 0;
+    keypress = 0;
+    expose = 0;
     configureNotify = 0;
     clientmsg = 0;
     rootformat = 0;
     alphaformat = 0;
     argbformat = 0;
+    xkb_state_unref(kbdstate);
+    kbdstate = 0;
+    xkb_keymap_unref(keymap);
+    keymap = 0;
+    xkb_compose_table_unref(kbdcompose);
+    kbdcompose = 0;
+    xkb_context_unref(kbdctx);
+    kbdctx = 0;
     xcb_disconnect(c);
     maxRequestSize = 0;
     s = 0;

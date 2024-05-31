@@ -19,6 +19,9 @@ xmoji_PKGDEPS=		fontconfig \
 			harfbuzz \
 			posercore \
 			xcb \
-			xcb-render
+			xcb-render \
+			xcb-xkb \
+			xkbcommon \
+			xkbcommon-x11
 
 $(call binrules,xmoji)
