@@ -233,19 +233,27 @@ static void handleX11Event(xcb_generic_event_t *ev)
 		xcb_key_press_event_t *kpev = (xcb_key_press_event_t *)ev;
 		xkb_keycode_t key = kpev->detail;
 		XkbModifier mods = XM_NONE;
+		XkbModifier rawmods = XM_NONE;
 		for (unsigned i = 0; i < NUMMODS; ++i)
 		{
 		    mods <<= 1;
+		    rawmods <<= 1;
 		    if (modmap[i] >= 0 && xkb_state_mod_index_is_active(
 				kbdstate, modmap[i], XKB_STATE_MODS_EFFECTIVE))
 		    {
-			mods |= 1;
+			if (xkb_state_mod_index_is_consumed2(kbdstate, key,
+				    modmap[i], XKB_CONSUMED_MODE_GTK) == 0)
+			{
+			    mods |= 1;
+			}
+			rawmods |= 1;
 		    }
 		}
 		XkbKeyEventArgs ea = {
 		    .keycode = key,
 		    .keysym = xkb_state_key_get_one_sym(kbdstate, key),
-		    .modifiers = mods
+		    .modifiers = mods,
+		    .rawmods = rawmods
 		};
 		PSC_Event_raise(keypress, kpev->event, &ea);
 	    }

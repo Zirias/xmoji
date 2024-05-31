@@ -74,6 +74,7 @@ typedef struct XkbKeyEventArgs
     uint32_t keycode;
     uint32_t keysym;
     XkbModifier modifiers;
+    XkbModifier rawmods;
 } XkbKeyEventArgs;
 
 typedef void (*X11ReplyHandler)(void *ctx, unsigned sequence, void *reply,
