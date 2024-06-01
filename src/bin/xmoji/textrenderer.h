@@ -17,6 +17,8 @@ Size TextRenderer_size(const TextRenderer *self)
     CMETHOD;
 int TextRenderer_setText(TextRenderer *self, const UniStr *text)
     CMETHOD;
+unsigned TextRenderer_pixelOffset(TextRenderer *self, unsigned index)
+    CMETHOD;
 int TextRenderer_render(TextRenderer *self,
 	xcb_render_picture_t picture, Color color, Pos pos)
     CMETHOD;

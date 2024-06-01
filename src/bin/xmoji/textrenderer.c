@@ -173,6 +173,21 @@ int TextRenderer_setText(TextRenderer *self, const UniStr *text)
     return 0;
 }
 
+unsigned TextRenderer_pixelOffset(TextRenderer *self, unsigned index)
+{
+    unsigned len = hb_buffer_get_length(self->hbbuffer);
+    hb_glyph_info_t *info = hb_buffer_get_glyph_infos(self->hbbuffer, 0);
+    hb_glyph_position_t *pos = hb_buffer_get_glyph_positions(
+	    self->hbbuffer, 0);
+    uint32_t offset = 0;
+    for (unsigned i = 0; i < len; ++i)
+    {
+	if (info[i].cluster > index) break;
+	offset += pos[i].x_advance;
+    }
+    return (offset + 0x3f) >> 6;
+}
+
 int TextRenderer_render(TextRenderer *self,
 	xcb_render_picture_t picture, Color color, Pos pos)
 {
