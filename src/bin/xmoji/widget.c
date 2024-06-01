@@ -162,7 +162,6 @@ int Widget_draw(void *self)
 {
     Widget *w = Object_instance(self);
     if (!w->drawable) return -1;
-    if (w->drawn) return 0;
     if (!Widget_visible(self)) return 0;
     int rc = -1;
     if (memcmp(&w->geometry, &w->clip, sizeof w->geometry))
@@ -172,6 +171,11 @@ int Widget_draw(void *self)
 	CHECK(xcb_render_set_picture_clip_rectangles(X11Adapter_connection(),
 		    w->picture, w->clip.pos.x, w->clip.pos.y, 1, &clip),
 		"Cannot set clipping region on 0x%x", (unsigned)w->drawable);
+    }
+    if (w->drawn)
+    {
+	Object_vcall(rc, Widget, draw, self, 0);
+	return rc;
     }
     if (w->drawBackground)
     {

@@ -4,6 +4,7 @@ xmoji_MODULES=		colorset \
 			nanosvg \
 			object \
 			svghooks \
+			textbox \
 			textlabel \
 			textrenderer \
 			unistr \

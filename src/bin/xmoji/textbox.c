@@ -1,0 +1,87 @@
+#include "textbox.h"
+
+#include "font.h"
+#include "textrenderer.h"
+#include "unistr.h"
+#include "unistrbuilder.h"
+
+#include <poser/core.h>
+#include <stdlib.h>
+
+static void destroy(void *obj);
+static int draw(void *obj, xcb_render_picture_t picture);
+static Size minSize(const void *obj);
+static void keyPressed(void *obj, const KeyEvent *event);
+
+static MetaTextBox mo = MetaTextBox_init("TextBox",
+	destroy, draw, 0, 0, minSize, keyPressed);
+
+struct TextBox
+{
+    Object base;
+    Font *font;
+    UniStrBuilder *text;
+    TextRenderer *renderer;
+};
+
+static void destroy(void *obj)
+{
+    TextBox *self = obj;
+    TextRenderer_destroy(self->renderer);
+    UniStrBuilder_destroy(self->text);
+    free(self);
+}
+
+static int draw(void *obj, xcb_render_picture_t picture)
+{
+    if (!picture) return 0;
+    TextBox *self = Object_instance(obj);
+    if (!UniStr_len(UniStrBuilder_stringView(self->text))) return 0;
+    Color color = Widget_color(self, COLOR_NORMAL);
+    Pos pos = Widget_contentOrigin(self, Widget_size(self));
+    return TextRenderer_render(self->renderer, picture, color, pos);
+}
+
+static Size minSize(const void *obj)
+{
+    const TextBox *self = Object_instance(obj);
+    return (Size){ 120, (Font_maxHeight(self->font) + 0x3f) >> 6 };
+}
+
+static void keyPressed(void *obj, const KeyEvent *event)
+{
+    if (!event->codepoint) return;
+    TextBox *self = Object_instance(obj);
+    UniStrBuilder_appendChar(self->text, event->codepoint);
+    TextRenderer_setText(self->renderer,
+	    UniStrBuilder_stringView(self->text));
+    Widget_invalidate(self);
+}
+
+TextBox *TextBox_createBase(void *derived, void *parent, Font *font)
+{
+    REGTYPE(0);
+
+    TextBox *self = PSC_malloc(sizeof *self);
+    if (!derived) derived = self;
+    self->base.base = Widget_createBase(derived, parent, IE_KEYPRESSED);
+    self->base.type = OBJTYPE;
+    self->font = font;
+    self->text = UniStrBuilder_create();
+    self->renderer = TextRenderer_create(font);
+
+    return self;
+}
+
+const UniStr *TextBox_text(const void *self)
+{
+    TextBox *l = Object_instance(self);
+    return UniStrBuilder_stringView(l->text);
+}
+
+void TextBox_setText(void *self, const UniStr *text)
+{
+    (void)self;
+    (void)text;
+}
+

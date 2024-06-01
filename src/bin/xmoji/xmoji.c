@@ -1,6 +1,7 @@
 #include "xmoji.h"
 
 #include "font.h"
+#include "textbox.h"
 #include "textlabel.h"
 #include "unistr.h"
 #include "valuetypes.h"
@@ -61,6 +62,13 @@ static void onprestartup(void *receiver, void *sender, void *args)
     Widget_setAlign(label, AH_CENTER|AV_MIDDLE);
     Widget_show(label);
     VBox_addWidget(box, label);
+
+    TextBox *input = TextBox_create(box, font);
+    Window_setFocusWidget(win, input);
+    Widget_setColor(input, COLOR_BG_NORMAL, Color_fromRgb(40, 50, 60));
+    Widget_setBackground(input, 1, COLOR_BG_NORMAL);
+    Widget_show(input);
+    VBox_addWidget(box, input);
 
     label = TextLabel_create(box, emojifont);
     UniStr(emojis, "😀🤡🇩🇪👺🧩🔮🐅🍻🧑🏾‍🤝‍🧑🏻");

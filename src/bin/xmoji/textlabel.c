@@ -36,7 +36,7 @@ static void destroy(void *obj)
 static int draw(void *obj, xcb_render_picture_t picture)
 {
     TextLabel *self = Object_instance(obj);
-    if (!self->text) return 0;
+    if (!picture || !self->text) return 0;
     Color color = Widget_color(self, COLOR_NORMAL);
     Pos pos = Widget_contentOrigin(self, self->minSize);
     Align align = Widget_align(self);
