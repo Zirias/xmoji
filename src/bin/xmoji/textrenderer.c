@@ -78,6 +78,11 @@ int TextRenderer_setText(TextRenderer *self, const UniStr *text)
     hb_buffer_destroy(self->hbbuffer);
     self->hbbuffer = hb_buffer_create();
     unsigned len = UniStr_len(text);
+    if (!len)
+    {
+	self->size = (Size){0, 0};
+	return 0;
+    }
     hb_buffer_add_codepoints(self->hbbuffer, UniStr_str(text), len, 0, -1);
     hb_buffer_set_language(self->hbbuffer, hb_language_from_string("en", -1));
     hb_buffer_guess_segment_properties(self->hbbuffer);
@@ -182,7 +187,7 @@ unsigned TextRenderer_pixelOffset(TextRenderer *self, unsigned index)
     uint32_t offset = 0;
     for (unsigned i = 0; i < len; ++i)
     {
-	if (info[i].cluster > index) break;
+	if (info[i].cluster >= index) break;
 	offset += pos[i].x_advance;
     }
     return (offset + 0x3f) >> 6;

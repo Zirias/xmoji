@@ -7,6 +7,7 @@
 
 #include <poser/core.h>
 #include <stdlib.h>
+#include <xkbcommon/xkbcommon-keysyms.h>
 
 static void destroy(void *obj);
 static int draw(void *obj, xcb_render_picture_t picture);
@@ -67,12 +68,51 @@ static Size minSize(const void *obj)
 
 static void keyPressed(void *obj, const KeyEvent *event)
 {
-    if (!event->codepoint) return;
     TextBox *self = Object_instance(obj);
-    UniStrBuilder_appendChar(self->text, event->codepoint);
-    TextRenderer_setText(self->renderer,
-	    UniStrBuilder_stringView(self->text));
-    ++self->cursor;
+    const UniStr *str = UniStrBuilder_stringView(self->text);
+    size_t len = UniStr_len(str);
+
+    switch (event->keysym)
+    {
+	case XKB_KEY_BackSpace:
+	    if (!len || !self->cursor) return;
+	    UniStrBuilder_remove(self->text, --self->cursor, 1);
+	    break;
+
+	case XKB_KEY_Delete:
+	    if (!len || self->cursor == len) return;
+	    UniStrBuilder_remove(self->text, self->cursor, 1);
+	    break;
+
+	case XKB_KEY_Left:
+	    if (!len || !self->cursor) return;
+	    --self->cursor;
+	    goto cursoronly;
+
+	case XKB_KEY_Right:
+	    if (!len || self->cursor == len) return;
+	    ++self->cursor;
+	    goto cursoronly;
+
+	case XKB_KEY_Home:
+	case XKB_KEY_Begin:
+	    if (!len || !self->cursor) return;
+	    self->cursor = 0;
+	    goto cursoronly;
+
+	case XKB_KEY_End:
+	    if (!len || self->cursor == len) return;
+	    self->cursor = len;
+	    goto cursoronly;
+
+	default:
+	    if (event->codepoint < 0x20U) return;
+	    UniStrBuilder_insertChar(self->text,
+		    self->cursor++, event->codepoint);
+	    break;
+    }
+    TextRenderer_setText(self->renderer, str);
+cursoronly:
     Widget_invalidate(self);
 }
 
