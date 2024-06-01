@@ -77,34 +77,28 @@ void layout(VBox *self)
 {
     PSC_ListIterator *i = PSC_List_iterator(self->items);
 
-    Size contentSize = { 0, 0 };
+    self->minSize = (Size){ 0, 0 };
     while (PSC_ListIterator_moveNext(i))
     {
 	VBoxItem *item = PSC_ListIterator_current(i);
-	contentSize.height += item->minSize.height;
-	if (item->minSize.width > contentSize.width)
+	self->minSize.height += item->minSize.height;
+	if (item->minSize.width > self->minSize.width)
 	{
-	    contentSize.width = item->minSize.width;
+	    self->minSize.width = item->minSize.width;
 	}
     }
 
-    Box padding = Widget_padding(self);
-    Pos contentOrigin = Widget_contentOrigin(self, contentSize);
+    Pos contentOrigin = Widget_contentOrigin(self, self->minSize);
     while (PSC_ListIterator_moveNext(i))
     {
 	VBoxItem *item = PSC_ListIterator_current(i);
 	Widget_setOrigin(item->widget, contentOrigin);
 	Widget_setSize(item->widget, (Size){
-		contentSize.width, item->minSize.height});
+		self->minSize.width, item->minSize.height});
 	contentOrigin.y += item->minSize.height;
     }
 
     PSC_ListIterator_destroy(i);
-
-    self->minSize = (Size){
-	contentSize.width + padding.left + padding.right,
-	contentSize.height + padding.top + padding.bottom
-    };
     Widget_requestSize(self);
 }
 
