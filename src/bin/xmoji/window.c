@@ -14,7 +14,7 @@ static int show(void *obj);
 static int hide(void *obj);
 
 static MetaWindow mo = MetaWindow_init("Window",
-	destroy, draw, show, hide, 0);
+	destroy, draw, show, hide, 0, 0);
 
 struct Window
 {
@@ -25,6 +25,7 @@ struct Window
     char *title;
     char *iconName;
     void *mainWidget;
+    void *focusWidget;
     xcb_window_t w;
     int haserror;
     int haveMinSize;
@@ -94,6 +95,8 @@ static void keypress(void *receiver, void *sender, void *args)
     (void)sender;
 
     Window *self = receiver;
+    if (!self->focusWidget) return;
+
     XkbKeyEventArgs *ea = args;
     xkb_keysym_t key = ea->keysym;
 
@@ -116,19 +119,12 @@ static void keypress(void *receiver, void *sender, void *args)
 	    break;
     }
 
-    char keyname[64] = "<invalid>";
-    char keystr[7] = "<none>";
-    char mods[64] = "";
-    xkb_keysym_get_name(key, keyname, sizeof keyname);
-    xkb_keysym_to_utf8(key, keystr, sizeof keystr);
-    if (ea->modifiers & XM_SHIFT) strcat(mods, "shift ");
-    if (ea->modifiers & XM_CAPSLOCK) strcat(mods, "capslock ");
-    if (ea->modifiers & XM_CONTROL) strcat(mods, "control ");
-    if (ea->modifiers & XM_ALT) strcat(mods, "alt ");
-    if (ea->modifiers & XM_NUMLOCK) strcat(mods, "numlock ");
-    if (ea->modifiers & XM_LOGO) strcat(mods, "logo ");
-    PSC_Log_fmt(PSC_L_DEBUG, "Key pressed. Name: %s\tMods: %s\tText: %s",
-	    keyname, mods, keystr);
+    KeyEvent event = {
+	.codepoint = xkb_keysym_to_utf32(key),
+	.keysym = key,
+	.modifiers = ea->modifiers
+    };
+    Widget_keyPressed(self->focusWidget, &event);
 }
 
 static void configureNotify(void *receiver, void *sender, void *args)
@@ -303,7 +299,7 @@ Window *Window_createBase(void *derived, void *parent)
     Window *self = PSC_malloc(sizeof *self);
     if (!derived) derived = self;
     memset(self, 0, sizeof *self);
-    self->base.base = Widget_createBase(derived, parent);
+    self->base.base = Widget_createBase(derived, parent, IE_NONE);
     self->base.type = OBJTYPE;
     self->closed = PSC_Event_create(self);
     self->errored = PSC_Event_create(self);
@@ -465,5 +461,11 @@ void Window_setMainWidget(void *self, void *widget)
 	PSC_Event_register(Widget_sizeRequested(widget), w, sizeRequested, 0);
 	sizeRequested(w, 0, 0);
     }
+}
+
+void Window_setFocusWidget(void *self, void *widget)
+{
+    Window *w = Object_instance(self);
+    w->focusWidget = widget;
 }
 

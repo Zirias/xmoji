@@ -12,7 +12,7 @@ static int hide(void *obj);
 static Size minSize(const void *obj);
 
 static MetaWidget mo = MetaWidget_init("Widget",
-	destroy, 0, show, hide, minSize);
+	destroy, 0, show, hide, minSize, 0);
 
 struct Widget
 {
@@ -31,6 +31,7 @@ struct Widget
     xcb_render_picture_t picture;
     ColorRole backgroundRole;
     Align align;
+    InputEvents events;
     int drawBackground;
     int drawn;
     int visible;
@@ -94,7 +95,7 @@ static void invalidate(void *receiver, void *sender, void *args)
     Widget_invalidate(receiver);
 }
 
-Widget *Widget_createBase(void *derived, void *parent)
+Widget *Widget_createBase(void *derived, void *parent, InputEvents events)
 {
     REGTYPE(0);
 
@@ -110,6 +111,7 @@ Widget *Widget_createBase(void *derived, void *parent)
     self->invalidated = PSC_Event_create(self);
     self->parent = parent;
     self->padding = (Box){ 3, 3, 3, 3 };
+    self->events = events;
 
     if (parent)
     {
@@ -359,6 +361,13 @@ int Widget_visible(const void *self)
     if (!w->visible) return 0;
     if (!w->parent) return 1;
     return Widget_visible(w->parent);
+}
+
+void Widget_keyPressed(void *self, const KeyEvent *event)
+{
+    Widget *w = Object_instance(self);
+    if (!(w->events & IE_KEYPRESSED)) return;
+    Object_vcallv(Widget, keyPressed, w, event);
 }
 
 void Widget_requestSize(void *self)

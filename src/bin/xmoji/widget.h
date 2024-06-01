@@ -4,9 +4,17 @@
 #include "colorset.h"
 #include "object.h"
 #include "valuetypes.h"
+#include "x11adapter.h"
 
 #include <poser/decl.h>
 #include <xcb/render.h>
+
+typedef struct KeyEvent
+{
+    uint32_t codepoint;
+    uint32_t keysym;
+    XkbModifier modifiers;
+} KeyEvent;
 
 typedef struct MetaWidget
 {
@@ -15,14 +23,17 @@ typedef struct MetaWidget
     int (*show)(void *widget);
     int (*hide)(void *widget);
     Size (*minSize)(const void *widget);
+    void (*keyPressed)(void *widget, const KeyEvent *event);
 } MetaWidget;
 
-#define MetaWidget_init(name, destroy, mdraw, mshow, mhide, mminSize) { \
+#define MetaWidget_init(name, destroy, \
+	mdraw, mshow, mhide, mminSize, mkeyPressed) { \
     .base = MetaObject_init(name, destroy), \
     .draw = mdraw, \
     .show = mshow, \
     .hide = mhide, \
-    .minSize = mminSize \
+    .minSize = mminSize, \
+    .keyPressed = mkeyPressed \
 }
 
 C_CLASS_DECL(PSC_Event);
@@ -40,7 +51,13 @@ typedef struct SizeChangedEventArgs
     Size newSize;
 } SizeChangedEventArgs;
 
-Widget *Widget_createBase(void *derived, void *parent);
+typedef enum InputEvents
+{
+    IE_NONE	    = 0,
+    IE_KEYPRESSED   = 1 << 0
+} InputEvents;
+
+Widget *Widget_createBase(void *derived, void *parent, InputEvents events);
 #define Widget_create(...) Widget_createBase(0, __VA_ARGS__)
 PSC_Event *Widget_shown(void *self) CMETHOD ATTR_RETNONNULL;
 PSC_Event *Widget_hidden(void *self) CMETHOD ATTR_RETNONNULL;
@@ -68,6 +85,7 @@ void Widget_setBackground(void *self, int enabled, ColorRole role) CMETHOD;
 xcb_drawable_t Widget_drawable(const void *self) CMETHOD;
 void Widget_setDrawable(void *self, xcb_drawable_t drawable) CMETHOD;
 int Widget_visible(const void *self) CMETHOD;
+void Widget_keyPressed(void *self, const KeyEvent *event) CMETHOD;
 
 // "protected" API meant only for derived classes
 void Widget_requestSize(void *self) CMETHOD;

@@ -12,7 +12,7 @@ static int draw(void *obj, xcb_render_picture_t picture);
 static Size minSize(const void *obj);
 
 static MetaTextLabel mo = MetaTextLabel_init("TextLabel",
-	destroy, draw, 0, 0, minSize);
+	destroy, draw, 0, 0, minSize, 0);
 
 #define dummy ((void *)&mo)
 
@@ -79,7 +79,7 @@ TextLabel *TextLabel_createBase(void *derived, void *parent, Font *font)
 
     TextLabel *self = PSC_malloc(sizeof *self);
     if (!derived) derived = self;
-    self->base.base = Widget_createBase(derived, parent);
+    self->base.base = Widget_createBase(derived, parent, IE_NONE);
     self->base.type = OBJTYPE;
     self->font = font;
     self->text = 0;

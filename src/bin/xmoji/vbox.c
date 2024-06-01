@@ -9,7 +9,7 @@ static int draw(void *obj, xcb_render_picture_t picture);
 static Size minSize(const void *obj);
 
 static MetaVBox mo = MetaVBox_init("VBox",
-	destroy, draw, 0, 0, minSize);
+	destroy, draw, 0, 0, minSize, 0);
 
 #define dummy ((void *)&mo)
 
@@ -65,7 +65,7 @@ VBox *VBox_createBase(void *derived, void *parent)
 
     VBox *self = PSC_malloc(sizeof *self);
     if (!derived) derived = self;
-    self->base.base = Widget_createBase(derived, parent);
+    self->base.base = Widget_createBase(derived, parent, IE_NONE);
     self->base.type = OBJTYPE;
     self->items = PSC_List_create();
     self->minSize = (Size){0, 0};

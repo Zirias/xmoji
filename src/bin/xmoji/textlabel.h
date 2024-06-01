@@ -8,8 +8,10 @@ typedef struct MetaTextLabel
     MetaWidget base;
 } MetaTextLabel;
 
-#define MetaTextLabel_init(name, destroy, draw, show, hide, minSize) { \
-    .base = MetaWidget_init(name, destroy, draw, show, hide, minSize) \
+#define MetaTextLabel_init(name, destroy, \
+	draw, show, hide, minSize, keyPressed) { \
+    .base = MetaWidget_init(name, destroy, \
+	    draw, show, hide, minSize, keyPressed) \
 }
 
 C_CLASS_DECL(Font);

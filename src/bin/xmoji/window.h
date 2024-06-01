@@ -12,8 +12,10 @@ typedef struct MetaWindow
     MetaWidget base;
 } MetaWindow;
 
-#define MetaWindow_init(name, destroy, draw, show, hide, minSize) { \
-    .base = MetaWidget_init(name, destroy, draw, show, hide, minSize) \
+#define MetaWindow_init(name, destroy, \
+	draw, show, hide, minSize, keyPressed) { \
+    .base = MetaWidget_init(name, destroy, \
+	    draw, show, hide, keyPressed, minSize) \
 }
 
 C_CLASS_DECL(Window);
@@ -43,6 +45,9 @@ void Window_setIconName(void *self, const char *iconName)
 void *Window_mainWidget(const void *self)
     CMETHOD;
 void Window_setMainWidget(void *self, void *widget)
+    CMETHOD;
+
+void Window_setFocusWidget(void *self, void *widget)
     CMETHOD;
 
 #endif
