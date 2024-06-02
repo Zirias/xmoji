@@ -16,6 +16,7 @@ ENDSUPPRESS
 #include <xkbcommon/xkbcommon-x11.h>
 
 #define MAXWAITING 128
+#define SYNCTHRESH 112
 
 #define RQ_AWAIT_REPLY 1
 #define RQ_AWAIT_NOREPLY 0
@@ -115,8 +116,8 @@ static X11ReplyHandlerRecord waitingReplies[MAXWAITING];
 static unsigned waitingFront;
 static unsigned waitingBack;
 static unsigned waitingNum;
+static unsigned syncseq;
 static int waitingNoreply;
-static int gotEvents;
 
 static int enqueueWaiting(unsigned sequence, int replytype, void *ctx,
 	X11ReplyHandler handler, const char *sarg, unsigned uarg)
@@ -389,8 +390,9 @@ static void readX11Input(void *receiver, void *sender, void *args)
 		 * we also find errors delivered as events.
 		 */
 		xcb_generic_event_t *ev = xcb_poll_for_queued_event(c);
-		if (ev) gotEvents = 1;
-		else break; // neither reply nor error found, exit iteration
+		// neither reply nor error found, so exit iteration:
+		if (!ev) break;
+
 		while (waitingReplies[waitingFront].sequence
 			- ev->sequence > 0)
 		{
@@ -427,7 +429,6 @@ static void readX11Input(void *receiver, void *sender, void *args)
 	     */
 	    else if ((ev = xcb_poll_for_event(c))) gotinput = 1;
 
-	    if (ev) gotEvents = 1;
 	    while (ev)
 	    {
 		handleX11Event(ev);
@@ -450,6 +451,7 @@ static void sync_cb(void *ctx, unsigned sequence,
 	PSC_Log_msg(PSC_L_ERROR, "X11 sync failed");
 	PSC_Service_quit();
     }
+    syncseq = 0;
     PSC_Log_msg(PSC_L_DEBUG, "X11 connection synced");
 }
 
@@ -459,14 +461,13 @@ static void flushandsync(void *receiver, void *sender, void *args)
     (void)sender;
     (void)args;
 
-    if (gotEvents)
-    {
-	gotEvents = 0;
-	PSC_Event_raise(eventsDone, 0, 0);
-    }
+    PSC_Event_raise(eventsDone, 0, 0);
     if (waitingNum)
     {
-	if (waitingNoreply) AWAIT(xcb_get_input_focus(c), 0, sync_cb);
+	if (!syncseq && (waitingNoreply || waitingNum >= SYNCTHRESH))
+	{
+	    syncseq = AWAIT(xcb_get_input_focus(c), 0, sync_cb);
+	}
 	xcb_flush(c);
     }
 }
