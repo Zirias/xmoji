@@ -11,8 +11,6 @@ static Size minSize(const void *obj);
 static MetaVBox mo = MetaVBox_init("VBox",
 	destroy, draw, 0, 0, minSize, 0);
 
-#define dummy ((void *)&mo)
-
 typedef struct VBoxItem
 {
     void *widget;
@@ -59,47 +57,55 @@ static Size minSize(const void *obj)
     return self->minSize;
 }
 
-VBox *VBox_createBase(void *derived, void *parent)
-{
-    REGTYPE(0);
-
-    VBox *self = PSC_malloc(sizeof *self);
-    if (!derived) derived = self;
-    self->base.base = Widget_createBase(derived, parent, IE_NONE);
-    self->base.type = OBJTYPE;
-    self->items = PSC_List_create();
-    self->minSize = (Size){0, 0};
-
-    return self;
-}
-
-void layout(VBox *self)
+void layout(VBox *self, int updateMinSize)
 {
     PSC_ListIterator *i = PSC_List_iterator(self->items);
 
-    self->minSize = (Size){ 0, 0 };
-    while (PSC_ListIterator_moveNext(i))
+    if (updateMinSize)
     {
-	VBoxItem *item = PSC_ListIterator_current(i);
-	self->minSize.height += item->minSize.height;
-	if (item->minSize.width > self->minSize.width)
+	self->minSize = (Size){ 0, 0 };
+	while (PSC_ListIterator_moveNext(i))
 	{
-	    self->minSize.width = item->minSize.width;
+	    VBoxItem *item = PSC_ListIterator_current(i);
+	    self->minSize.height += item->minSize.height;
+	    if (item->minSize.width > self->minSize.width)
+	    {
+		self->minSize.width = item->minSize.width;
+	    }
 	}
+	Widget_requestSize(self);
     }
 
+    Size sz = Widget_size(self);
+    Box padding = Widget_padding(self);
+    uint16_t itemwidth = sz.width - padding.left - padding.right;
+    uint16_t contentheight = sz.height - padding.top - padding.bottom;
+    uint16_t hspace = 0;
+    if (contentheight > self->minSize.height)
+    {
+	hspace = (contentheight - self->minSize.height)
+	    / PSC_List_size(self->items);
+    }
     Pos contentOrigin = Widget_contentOrigin(self, self->minSize);
     while (PSC_ListIterator_moveNext(i))
     {
 	VBoxItem *item = PSC_ListIterator_current(i);
 	Widget_setOrigin(item->widget, contentOrigin);
 	Widget_setSize(item->widget, (Size){
-		self->minSize.width, item->minSize.height});
-	contentOrigin.y += item->minSize.height;
+		itemwidth, item->minSize.height + hspace});
+	contentOrigin.y += item->minSize.height + hspace;
     }
 
     PSC_ListIterator_destroy(i);
-    Widget_requestSize(self);
+}
+
+void sizeChanged(void *receiver, void *sender, void *args)
+{
+    (void)sender;
+    (void)args;
+
+    VBox *self = receiver;
+    layout(self, 0);
 }
 
 void sizeRequested(void *receiver, void *sender, void *args)
@@ -127,9 +133,25 @@ void sizeRequested(void *receiver, void *sender, void *args)
 	if (memcmp(&minSize, &item->minSize, sizeof minSize))
 	{
 	    item->minSize = minSize;
-	    layout(self);
+	    layout(self, 1);
 	}
     }
+}
+
+VBox *VBox_createBase(void *derived, void *parent)
+{
+    REGTYPE(0);
+
+    VBox *self = PSC_malloc(sizeof *self);
+    if (!derived) derived = self;
+    self->base.base = Widget_createBase(derived, parent, IE_NONE);
+    self->base.type = OBJTYPE;
+    self->items = PSC_List_create();
+    self->minSize = (Size){0, 0};
+
+    PSC_Event_register(Widget_sizeChanged(self), self, sizeChanged, 0);
+
+    return self;
 }
 
 void VBox_addWidget(void *self, void *widget)
