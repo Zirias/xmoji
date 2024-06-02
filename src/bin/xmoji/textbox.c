@@ -25,11 +25,23 @@ struct TextBox
     TextRenderer *renderer;
     Size minSize;
     unsigned cursor;
+    int cursorvisible;
 };
+
+void blink(void *receiver, void *sender, void *args)
+{
+    (void)sender;
+    (void)args;
+
+    TextBox *self = receiver;
+    self->cursorvisible = !self->cursorvisible;
+    Widget_invalidate(self);
+}
 
 static void destroy(void *obj)
 {
     TextBox *self = obj;
+    PSC_Event_unregister(PSC_Service_tick(), self, blink, 0);
     TextRenderer_destroy(self->renderer);
     UniStrBuilder_destroy(self->text);
     free(self);
@@ -48,7 +60,7 @@ static int draw(void *obj, xcb_render_picture_t picture)
 	rc = TextRenderer_render(self->renderer, picture, color, pos);
 	cursorpos = TextRenderer_pixelOffset(self->renderer, self->cursor);
     }
-    if (rc >= 0)
+    if (rc >= 0 && self->cursorvisible)
     {
 	xcb_rectangle_t rect = { pos.x + cursorpos, pos.y,
 	    1, self->minSize.height };
@@ -136,6 +148,10 @@ TextBox *TextBox_createBase(void *derived, void *parent, Font *font)
     TextRenderer_setNoLigatures(self->renderer, 1);
     self->minSize = (Size){ 120, (Font_maxHeight(self->font) + 0x3f) >> 6 };
     self->cursor = 0;
+    self->cursorvisible = 1;
+
+    PSC_Service_setTickInterval(600);
+    PSC_Event_register(PSC_Service_tick(), self, blink, 0);
 
     return self;
 }
