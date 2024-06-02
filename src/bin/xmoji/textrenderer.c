@@ -219,7 +219,7 @@ unsigned TextRenderer_pixelOffset(const TextRenderer *self, unsigned index)
 	if (self->hbglyphs[i].cluster >= index) break;
 	offset += self->hbpos[i].x_advance;
     }
-    return (offset + 0x3f) >> 6;
+    return (offset + 0x20) >> 6;
 }
 
 int TextRenderer_render(TextRenderer *self,
