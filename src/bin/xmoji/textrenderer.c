@@ -9,11 +9,20 @@
 #include <poser/core.h>
 #include <string.h>
 
+static const hb_feature_t nolig = {
+    .tag = HB_TAG('l','i','g','a'),
+    .value = 0,
+    .start = HB_FEATURE_GLOBAL_START,
+    .end = HB_FEATURE_GLOBAL_END
+};
+
 struct TextRenderer
 {
     Font *font;
     hb_font_t *hbfont;
     hb_buffer_t *hbbuffer;
+    hb_glyph_info_t *hbglyphs;
+    hb_glyph_position_t *hbpos;
     GlyphRenderInfo *glyphs;
     xcb_pixmap_t pixmap;
     xcb_pixmap_t tmp;
@@ -21,7 +30,9 @@ struct TextRenderer
     xcb_render_picture_t tpic;
     Color color;
     Size size;
+    unsigned hblen;
     int haserror;
+    int noligatures;
 };
 
 static void requestError(void *receiver, void *sender, void *args)
@@ -72,34 +83,44 @@ Size TextRenderer_size(const TextRenderer *self)
     return self->size;
 }
 
+void TextRenderer_setNoLigatures(TextRenderer *self, int noLigatures)
+{
+    self->noligatures = !!noLigatures;
+}
+
 int TextRenderer_setText(TextRenderer *self, const UniStr *text)
 {
     if (self->haserror) return -1;
     hb_buffer_destroy(self->hbbuffer);
-    self->hbbuffer = hb_buffer_create();
     unsigned len = UniStr_len(text);
     if (!len)
     {
+	self->hbbuffer = 0;
+	self->hbglyphs = 0;
+	self->hbpos = 0;
 	self->size = (Size){0, 0};
+	self->hblen = 0;
 	return 0;
     }
+    self->hbbuffer = hb_buffer_create();
     hb_buffer_add_codepoints(self->hbbuffer, UniStr_str(text), len, 0, -1);
     hb_buffer_set_language(self->hbbuffer, hb_language_from_string("en", -1));
     hb_buffer_guess_segment_properties(self->hbbuffer);
-    hb_shape(self->hbfont, self->hbbuffer, 0, 0);
-    unsigned slen = hb_buffer_get_length(self->hbbuffer);
-    hb_glyph_info_t *info = hb_buffer_get_glyph_infos(self->hbbuffer, 0);
-    hb_glyph_position_t *pos = hb_buffer_get_glyph_positions(
-	    self->hbbuffer, 0);
+    if (self->noligatures) hb_shape(self->hbfont, self->hbbuffer, &nolig, 1);
+    else hb_shape(self->hbfont, self->hbbuffer, 0, 0);
+    self->hblen = hb_buffer_get_length(self->hbbuffer);
+    self->hbglyphs = hb_buffer_get_glyph_infos(self->hbbuffer, 0);
+    self->hbpos = hb_buffer_get_glyph_positions(self->hbbuffer, 0);
     uint32_t width = 0;
     uint32_t height = 0;
     FT_Face face = Font_face(self->font);
-    FT_Load_Glyph(face, info[slen-1].codepoint, Font_ftLoadFlags(self->font));
+    FT_Load_Glyph(face, self->hbglyphs[self->hblen-1].codepoint,
+	    Font_ftLoadFlags(self->font));
     if (HB_DIRECTION_IS_HORIZONTAL(hb_buffer_get_direction(self->hbbuffer)))
     {
-	for (unsigned i = 0; i < slen-1; ++i)
+	for (unsigned i = 0; i < self->hblen - 1; ++i)
 	{
-	    width += pos[i].x_advance;
+	    width += self->hbpos[i].x_advance;
 	}
 	width += Font_scale(self->font, face->glyph->metrics.horiBearingX
 		+ face->glyph->metrics.width);
@@ -107,9 +128,9 @@ int TextRenderer_setText(TextRenderer *self, const UniStr *text)
     }
     else
     {
-	for (unsigned i = 0; i < slen - 1; ++i)
+	for (unsigned i = 0; i < self->hblen - 1; ++i)
 	{
-	    height += pos[i].y_advance;
+	    height += self->hbpos[i].y_advance;
 	}
 	height += Font_scale(self->font, face->glyph->metrics.vertBearingY
 		+ face->glyph->metrics.height);
@@ -137,8 +158,8 @@ int TextRenderer_setText(TextRenderer *self, const UniStr *text)
 		(unsigned)self->pixmap);
     }
     free(self->glyphs);
-    self->glyphs = PSC_malloc(len * sizeof *self->glyphs);
-    memset(self->glyphs, 0, len * sizeof *self->glyphs);
+    self->glyphs = PSC_malloc(self->hblen * sizeof *self->glyphs);
+    memset(self->glyphs, 0, self->hblen * sizeof *self->glyphs);
     uint32_t x = 0;
     uint32_t y = Font_baseline(self->font);
     uint32_t rx = 0;
@@ -151,44 +172,52 @@ int TextRenderer_setText(TextRenderer *self, const UniStr *text)
     uint8_t roundadd = 0;
     if (roundbits) roundadd = 1U << (roundbits - 1);
     uint8_t subpixelmask = (1U << subpixelbits) - 1;
-    for (unsigned i = 0; i < slen; ++i)
+    for (unsigned i = 0; i < self->hblen; ++i)
     {
 	rx = (x + roundadd) >> roundbits;
 	ry = (y + 0x20) >> 6;
 	self->glyphs[i].count = 1;
 	self->glyphs[i].dx = (rx >> subpixelbits) - (prx >> subpixelbits)
-	    + ((pos[i].x_offset + 0x20) >> 6);
-	self->glyphs[i].dy = ry - pry + ((pos[i].y_offset + 0x20) >> 6);
-	self->glyphs[i].glyphid = info[i].codepoint
+	    + ((self->hbpos[i].x_offset + 0x20) >> 6);
+	self->glyphs[i].dy = ry - pry
+	    + ((self->hbpos[i].y_offset + 0x20) >> 6);
+	self->glyphs[i].glyphid = self->hbglyphs[i].codepoint
 	    | ((rx & subpixelmask) << glyphidbits);
 	prx = rx;
 	pry = ry;
-	x += pos[i].x_advance;
-	y += pos[i].y_advance;
+	x += self->hbpos[i].x_advance;
+	y += self->hbpos[i].y_advance;
     }
-    Font_uploadGlyphs(self->font, slen, self->glyphs);
+    Font_uploadGlyphs(self->font, self->hblen, self->glyphs);
     if (Font_glyphtype(self->font) == FGT_BITMAP_BGRA)
     {
 	CHECK(xcb_render_composite_glyphs_32(c, XCB_RENDER_PICT_OP_IN,
 		    self->pen, self->tpic, 0, Font_glyphset(self->font), 0, 0,
-		    len * sizeof *self->glyphs, (const uint8_t *)self->glyphs),
+		    self->hblen * sizeof *self->glyphs,
+		    (const uint8_t *)self->glyphs),
 		"TextRenderer: Cannot render glyphs for 0x%x",
 		(unsigned)self->pixmap);
     }
     return 0;
 }
 
-unsigned TextRenderer_pixelOffset(TextRenderer *self, unsigned index)
+unsigned TextRenderer_glyphLen(const TextRenderer *self, unsigned index)
 {
-    unsigned len = hb_buffer_get_length(self->hbbuffer);
-    hb_glyph_info_t *info = hb_buffer_get_glyph_infos(self->hbbuffer, 0);
-    hb_glyph_position_t *pos = hb_buffer_get_glyph_positions(
-	    self->hbbuffer, 0);
+    unsigned pos = 0;
+    if (!self->hblen) return 0;
+    for (; pos < self->hblen && self->hbglyphs[pos].cluster < index; ++pos);
+    if (!pos) return self->hbglyphs[0].cluster;
+    if (pos == self->hblen) return index - self->hbglyphs[pos-1].cluster;
+    return self->hbglyphs[pos].cluster - self->hbglyphs[pos-1].cluster;
+}
+
+unsigned TextRenderer_pixelOffset(const TextRenderer *self, unsigned index)
+{
     uint32_t offset = 0;
-    for (unsigned i = 0; i < len; ++i)
+    for (unsigned i = 0; i < self->hblen; ++i)
     {
-	if (info[i].cluster >= index) break;
-	offset += pos[i].x_advance;
+	if (self->hbglyphs[i].cluster >= index) break;
+	offset += self->hbpos[i].x_advance;
     }
     return (offset + 0x3f) >> 6;
 }
@@ -201,7 +230,6 @@ int TextRenderer_render(TextRenderer *self,
     uint16_t ody = self->glyphs[0].dy;
     self->glyphs[0].dx += pos.x;
     self->glyphs[0].dy += pos.y;
-    unsigned len = hb_buffer_get_length(self->hbbuffer);
     xcb_connection_t *c = X11Adapter_connection();
     if (Font_glyphtype(self->font) == FGT_BITMAP_BGRA)
     {
@@ -215,7 +243,7 @@ int TextRenderer_render(TextRenderer *self,
 		(unsigned)self->pixmap);
 	CHECK(xcb_render_composite_glyphs_32(c, XCB_RENDER_PICT_OP_OVER,
 		    self->tpic, picture, 0, Font_maskGlyphset(self->font),
-		    0, 0, len * sizeof *self->glyphs,
+		    0, 0, self->hblen * sizeof *self->glyphs,
 		    (const uint8_t *)self->glyphs),
 		"TextRenderer: Cannot blend glyphs for 0x%x",
 		(unsigned)self->pixmap);
@@ -233,7 +261,7 @@ int TextRenderer_render(TextRenderer *self,
 	}
 	CHECK(xcb_render_composite_glyphs_32(c, XCB_RENDER_PICT_OP_OVER,
 		    self->pen, picture, 0, Font_glyphset(self->font), 0, 0,
-		    len * sizeof *self->glyphs,
+		    self->hblen * sizeof *self->glyphs,
 		    (const uint8_t *)self->glyphs),
 		"TextRenderer: Cannot render glyphs for 0x%x",
 		(unsigned)self->pixmap);

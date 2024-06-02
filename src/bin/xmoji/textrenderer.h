@@ -15,9 +15,13 @@ TextRenderer *TextRenderer_create(Font *font)
     ATTR_NONNULL((1));
 Size TextRenderer_size(const TextRenderer *self)
     CMETHOD;
+void TextRenderer_setNoLigatures(TextRenderer *self, int noLigatures)
+    CMETHOD;
 int TextRenderer_setText(TextRenderer *self, const UniStr *text)
     CMETHOD;
-unsigned TextRenderer_pixelOffset(TextRenderer *self, unsigned index)
+unsigned TextRenderer_glyphLen(const TextRenderer *self, unsigned index)
+    CMETHOD;
+unsigned TextRenderer_pixelOffset(const TextRenderer *self, unsigned index)
     CMETHOD;
 int TextRenderer_render(TextRenderer *self,
 	xcb_render_picture_t picture, Color color, Pos pos)

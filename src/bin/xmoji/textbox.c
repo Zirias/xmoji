@@ -71,27 +71,33 @@ static void keyPressed(void *obj, const KeyEvent *event)
     TextBox *self = Object_instance(obj);
     const UniStr *str = UniStrBuilder_stringView(self->text);
     size_t len = UniStr_len(str);
+    unsigned glen;
 
     switch (event->keysym)
     {
 	case XKB_KEY_BackSpace:
 	    if (!len || !self->cursor) return;
-	    UniStrBuilder_remove(self->text, --self->cursor, 1);
+	    glen = TextRenderer_glyphLen(self->renderer, self->cursor);
+	    self->cursor -= glen;
+	    UniStrBuilder_remove(self->text, self->cursor, glen);
 	    break;
 
 	case XKB_KEY_Delete:
 	    if (!len || self->cursor == len) return;
-	    UniStrBuilder_remove(self->text, self->cursor, 1);
+	    glen = TextRenderer_glyphLen(self->renderer, self->cursor + 1);
+	    UniStrBuilder_remove(self->text, self->cursor, glen);
 	    break;
 
 	case XKB_KEY_Left:
 	    if (!len || !self->cursor) return;
-	    --self->cursor;
+	    self->cursor -= TextRenderer_glyphLen(self->renderer,
+		    self->cursor);
 	    goto cursoronly;
 
 	case XKB_KEY_Right:
 	    if (!len || self->cursor == len) return;
-	    ++self->cursor;
+	    self->cursor += TextRenderer_glyphLen(self->renderer,
+		    self->cursor + 1);
 	    goto cursoronly;
 
 	case XKB_KEY_Home:
@@ -127,6 +133,7 @@ TextBox *TextBox_createBase(void *derived, void *parent, Font *font)
     self->font = font;
     self->text = UniStrBuilder_create();
     self->renderer = TextRenderer_create(font);
+    TextRenderer_setNoLigatures(self->renderer, 1);
     self->minSize = (Size){ 120, (Font_maxHeight(self->font) + 0x3f) >> 6 };
     self->cursor = 0;
 
