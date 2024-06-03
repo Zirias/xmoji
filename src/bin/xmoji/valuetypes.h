@@ -58,6 +58,12 @@ typedef struct Box
     int16_t bottom;
 } Box;
 
+typedef struct Selection
+{
+    unsigned start;
+    unsigned len;
+} Selection;
+
 typedef enum Align
 {
     AH_RIGHT	= 1 << 0,
