@@ -28,9 +28,10 @@ typedef struct X11ReplyHandlerRecord
 {
     X11ReplyHandler handler;
     void *ctx;
+    const char *sarg;
+    xcb_generic_error_t *err;
     unsigned sequence;
     int replytype;
-    const char *sarg;
     unsigned uarg;
 } X11ReplyHandlerRecord;
 
@@ -125,9 +126,10 @@ static int enqueueWaiting(unsigned sequence, int replytype, void *ctx,
     if (waitingNum == MAXWAITING) return -1;
     waitingReplies[waitingBack].handler = handler;
     waitingReplies[waitingBack].ctx = ctx;
+    waitingReplies[waitingBack].sarg = sarg;
+    waitingReplies[waitingBack].err = 0;
     waitingReplies[waitingBack].sequence = sequence;
     waitingReplies[waitingBack].replytype = replytype;
-    waitingReplies[waitingBack].sarg = sarg;
     waitingReplies[waitingBack].uarg = uarg;
     if (++waitingBack == MAXWAITING) waitingBack = 0;
     ++waitingNum;
@@ -141,6 +143,19 @@ static void removeFirstWaiting(void)
     if (!waitingNum) return;
     --waitingNum;
     if (++waitingFront == MAXWAITING) waitingFront = 0;
+}
+
+static X11ReplyHandlerRecord *findWaitingBySequence(unsigned sequence)
+{
+    if (!waitingNum) return 0;
+    unsigned i = waitingFront;
+    do
+    {
+	if (waitingReplies[i].sequence == sequence) return waitingReplies + i;
+	if ((int)(waitingReplies[i].sequence - sequence) > 0) return 0;
+	if (++i == MAXWAITING) i = 0;
+    } while (i != waitingBack);
+    return 0;
 }
 
 static void updateKeymap(void)
@@ -249,30 +264,28 @@ static void handleX11Reply(X11ReplyHandlerRecord *rec, void *reply,
 
 static void handleX11Event(xcb_generic_event_t *ev)
 {
-    if (waitingNum)
-    {
-	/* When waiting for outstanding requests, match sequence numbers
-	 * against them to either handle an error or just complete them
-	 */
-	X11ReplyHandlerRecord *rec = waitingReplies + waitingFront;
-	while ((int)(ev->sequence - rec->sequence) > 0)
-	{
-	    handleX11Reply(rec, 0, 0);
-	    rec = waitingReplies + waitingFront;
-	}
-	if (rec->sequence == ev->sequence && ev->response_type == 0)
-	{
-	    handleX11Reply(rec, 0, (xcb_generic_error_t *)ev);
-	    return;
-	}
-    }
-
     if (ev->response_type == 0)
     {
-	// Received an error that couldn't be matched to a request
-	PSC_Log_fmt(PSC_L_WARNING, "Unhandled X11 error %d: %u",
-		((xcb_generic_error_t *)ev)->error_code,
-		ev->sequence);
+	// Try to match the error to an outstanding request
+	X11ReplyHandlerRecord *rec = findWaitingBySequence(ev->sequence);
+	if (rec)
+	{
+	    if (rec->err)
+	    {
+		PSC_Log_fmt(PSC_L_ERROR, "Received second error for %u",
+			ev->sequence);
+		free(rec->err);
+	    }
+	    rec->err = (xcb_generic_error_t *)ev;
+	    return;
+	}
+	else
+	{
+	    // Received an error that couldn't be matched to a request
+	    PSC_Log_fmt(PSC_L_WARNING, "Unhandled X11 error %d: %u",
+		    ((xcb_generic_error_t *)ev)->error_code,
+		    ev->sequence);
+	}
     }
 
     else if (ev->response_type == xkbevbase)
@@ -379,8 +392,27 @@ static void readX11Input(void *receiver, void *sender, void *args)
 	    X11ReplyHandlerRecord *rec = waitingReplies + waitingFront;
 
 	    gotinput = xcb_poll_for_reply(c, rec->sequence, &reply, &error);
-	    if (gotinput && (reply || error))
+	    if (gotinput)
 	    {
+		if (!reply && !error && !rec->err)
+		{
+		    /* The request is considered completed, but we got neither
+		     * a reply nor an error, then check events once whether
+		     * an error was delivered there.
+		     */
+		    xcb_generic_event_t *ev = xcb_poll_for_queued_event(c);
+		    if (ev) handleX11Event(ev);
+		}
+		if (rec->err)
+		{
+		    if (error)
+		    {
+			PSC_Log_fmt(PSC_L_ERROR,
+				"Received second error for %u", rec->sequence);
+			free(rec->err);
+		    }
+		    else error = rec->err;
+		}
 		/* Handle reply or error to the first request we're waiting
 		 * for, according to what was registered by AWAIT() or CHECK().
 		 */
@@ -388,9 +420,8 @@ static void readX11Input(void *receiver, void *sender, void *args)
 	    }
 	    else
 	    {
-		/* If we didn't get a reply or error to the first awaited
-		 * request, we have to switch to event processing to make sure
-		 * we also find errors delivered as events.
+		/* If we didn't find a completed request, switch to
+		 * processing events.
 		 */
 		break;
 	    }
