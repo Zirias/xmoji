@@ -49,6 +49,8 @@ static void onprestartup(void *receiver, void *sender, void *args)
     Window_setTitle(win, "Xmoji 😀 äöüß");
     Widget_setColor(win, COLOR_BG_NORMAL, Color_fromRgb(50, 60, 70));
     Widget_setColor(win, COLOR_NORMAL, Color_fromRgb(200, 255, 240));
+    Widget_setColor(win, COLOR_BG_SELECTED, Color_fromRgb(100, 200, 255));
+    Widget_setColor(win, COLOR_SELECTED, Color_fromRgb(0, 0, 0));
 
     VBox *box = VBox_create(win);
     Window_setMainWidget(win, box);

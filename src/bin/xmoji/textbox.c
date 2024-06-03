@@ -24,6 +24,7 @@ struct TextBox
     UniStrBuilder *text;
     TextRenderer *renderer;
     Size minSize;
+    Selection selection;
     unsigned cursor;
     int cursorvisible;
 };
@@ -51,22 +52,41 @@ static int draw(void *obj, xcb_render_picture_t picture)
 {
     if (!picture) return 0;
     TextBox *self = Object_instance(obj);
+    xcb_connection_t *c = X11Adapter_connection();
     Color color = Widget_color(self, COLOR_NORMAL);
     Pos pos = Widget_contentOrigin(self, Widget_size(self));
     int rc = 0;
     unsigned cursorpos = 0;
     if (UniStr_len(UniStrBuilder_stringView(self->text)))
     {
-	rc = TextRenderer_render(self->renderer, picture, color, pos);
+	if (self->selection.len)
+	{
+	    Selection rendersel;
+	    rendersel.start = TextRenderer_pixelOffset(
+		    self->renderer, self->selection.start);
+	    rendersel.len = TextRenderer_pixelOffset(self->renderer,
+		    self->selection.start + self->selection.len)
+		- rendersel.start;
+	    Color selfgcol = Widget_color(self, COLOR_SELECTED);
+	    Color selbgcol = Widget_color(self, COLOR_BG_SELECTED);
+	    xcb_rectangle_t rect = { pos.x + rendersel.start, pos.y,
+		rendersel.len, self->minSize.height };
+	    CHECK(xcb_render_fill_rectangles(c, XCB_RENDER_PICT_OP_OVER,
+			picture, Color_xcb(selbgcol), 1, &rect),
+		    "Cannot draw selection background on 0x%x",
+		    (unsigned)picture);
+	    rc = TextRenderer_renderWithSelection(self->renderer, picture,
+		    color, pos, rendersel, selfgcol);
+	}
+	else rc = TextRenderer_render(self->renderer, picture, color, pos);
 	cursorpos = TextRenderer_pixelOffset(self->renderer, self->cursor);
     }
     if (rc >= 0 && self->cursorvisible)
     {
 	xcb_rectangle_t rect = { pos.x + cursorpos, pos.y,
 	    1, self->minSize.height };
-	CHECK(xcb_render_fill_rectangles(X11Adapter_connection(),
-		    XCB_RENDER_PICT_OP_OVER, picture, Color_xcb(color),
-		    1, &rect),
+	CHECK(xcb_render_fill_rectangles(c, XCB_RENDER_PICT_OP_OVER, picture,
+		    Color_xcb(color), 1, &rect),
 		"Cannot draw cursor on 0x%x", (unsigned)picture);
     }
     return rc;
@@ -88,6 +108,14 @@ static void keyPressed(void *obj, const KeyEvent *event)
     switch (event->keysym)
     {
 	case XKB_KEY_BackSpace:
+	    if (self->selection.len)
+	    {
+		self->cursor = self->selection.start;
+		UniStrBuilder_remove(self->text, self->cursor,
+			self->selection.len);
+		self->selection.len = 0;
+		break;
+	    }
 	    if (!len || !self->cursor) return;
 	    glen = TextRenderer_glyphLen(self->renderer, self->cursor);
 	    self->cursor -= glen;
@@ -95,6 +123,14 @@ static void keyPressed(void *obj, const KeyEvent *event)
 	    break;
 
 	case XKB_KEY_Delete:
+	    if (self->selection.len)
+	    {
+		self->cursor = self->selection.start;
+		UniStrBuilder_remove(self->text, self->cursor,
+			self->selection.len);
+		self->selection.len = 0;
+		break;
+	    }
 	    if (!len || self->cursor == len) return;
 	    glen = TextRenderer_glyphLen(self->renderer, self->cursor + 1);
 	    UniStrBuilder_remove(self->text, self->cursor, glen);
@@ -102,29 +138,99 @@ static void keyPressed(void *obj, const KeyEvent *event)
 
 	case XKB_KEY_Left:
 	    if (!len || !self->cursor) return;
-	    self->cursor -= TextRenderer_glyphLen(self->renderer,
-		    self->cursor);
+	    glen = TextRenderer_glyphLen(self->renderer, self->cursor);
+	    if (event->modifiers & XM_SHIFT)
+	    {
+		if (self->selection.len)
+		{
+		    if (self->cursor == self->selection.start)
+		    {
+			self->selection.start -= glen;
+			self->selection.len += glen;
+		    }
+		    else self->selection.len -= glen;
+		}
+		else
+		{
+		    self->selection.len = glen;
+		    self->selection.start = self->cursor - glen;
+		}
+	    }
+	    else self->selection.len = 0;
+	    self->cursor -= glen;
 	    goto cursoronly;
 
 	case XKB_KEY_Right:
 	    if (!len || self->cursor == len) return;
-	    self->cursor += TextRenderer_glyphLen(self->renderer,
-		    self->cursor + 1);
+	    glen = TextRenderer_glyphLen(self->renderer, self->cursor + 1);
+	    if (event->modifiers & XM_SHIFT)
+	    {
+		if (self->selection.len)
+		{
+		    if (self->cursor == self->selection.start)
+		    {
+			self->selection.start += glen;
+			self->selection.len -= glen;
+		    }
+		    else self->selection.len += glen;
+		}
+		else
+		{
+		    self->selection.len = glen;
+		    self->selection.start = self->cursor;
+		}
+	    }
+	    else self->selection.len = 0;
+	    self->cursor += glen;
 	    goto cursoronly;
 
 	case XKB_KEY_Home:
 	case XKB_KEY_Begin:
 	    if (!len || !self->cursor) return;
+	    if (event->modifiers & XM_SHIFT)
+	    {
+		if (self->selection.len)
+		{
+		    if (self->cursor == self->selection.start)
+		    {
+			self->selection.len += self->cursor;
+		    }
+		    else self->selection.len = self->selection.start;
+		}
+		else self->selection.len = self->cursor;
+		self->selection.start = 0;
+	    }
+	    else self->selection.len = 0;
 	    self->cursor = 0;
 	    goto cursoronly;
 
 	case XKB_KEY_End:
 	    if (!len || self->cursor == len) return;
+	    if (event->modifiers & XM_SHIFT)
+	    {
+		if (self->selection.len)
+		{
+		    if (self->cursor == self->selection.start)
+		    {
+			self->selection.start += self->selection.len;
+		    }
+		}
+		else self->selection.start = self->cursor;
+		self->selection.len = len - self->selection.start;
+	    }
+	    else self->selection.len = 0;
 	    self->cursor = len;
 	    goto cursoronly;
 
 	default:
 	    if (event->codepoint < 0x20U) return;
+	    if (self->selection.len)
+	    {
+		self->cursor = self->selection.start;
+		UniStrBuilder_remove(self->text, self->cursor,
+			self->selection.len);
+		self->selection.len = 0;
+	    }
 	    UniStrBuilder_insertChar(self->text,
 		    self->cursor++, event->codepoint);
 	    break;
@@ -147,6 +253,7 @@ TextBox *TextBox_createBase(void *derived, void *parent, Font *font)
     self->renderer = TextRenderer_create(font);
     TextRenderer_setNoLigatures(self->renderer, 1);
     self->minSize = (Size){ 120, (Font_maxHeight(self->font) + 0x3f) >> 6 };
+    self->selection = (Selection){ 0, 0 };
     self->cursor = 0;
     self->cursorvisible = 1;
 
