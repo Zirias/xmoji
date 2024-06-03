@@ -397,11 +397,14 @@ static void readX11Input(void *receiver, void *sender, void *args)
 		if (!reply && !error && !rec->err)
 		{
 		    /* The request is considered completed, but we got neither
-		     * a reply nor an error, then check events once whether
-		     * an error was delivered there.
+		     * a reply nor an error, then process queued events first
+		     * to collect errors potentially delivered there.
 		     */
-		    xcb_generic_event_t *ev = xcb_poll_for_queued_event(c);
-		    if (ev) handleX11Event(ev);
+		    xcb_generic_event_t *ev;
+		    while ((ev = xcb_poll_for_queued_event(c)))
+		    {
+			handleX11Event(ev);
+		    }
 		}
 		if (rec->err)
 		{
