@@ -26,6 +26,7 @@ struct TextBox
     Size minSize;
     Selection selection;
     unsigned cursor;
+    unsigned scrollpos;
     int cursorvisible;
 };
 
@@ -54,11 +55,28 @@ static int draw(void *obj, xcb_render_picture_t picture)
     TextBox *self = Object_instance(obj);
     xcb_connection_t *c = X11Adapter_connection();
     Color color = Widget_color(self, COLOR_NORMAL);
-    Pos pos = Widget_contentOrigin(self, Widget_size(self));
+    Size size = Widget_size(self);
+    Pos pos = Widget_contentOrigin(self, size);
+    Box padding = Widget_padding(self);
+    size.width -= (padding.left + padding.right);
     int rc = 0;
     unsigned cursorpos = 0;
     if (UniStr_len(UniStrBuilder_stringView(self->text)))
     {
+	Size textsz = TextRenderer_size(self->renderer);
+	if (self->scrollpos > textsz.width ||
+		textsz.width - self->scrollpos < size.width)
+	{
+	    if (size.width >= textsz.width) self->scrollpos = 0;
+	    else self->scrollpos = textsz.width - size.width - 1;
+	}
+	cursorpos = TextRenderer_pixelOffset(self->renderer, self->cursor);
+	if (cursorpos < self->scrollpos) self->scrollpos = cursorpos;
+	else if (cursorpos >= size.width + self->scrollpos)
+	{
+	    self->scrollpos = cursorpos - size.width + 1;
+	}
+	pos.x -= self->scrollpos;
 	if (self->selection.len)
 	{
 	    Selection rendersel;
@@ -79,8 +97,8 @@ static int draw(void *obj, xcb_render_picture_t picture)
 		    color, pos, rendersel, selfgcol);
 	}
 	else rc = TextRenderer_render(self->renderer, picture, color, pos);
-	cursorpos = TextRenderer_pixelOffset(self->renderer, self->cursor);
     }
+    else self->scrollpos = 0;
     if (rc >= 0 && self->cursorvisible)
     {
 	xcb_rectangle_t rect = { pos.x + cursorpos, pos.y,
@@ -255,6 +273,7 @@ TextBox *TextBox_createBase(void *derived, void *parent, Font *font)
     self->minSize = (Size){ 120, (Font_maxHeight(self->font) + 0x3f) >> 6 };
     self->selection = (Selection){ 0, 0 };
     self->cursor = 0;
+    self->scrollpos = 0;
     self->cursorvisible = 1;
 
     PSC_Service_setTickInterval(600);
