@@ -200,18 +200,86 @@ static void handleXkbEvent(XkbEvent *ev)
     }
 }
 
+static void handleX11Reply(X11ReplyHandlerRecord *rec, void *reply,
+	xcb_generic_error_t *error)
+{
+    if (reply)
+    {
+	if (rec->replytype != RQ_AWAIT_REPLY)
+	{
+	    PSC_Log_fmt(PSC_L_ERROR, "Received unexpected reply: %u",
+		    rec->sequence);
+	    free(reply);
+	    reply = 0;
+	}
+	else
+	{
+	    PSC_Log_fmt(PSC_L_DEBUG, "Received reply: %u", rec->sequence);
+	    rec->handler(rec->ctx, rec->sequence, reply, error);
+	}
+    }
+    else if (error)
+    {
+	PSC_Log_fmt(PSC_L_DEBUG, "Received error: %u", rec->sequence);
+	switch (rec->replytype)
+	{
+	    case RQ_CHECK_ERROR_STRING:
+		PSC_Log_fmt(PSC_L_ERROR, rec->ctx, rec->sarg);
+		break;
+
+	    case RQ_CHECK_ERROR_UNSIGNED:
+		PSC_Log_fmt(PSC_L_ERROR, rec->ctx, rec->uarg);
+		PSC_Event_raise(requestError, rec->uarg, 0);
+		break;
+
+	    default:
+		rec->handler(rec->ctx, rec->sequence, reply, error);
+		break;
+	}
+    }
+    else if (rec->replytype == RQ_AWAIT_NOREPLY)
+    {
+	PSC_Log_fmt(PSC_L_DEBUG, "Confirmed request: %u", rec->sequence);
+	rec->handler(rec->ctx, rec->sequence, reply, error);
+    }
+    free(reply);
+    free(error);
+    removeFirstWaiting();
+}
+
 static void handleX11Event(xcb_generic_event_t *ev)
 {
+    if (waitingNum)
+    {
+	/* When waiting for outstanding requests, match sequence numbers
+	 * against them to either handle an error or just complete them
+	 */
+	X11ReplyHandlerRecord *rec = waitingReplies + waitingFront;
+	while ((int)(ev->sequence - rec->sequence) > 0)
+	{
+	    handleX11Reply(rec, 0, 0);
+	    rec = waitingReplies + waitingFront;
+	}
+	if (rec->sequence == ev->sequence && ev->response_type == 0)
+	{
+	    handleX11Reply(rec, 0, (xcb_generic_error_t *)ev);
+	    return;
+	}
+    }
+
     if (ev->response_type == 0)
     {
+	// Received an error that couldn't be matched to a request
 	PSC_Log_fmt(PSC_L_WARNING, "Unhandled X11 error %d: %u",
 		((xcb_generic_error_t *)ev)->error_code,
 		ev->sequence);
     }
+
     else if (ev->response_type == xkbevbase)
     {
 	handleXkbEvent((XkbEvent *)ev);
     }
+
     else switch (ev->response_type & 0x7f)
     {
 	case XCB_CLIENT_MESSAGE:
@@ -278,26 +346,6 @@ static void handleX11Event(xcb_generic_event_t *ev)
     free(ev);
 }
 
-static void handleRequestError(X11ReplyHandlerRecord *rec,
-	xcb_generic_error_t *err)
-{
-    switch (rec->replytype)
-    {
-	case RQ_CHECK_ERROR_STRING:
-	    PSC_Log_fmt(PSC_L_ERROR, rec->ctx, rec->sarg);
-	    break;
-
-	case RQ_CHECK_ERROR_UNSIGNED:
-	    PSC_Log_fmt(PSC_L_ERROR, rec->ctx, rec->uarg);
-	    PSC_Event_raise(requestError, rec->uarg, 0);
-	    break;
-
-	default:
-	    rec->handler(rec->ctx, rec->sequence, 0, err);
-	    break;
-    }
-}
-
 static void readX11Input(void *receiver, void *sender, void *args)
 {
     (void)receiver;
@@ -328,112 +376,42 @@ static void readX11Input(void *receiver, void *sender, void *args)
 	{
 	    void *reply = 0;
 	    xcb_generic_error_t *error = 0;
-	    if (xcb_poll_for_reply(c,
-			waitingReplies[waitingFront].sequence,
-			&reply, &error))
+	    X11ReplyHandlerRecord *rec = waitingReplies + waitingFront;
+
+	    gotinput = xcb_poll_for_reply(c, rec->sequence, &reply, &error);
+	    if (gotinput && (reply || error))
 	    {
 		/* Handle reply or error to the first request we're waiting
 		 * for, according to what was registered by AWAIT() or CHECK().
 		 */
-		gotinput = 1;
-		if (reply)
-		{
-		    if (waitingReplies[waitingFront].replytype
-			    != RQ_AWAIT_REPLY)
-		    {
-			PSC_Log_fmt(PSC_L_ERROR,
-				"Received unexpected reply: %u",
-				waitingReplies[waitingFront].sequence);
-			free(reply);
-			reply = 0;
-		    }
-		    else
-		    {
-			PSC_Log_fmt(PSC_L_DEBUG, "Received reply: %u",
-				waitingReplies[waitingFront].sequence);
-		    }
-		}
-		else if (error)
-		{
-		    PSC_Log_fmt(PSC_L_DEBUG, "Received error: %u",
-			    waitingReplies[waitingFront].sequence);
-		}
-		else if (waitingReplies[waitingFront].replytype
-			== RQ_AWAIT_NOREPLY)
-		{
-		    PSC_Log_fmt(PSC_L_DEBUG, "Confirmed request: %u",
-			    waitingReplies[waitingFront].sequence);
-		}
-		if (reply || error ||
-			waitingReplies[waitingFront].replytype ==
-			RQ_AWAIT_NOREPLY)
-		{
-		    X11ReplyHandlerRecord *rec = waitingReplies + waitingFront;
-		    if (error && !reply)
-		    {
-			handleRequestError(rec, error);
-		    }
-		    else
-		    {
-			rec->handler(rec->ctx, rec->sequence, reply, error);
-		    }
-		}
-		free(reply);
-		free(error);
-		removeFirstWaiting();
+		handleX11Reply(rec, reply, error);
 	    }
 	    else
 	    {
 		/* If we didn't get a reply or error to the first awaited
-		 * request, we have to check all events already queued up
-		 * to the sequence number of this first request to make sure
+		 * request, we have to switch to event processing to make sure
 		 * we also find errors delivered as events.
 		 */
-		xcb_generic_event_t *ev = xcb_poll_for_queued_event(c);
-		// neither reply nor error found, so exit iteration:
-		if (!ev) break;
-
-		while (waitingReplies[waitingFront].sequence
-			- ev->sequence > 0)
-		{
-		    handleX11Event(ev);
-		    ev = xcb_poll_for_queued_event(c);
-		}
-		if (ev->response_type == 0 &&
-			ev->sequence == waitingReplies[waitingFront].sequence)
-		{
-		    PSC_Log_fmt(PSC_L_DEBUG, "Received error: %u",
-			    ev->sequence);
-		    handleRequestError(waitingReplies + waitingFront,
-			    (xcb_generic_error_t *)ev);
-		    free(ev);
-		    removeFirstWaiting();
-		}
-		else if (ev) handleX11Event(ev);
+		break;
 	    }
 	}
-	if (!waitingNum)
+
+	xcb_generic_event_t *ev;
+
+	/* If we already attempted to read new input in this iteration,
+	 * just process what's already queued.
+	 */
+	if (polled) ev = xcb_poll_for_queued_event(c);
+
+	/* Otherwise, attempt once to read new input and update our flag
+	 * whether new input was available.
+	 */
+	else if ((ev = xcb_poll_for_event(c))) gotinput = 1;
+
+	while (ev)
 	{
-	    /* We're currently not waiting for any more requests, then just
-	     * process events.
-	     */
-	    xcb_generic_event_t *ev;
-
-	    /* If we already attempted to read new input in this iteration,
-	     * just process what's already queued.
-	     */
-	    if (polled) ev = xcb_poll_for_queued_event(c);
-
-	    /* Otherwise, attempt once to read new input and update our flag
-	     * whether new input was available.
-	     */
-	    else if ((ev = xcb_poll_for_event(c))) gotinput = 1;
-
-	    while (ev)
-	    {
-		handleX11Event(ev);
-		ev = xcb_poll_for_queued_event(c);
-	    }
+	    handleX11Event(ev);
+	    ev = xcb_poll_for_queued_event(c);
 	}
     }
 }
