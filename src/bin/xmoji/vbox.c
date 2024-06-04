@@ -5,11 +5,12 @@
 #include <string.h>
 
 static void destroy(void *obj);
+static void expose(void *obj, Rect region);
 static int draw(void *obj, xcb_render_picture_t picture);
 static Size minSize(const void *obj);
 
 static MetaVBox mo = MetaVBox_init("VBox",
-	destroy, draw, 0, 0, minSize, 0);
+	destroy, expose, draw, 0, 0, minSize, 0);
 
 typedef struct VBoxItem
 {
@@ -29,6 +30,19 @@ static void destroy(void *obj)
     VBox *self = obj;
     PSC_List_destroy(self->items);
     free(self);
+}
+
+static void expose(void *obj, Rect region)
+{
+    VBox *self = Object_instance(obj);
+    if (!PSC_List_size(self->items)) return;
+    PSC_ListIterator *i = PSC_List_iterator(self->items);
+    while (PSC_ListIterator_moveNext(i))
+    {
+	VBoxItem *item = PSC_ListIterator_current(i);
+	Widget_invalidateRegion(item->widget, region);
+    }
+    PSC_ListIterator_destroy(i);
 }
 
 static int draw(void *obj, xcb_render_picture_t picture)

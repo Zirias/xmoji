@@ -19,6 +19,7 @@ typedef struct KeyEvent
 typedef struct MetaWidget
 {
     MetaObject base;
+    void (*expose)(void *widget, Rect region);
     int (*draw)(void *widget, xcb_render_picture_t picture);
     int (*show)(void *widget);
     int (*hide)(void *widget);
@@ -27,8 +28,9 @@ typedef struct MetaWidget
 } MetaWidget;
 
 #define MetaWidget_init(name, destroy, \
-	mdraw, mshow, mhide, mminSize, mkeyPressed) { \
+	mexpose, mdraw, mshow, mhide, mminSize, mkeyPressed) { \
     .base = MetaObject_init(name, destroy), \
+    .expose = mexpose, \
     .draw = mdraw, \
     .show = mshow, \
     .hide = mhide, \
@@ -63,7 +65,6 @@ PSC_Event *Widget_shown(void *self) CMETHOD ATTR_RETNONNULL;
 PSC_Event *Widget_hidden(void *self) CMETHOD ATTR_RETNONNULL;
 PSC_Event *Widget_sizeRequested(void *self) CMETHOD ATTR_RETNONNULL;
 PSC_Event *Widget_sizeChanged(void *self) CMETHOD ATTR_RETNONNULL;
-PSC_Event *Widget_invalidated(void *self) CMETHOD ATTR_RETNONNULL;
 Widget *Widget_parent(const void *self) CMETHOD;
 int Widget_draw(void *self) CMETHOD;
 int Widget_show(void *self) CMETHOD;
@@ -76,6 +77,7 @@ Box Widget_padding(const void *self) CMETHOD;
 void Widget_setAlign(void *self, Align align) CMETHOD;
 Align Widget_align(const void *self) CMETHOD;
 void Widget_setOrigin(void *self, Pos origin) CMETHOD;
+Rect Widget_geometry(const void *self) CMETHOD;
 Pos Widget_origin(const void *self) CMETHOD;
 Pos Widget_contentOrigin(const void *self, Size contentSize) CMETHOD;
 const ColorSet *Widget_colorSet(const void *self) CMETHOD;
@@ -90,6 +92,7 @@ void Widget_keyPressed(void *self, const KeyEvent *event) CMETHOD;
 // "protected" API meant only for derived classes
 void Widget_requestSize(void *self) CMETHOD;
 void Widget_invalidate(void *self) CMETHOD;
+void Widget_invalidateRegion(void *self, Rect region) CMETHOD;
 void Widget_disableDrawing(void *self) CMETHOD;
 void Widget_setWindowSize(void *self, Size size) CMETHOD;
 void Widget_showWindow(void *self) CMETHOD;

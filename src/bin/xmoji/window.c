@@ -9,12 +9,13 @@
 #include <xkbcommon/xkbcommon-compose.h>
 
 static void destroy(void *obj);
+static void expose(void *obj, Rect region);
 static int draw(void *obj, xcb_render_picture_t picture);
 static int show(void *obj);
 static int hide(void *obj);
 
 static MetaWindow mo = MetaWindow_init("Window",
-	destroy, draw, show, hide, 0, 0);
+	destroy, expose, draw, show, hide, 0, 0);
 
 struct Window
 {
@@ -39,6 +40,12 @@ static void map(Window *self)
 	    "Cannot map window 0x%x", (unsigned)self->w);
     self->mapped = 1;
     PSC_Log_fmt(PSC_L_DEBUG, "Mapping window 0x%x", (unsigned)self->w);
+}
+
+static void expose(void *obj, Rect region)
+{
+    Window *self = Object_instance(obj);
+    if (self->mainWidget) Widget_invalidateRegion(self->mainWidget, region);
 }
 
 static int draw(void *obj, xcb_render_picture_t picture)
@@ -71,7 +78,7 @@ static int hide(void *obj)
     return 0;
 }
 
-static void expose(void *receiver, void *sender, void *args)
+static void exposed(void *receiver, void *sender, void *args)
 {
     (void)sender;
 
@@ -81,13 +88,14 @@ static void expose(void *receiver, void *sender, void *args)
     PSC_Log_fmt(PSC_L_DEBUG, "Expose 0x%x: { %u, %u, %u, %u }, count %u",
 	    (unsigned)self->w, (unsigned)ev->x, (unsigned)ev->y,
 	    (unsigned)ev->width, (unsigned)ev->height, (unsigned)ev->count);
-    if (ev->count || !self->mapped) return;
+    if (!self->mapped) return;
     if (self->mapped == 1)
     {
 	Widget_showWindow(receiver);
 	self->mapped = 2;
     }
-    Widget_invalidate(self);
+    Widget_invalidateRegion(self,
+	    (Rect){{ev->x, ev->y},{ev->width, ev->height}});
 }
 
 static void keypress(void *receiver, void *sender, void *args)
@@ -151,7 +159,6 @@ static void clientmsg(void *receiver, void *sender, void *args)
     
     if (ev->data.data32[0] == A(WM_DELETE_WINDOW))
     {
-	Widget_disableDrawing(self);
 	hide(self);
     }
 }
@@ -277,7 +284,7 @@ static void destroy(void *window)
     PSC_Event_unregister(X11Adapter_mapNotify(), self,
 	    mapped, self->w);
     PSC_Event_unregister(X11Adapter_expose(), self,
-	    expose, self->w);
+	    exposed, self->w);
     PSC_Event_unregister(X11Adapter_configureNotify(), self,
 	    configureNotify, self->w);
     PSC_Event_unregister(X11Adapter_clientmsg(), self,
@@ -344,7 +351,7 @@ Window *Window_createBase(void *derived, void *parent)
     PSC_Event_register(X11Adapter_configureNotify(), self,
 	    configureNotify, self->w);
     PSC_Event_register(X11Adapter_expose(), self,
-	    expose, self->w);
+	    exposed, self->w);
     PSC_Event_register(X11Adapter_keypress(), self,
 	    keypress, self->w);
     PSC_Event_register(X11Adapter_mapNotify(), self,

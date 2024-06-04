@@ -6,13 +6,14 @@
 #include <stdlib.h>
 #include <string.h>
 
+#define MAXDAMAGES 16
 static void destroy(void *obj);
 static int show(void *obj);
 static int hide(void *obj);
 static Size minSize(const void *obj);
 
 static MetaWidget mo = MetaWidget_init("Widget",
-	destroy, 0, show, hide, minSize, 0);
+	destroy, 0, 0, show, hide, minSize, 0);
 
 struct Widget
 {
@@ -21,11 +22,11 @@ struct Widget
     PSC_Event *hidden;
     PSC_Event *sizeRequested;
     PSC_Event *sizeChanged;
-    PSC_Event *invalidated;
     Widget *parent;
     ColorSet *colorSet;
     Rect geometry;
     Rect clip;
+    Rect damages[MAXDAMAGES];
     Box padding;
     xcb_drawable_t drawable;
     xcb_render_picture_t picture;
@@ -34,7 +35,7 @@ struct Widget
     Align align;
     InputEvents events;
     int drawBackground;
-    int drawn;
+    int ndamages;
     int visible;
 };
 
@@ -42,7 +43,6 @@ static void destroy(void *obj)
 {
     Widget *self = obj;
     ColorSet_destroy(self->colorSet);
-    PSC_Event_destroy(self->invalidated);
     PSC_Event_destroy(self->sizeChanged);
     PSC_Event_destroy(self->sizeRequested);
     PSC_Event_destroy(self->hidden);
@@ -55,6 +55,7 @@ static int doshow(Widget *self, int external)
     if (!self->visible)
     {
 	self->visible = 1;
+	Widget_invalidate(self);
 	WidgetEventArgs args = { external };
 	PSC_Event_raise(self->shown, 0, &args);
     }
@@ -71,6 +72,7 @@ static int dohide(Widget *self, int external)
     if (self->visible)
     {
 	self->visible = 0;
+	self->ndamages = 0;
 	WidgetEventArgs args = { external };
 	PSC_Event_raise(self->hidden, 0, &args);
     }
@@ -88,14 +90,6 @@ static Size minSize(const void *obj)
     return (Size){0, 0};
 }
 
-static void invalidate(void *receiver, void *sender, void *args)
-{
-    (void)sender;
-    (void)args;
-
-    Widget_invalidate(receiver);
-}
-
 Widget *Widget_createBase(void *derived, void *parent, InputEvents events)
 {
     REGTYPE(0);
@@ -109,16 +103,11 @@ Widget *Widget_createBase(void *derived, void *parent, InputEvents events)
     self->hidden = PSC_Event_create(self);
     self->sizeRequested = PSC_Event_create(self);
     self->sizeChanged = PSC_Event_create(self);
-    self->invalidated = PSC_Event_create(self);
     self->parent = parent;
     self->padding = (Box){ 3, 3, 3, 3 };
     self->events = events;
 
-    if (parent)
-    {
-	Object_own(parent, derived);
-	PSC_Event_register(Widget_invalidated(parent), self, invalidate, 0);
-    }
+    if (parent) Object_own(parent, derived);
     else self->colorSet = ColorSet_create(0xffffffff, 0x000000ff);
     return self;
 }
@@ -147,16 +136,53 @@ PSC_Event *Widget_sizeChanged(void *self)
     return w->sizeChanged;
 }
 
-PSC_Event *Widget_invalidated(void *self)
-{
-    Widget *w = Object_instance(self);
-    return w->invalidated;
-}
-
 Widget *Widget_parent(const void *self)
 {
     const Widget *w = Object_instance(self);
     return w->parent;
+}
+
+static void setContentClipArea(Widget *self, xcb_connection_t *c)
+{
+    Rect contentArea = Rect_pad(self->geometry, self->padding);
+    if (self->ndamages < 0)
+    {
+	xcb_rectangle_t cliprect = {
+	    contentArea.pos.x, contentArea.pos.y,
+	    contentArea.size.width, contentArea.size.height
+	};
+	CHECK(xcb_render_set_picture_clip_rectangles(c,
+		    self->picture, 0, 0, 1, &cliprect),
+		"Cannot set clipping region on 0x%x",
+		(unsigned)self->drawable);
+    }
+    else
+    {
+	Box contentBox = Box_fromRect(contentArea);
+	xcb_rectangle_t cliprects[MAXDAMAGES];
+	int i = 0;
+	for (int d = 0; d < self->ndamages; ++d)
+	{
+	    if (!Rect_overlaps(contentArea, self->damages[d])) continue;
+	    Box damageBox = Box_fromRect(self->damages[d]);
+	    if (damageBox.left < contentBox.left)
+		damageBox.left = contentBox.left;
+	    if (damageBox.top < contentBox.top)
+		damageBox.top = contentBox.top;
+	    if (damageBox.right > contentBox.right)
+		damageBox.right = contentBox.right;
+	    if (damageBox.bottom > contentBox.bottom)
+		damageBox.bottom = contentBox.bottom;
+	    cliprects[i++] = (xcb_rectangle_t){
+		damageBox.left, damageBox.top,
+		    damageBox.right - damageBox.left,
+		    damageBox.bottom - damageBox.top };
+	}
+	CHECK(xcb_render_set_picture_clip_rectangles(c,
+		    self->picture, 0, 0, i, cliprects),
+		"Cannot set clipping region on 0x%x",
+		(unsigned)self->drawable);
+    }
 }
 
 int Widget_draw(void *self)
@@ -165,42 +191,47 @@ int Widget_draw(void *self)
     if (!w->drawable) return -1;
     if (!Widget_visible(self)) return 0;
     int rc = -1;
-    if (w->drawn)
+    if (!w->ndamages)
     {
 	Object_vcall(rc, Widget, draw, self, 0);
 	return rc;
     }
     xcb_connection_t *c = X11Adapter_connection();
-    if (memcmp(&w->geometry, &w->clip, sizeof w->geometry))
+    if (w->drawBackground)
     {
-	w->clip = w->geometry;
-	xcb_rectangle_t clip = {0, 0, w->clip.size.width, w->clip.size.height};
-	if (w->drawBackground)
+	if (memcmp(&w->geometry, &w->clip, sizeof w->geometry))
 	{
+	    w->clip = w->geometry;
+	    xcb_rectangle_t clip = {0, 0,
+		w->clip.size.width, w->clip.size.height};
 	    CHECK(xcb_render_set_picture_clip_rectangles(c,
 			w->bgpicture, w->clip.pos.x, w->clip.pos.y, 1, &clip),
 		    "Cannot set clipping region on 0x%x",
 		    (unsigned)w->drawable);
 	}
-	clip.x += w->padding.left;
-	clip.y += w->padding.top;
-	clip.width -= (w->padding.left + w->padding.right);
-	clip.height -= (w->padding.top + w->padding.bottom);
-	CHECK(xcb_render_set_picture_clip_rectangles(c,
-		    w->picture, w->clip.pos.x, w->clip.pos.y, 1, &clip),
-		"Cannot set clipping region on 0x%x", (unsigned)w->drawable);
-    }
-    if (w->drawBackground)
-    {
-	xcb_rectangle_t rect = {w->geometry.pos.x, w->geometry.pos.y,
-	    w->geometry.size.width, w->geometry.size.height};
 	Color color = Widget_color(w, w->backgroundRole);
-	CHECK(xcb_render_fill_rectangles(c, XCB_RENDER_PICT_OP_OVER,
-		    w->bgpicture, Color_xcb(color), 1, &rect),
-		"Cannot draw widget background on 0x%x", (unsigned)w->picture);
+	if (w->ndamages < 0)
+	{
+	    xcb_rectangle_t rect = {w->geometry.pos.x, w->geometry.pos.y,
+		w->geometry.size.width, w->geometry.size.height};
+	    CHECK(xcb_render_fill_rectangles(c, XCB_RENDER_PICT_OP_OVER,
+			w->bgpicture, Color_xcb(color), 1, &rect),
+		    "Cannot draw widget background on 0x%x",
+		    (unsigned)w->picture);
+	}
+	else for (int d = 0; d < w->ndamages; ++d)
+	{
+	    xcb_rectangle_t rect = {w->damages[d].pos.x, w->damages[d].pos.y,
+		w->damages[d].size.width, w->damages[d].size.height};
+	    CHECK(xcb_render_fill_rectangles(c, XCB_RENDER_PICT_OP_OVER,
+			w->bgpicture, Color_xcb(color), 1, &rect),
+		    "Cannot draw widget background on 0x%x",
+		    (unsigned)w->picture);
+	}
     }
+    setContentClipArea(w, c);
     Object_vcall(rc, Widget, draw, self, w->picture);
-    w->drawn = 1;
+    w->ndamages = 0;
     return rc;
 }
 
@@ -224,6 +255,7 @@ static void setSize(Widget *self, int external, Size size)
     {
 	SizeChangedEventArgs args = { external, self->geometry.size, size };
 	self->geometry.size = size;
+	Widget_invalidate(self);
 	PSC_Event_raise(self->sizeChanged, 0, &args);
     }
 }
@@ -383,6 +415,7 @@ void Widget_setDrawable(void *self, xcb_drawable_t drawable)
 int Widget_visible(const void *self)
 {
     const Widget *w = Object_instance(self);
+    if (!w->drawable) return 0;
     if (!w->visible) return 0;
     if (!w->parent) return 1;
     return Widget_visible(w->parent);
@@ -401,17 +434,30 @@ void Widget_requestSize(void *self)
     PSC_Event_raise(w->sizeRequested, 0, 0);
 }
 
-void Widget_invalidate(void *self)
+void Widget_invalidateRegion(void *self, Rect region)
 {
+    if (!Widget_visible(self)) return;
     Widget *w = Object_instance(self);
-    if (w->drawn > 0) w->drawn = 0;
-    PSC_Event_raise(w->invalidated, 0, 0);
+    if (w->ndamages < 0) return;
+    if (!Rect_overlaps(region, w->geometry)) return;
+    if (w->ndamages == MAXDAMAGES || Rect_contains(region, w->geometry))
+    {
+	w->ndamages = -1;
+    }
+    else
+    {
+	w->damages[w->ndamages++] = region;
+    }
+    Object_vcallv(Widget, expose, w, region);
 }
 
-void Widget_disableDrawing(void *self)
+void Widget_invalidate(void *self)
 {
+    if (!Widget_visible(self)) return;
     Widget *w = Object_instance(self);
-    w->drawn = -1;
+    if (w->ndamages < 0) return;
+    w->ndamages = -1;
+    Object_vcallv(Widget, expose, w, w->geometry);
 }
 
 void Widget_setWindowSize(void *self, Size size)
@@ -421,9 +467,7 @@ void Widget_setWindowSize(void *self, Size size)
 
 void Widget_showWindow(void *self)
 {
-    Widget *w = Object_instance(self);
-    if (w->drawn < 0) w->drawn = 1;
-    doshow(w, 1);
+    doshow(Object_instance(self), 1);
 }
 
 void Widget_hideWindow(void *self)

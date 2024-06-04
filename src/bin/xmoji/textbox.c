@@ -15,7 +15,7 @@ static Size minSize(const void *obj);
 static void keyPressed(void *obj, const KeyEvent *event);
 
 static MetaTextBox mo = MetaTextBox_init("TextBox",
-	destroy, draw, 0, 0, minSize, keyPressed);
+	destroy, 0, draw, 0, 0, minSize, keyPressed);
 
 struct TextBox
 {

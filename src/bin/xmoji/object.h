@@ -57,6 +57,7 @@ void Object_destroy(void *self);
 	    c(r, mo_meta, m, __VA_ARGS__); \
 	    break; \
 	} \
+	if (mo_meta == &mo) break; \
 	mo_obj = mo_obj->base; \
     } \
 } while (0)

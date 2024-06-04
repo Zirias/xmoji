@@ -9,9 +9,9 @@ typedef struct MetaTextBox
 } MetaTextBox;
 
 #define MetaTextBox_init(name, destroy, \
-	draw, show, hide, minSize, keyPressed) { \
+	expose, draw, show, hide, minSize, keyPressed) { \
     .base = MetaWidget_init(name, destroy, \
-	    draw, show, hide, minSize, keyPressed) \
+	    expose, draw, show, hide, minSize, keyPressed) \
 }
 
 C_CLASS_DECL(Font);
