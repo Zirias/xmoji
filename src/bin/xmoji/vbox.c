@@ -162,7 +162,7 @@ VBox *VBox_createBase(void *derived, void *parent)
 
     VBox *self = PSC_malloc(sizeof *self);
     if (!derived) derived = self;
-    self->base.base = Widget_createBase(derived, parent, IE_NONE);
+    self->base.base = Widget_createBase(derived, parent);
     self->base.type = OBJTYPE;
     self->items = PSC_List_create();
     self->minSize = (Size){0, 0};
@@ -178,6 +178,7 @@ void VBox_addWidget(void *self, void *widget)
     VBoxItem *item = PSC_malloc(sizeof *item);
     item->widget = widget;
     item->minSize = (Size){0, 0};
+    Widget_setContainer(widget, b);
     Widget_setDrawable(widget, Widget_drawable(b));
     PSC_Event_register(Widget_sizeRequested(widget), b, sizeRequested, 0);
     PSC_List_append(b->items, item, free);

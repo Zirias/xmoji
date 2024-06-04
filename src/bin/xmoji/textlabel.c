@@ -79,7 +79,7 @@ TextLabel *TextLabel_createBase(void *derived, void *parent, Font *font)
 
     TextLabel *self = PSC_malloc(sizeof *self);
     if (!derived) derived = self;
-    self->base.base = Widget_createBase(derived, parent, IE_NONE);
+    self->base.base = Widget_createBase(derived, parent);
     self->base.type = OBJTYPE;
     self->font = font;
     self->text = 0;

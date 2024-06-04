@@ -22,7 +22,7 @@ struct Widget
     PSC_Event *hidden;
     PSC_Event *sizeRequested;
     PSC_Event *sizeChanged;
-    Widget *parent;
+    Widget *container;
     ColorSet *colorSet;
     Rect geometry;
     Rect clip;
@@ -34,7 +34,6 @@ struct Widget
     xcb_render_picture_t bgpicture;
     ColorRole backgroundRole;
     Align align;
-    InputEvents events;
     int drawBackground;
     int ndamages;
     int visible;
@@ -91,7 +90,7 @@ static Size minSize(const void *obj)
     return (Size){0, 0};
 }
 
-Widget *Widget_createBase(void *derived, void *parent, InputEvents events)
+Widget *Widget_createBase(void *derived, void *parent)
 {
     REGTYPE(0);
 
@@ -104,13 +103,11 @@ Widget *Widget_createBase(void *derived, void *parent, InputEvents events)
     self->hidden = PSC_Event_create(self);
     self->sizeRequested = PSC_Event_create(self);
     self->sizeChanged = PSC_Event_create(self);
-    self->parent = parent;
+    self->colorSet = ColorSet_create(0, 0);
     self->padding = (Box){ 3, 3, 3, 3 };
     self->maxSize = (Size){ -1, -1 };
-    self->events = events;
 
     if (parent) Object_own(parent, derived);
-    else self->colorSet = ColorSet_create(0xffffffff, 0x000000ff);
     return self;
 }
 
@@ -138,10 +135,17 @@ PSC_Event *Widget_sizeChanged(void *self)
     return w->sizeChanged;
 }
 
-Widget *Widget_parent(const void *self)
+Widget *Widget_container(const void *self)
 {
     const Widget *w = Object_instance(self);
-    return w->parent;
+    return w->container;
+}
+
+void Widget_setContainer(void *self, void *container)
+{
+    Widget *w = Object_instance(self);
+    Widget *c = container ? Object_instance(container) : 0;
+    w->container = c;
 }
 
 static void setContentClipArea(Widget *self, xcb_connection_t *c)
@@ -360,30 +364,18 @@ Pos Widget_contentOrigin(const void *self, Size contentSize)
     return contentPos;
 }
 
-const ColorSet *Widget_colorSet(const void *self)
-{
-    const Widget *w = Object_instance(self);
-    if (w->colorSet) return w->colorSet;
-    if (w->parent) return Widget_colorSet(w->parent);
-    return 0;
-}
-
 Color Widget_color(const void *self, ColorRole role)
 {
-    const ColorSet *colorSet = Widget_colorSet(self);
-    if (!colorSet) return 0x00000000;
-    return ColorSet_color(colorSet, role);
+    Widget *w = Object_instance(self);
+    Color color = ColorSet_color(w->colorSet, role);
+    if (!w->container) return color;
+    if (!color) color = Widget_color(w->container, role);
+    return color;
 }
 
 void Widget_setColor(void *self, ColorRole role, Color color)
 {
     Widget *w = Object_instance(self);
-    if (!w->colorSet)
-    {
-	const ColorSet *cs = Widget_colorSet(self);
-	if (cs) w->colorSet = ColorSet_clone(cs);
-	else w->colorSet = ColorSet_create(0xffffffff, 0x000000ff);
-    }
     ColorSet_setColor(w->colorSet, role, color);
 }
 
@@ -434,14 +426,13 @@ int Widget_visible(const void *self)
     const Widget *w = Object_instance(self);
     if (!w->drawable) return 0;
     if (!w->visible) return 0;
-    if (!w->parent) return 1;
-    return Widget_visible(w->parent);
+    if (!w->container) return 1;
+    return Widget_visible(w->container);
 }
 
 void Widget_keyPressed(void *self, const KeyEvent *event)
 {
     Widget *w = Object_instance(self);
-    if (!(w->events & IE_KEYPRESSED)) return;
     Object_vcallv(Widget, keyPressed, w, event);
 }
 

@@ -262,7 +262,7 @@ TextBox *TextBox_createBase(void *derived, void *parent, Font *font)
 
     TextBox *self = PSC_malloc(sizeof *self);
     if (!derived) derived = self;
-    self->base.base = Widget_createBase(derived, parent, IE_KEYPRESSED);
+    self->base.base = Widget_createBase(derived, parent);
     self->base.type = OBJTYPE;
     self->font = font;
     self->text = UniStrBuilder_create();

@@ -53,19 +53,14 @@ typedef struct SizeChangedEventArgs
     Size newSize;
 } SizeChangedEventArgs;
 
-typedef enum InputEvents
-{
-    IE_NONE	    = 0,
-    IE_KEYPRESSED   = 1 << 0
-} InputEvents;
-
-Widget *Widget_createBase(void *derived, void *parent, InputEvents events);
+Widget *Widget_createBase(void *derived, void *parent);
 #define Widget_create(...) Widget_createBase(0, __VA_ARGS__)
 PSC_Event *Widget_shown(void *self) CMETHOD ATTR_RETNONNULL;
 PSC_Event *Widget_hidden(void *self) CMETHOD ATTR_RETNONNULL;
 PSC_Event *Widget_sizeRequested(void *self) CMETHOD ATTR_RETNONNULL;
 PSC_Event *Widget_sizeChanged(void *self) CMETHOD ATTR_RETNONNULL;
-Widget *Widget_parent(const void *self) CMETHOD;
+Widget *Widget_container(const void *self) CMETHOD;
+void Widget_setContainer(void *self, void *container) CMETHOD;
 int Widget_draw(void *self) CMETHOD;
 int Widget_show(void *self) CMETHOD;
 int Widget_hide(void *self) CMETHOD;

@@ -297,7 +297,7 @@ Window *Window_createBase(void *derived, void *parent)
     Window *self = PSC_malloc(sizeof *self);
     if (!derived) derived = self;
     memset(self, 0, sizeof *self);
-    self->base.base = Widget_createBase(derived, parent, IE_NONE);
+    self->base.base = Widget_createBase(derived, parent);
     self->base.type = OBJTYPE;
     self->closed = PSC_Event_create(self);
     self->errored = PSC_Event_create(self);
@@ -451,10 +451,12 @@ void Window_setMainWidget(void *self, void *widget)
 	PSC_Event_unregister(Widget_sizeRequested(w->mainWidget), w,
 		sizeRequested, 0);
 	Widget_setDrawable(w->mainWidget, 0);
+	Widget_setContainer(w->mainWidget, 0);
     }
     w->mainWidget = widget;
     if (widget)
     {
+	Widget_setContainer(widget, w);
 	Widget_setDrawable(widget, w->w);
 	PSC_Event_register(Widget_sizeRequested(widget), w, sizeRequested, 0);
 	sizeRequested(w, 0, 0);
