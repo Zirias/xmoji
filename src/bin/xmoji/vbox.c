@@ -104,10 +104,14 @@ void layout(VBox *self, int updateMinSize)
     while (PSC_ListIterator_moveNext(i))
     {
 	VBoxItem *item = PSC_ListIterator_current(i);
-	Widget_setOrigin(item->widget, contentOrigin);
-	Widget_setSize(item->widget, (Size){
-		itemwidth, item->minSize.height + hspace});
-	contentOrigin.y += item->minSize.height + hspace;
+	Size itemSize = (Size){itemwidth, item->minSize.height + hspace};
+	Widget_setSize(item->widget, itemSize);
+	Size realSize = Widget_size(item->widget);
+	Pos itemPos = contentOrigin;
+	itemPos.x += (itemSize.width - realSize.width) / 2;
+	itemPos.y += (itemSize.height - realSize.height) / 2;
+	Widget_setOrigin(item->widget, itemPos);
+	contentOrigin.y += itemSize.height;
     }
 
     PSC_ListIterator_destroy(i);

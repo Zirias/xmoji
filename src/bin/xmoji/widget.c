@@ -28,6 +28,7 @@ struct Widget
     Rect clip;
     Rect damages[MAXDAMAGES];
     Box padding;
+    Size maxSize;
     xcb_drawable_t drawable;
     xcb_render_picture_t picture;
     xcb_render_picture_t bgpicture;
@@ -105,6 +106,7 @@ Widget *Widget_createBase(void *derived, void *parent, InputEvents events)
     self->sizeChanged = PSC_Event_create(self);
     self->parent = parent;
     self->padding = (Box){ 3, 3, 3, 3 };
+    self->maxSize = (Size){ -1, -1 };
     self->events = events;
 
     if (parent) Object_own(parent, derived);
@@ -251,6 +253,8 @@ int Widget_hide(void *self)
 
 static void setSize(Widget *self, int external, Size size)
 {
+    if (size.width > self->maxSize.width) size.width = self->maxSize.width;
+    if (size.height > self->maxSize.height) size.height = self->maxSize.height;
     if (memcmp(&self->geometry.size, &size, sizeof size))
     {
 	SizeChangedEventArgs args = { external, self->geometry.size, size };
@@ -263,6 +267,13 @@ static void setSize(Widget *self, int external, Size size)
 void Widget_setSize(void *self, Size size)
 {
     setSize(Object_instance(self), 0, size);
+}
+
+void Widget_setMaxSize(void *self, Size maxSize)
+{
+    Widget *w = Object_instance(self);
+    w->maxSize = maxSize;
+    setSize(w, 0, w->geometry.size);
 }
 
 Size Widget_minSize(const void *self)

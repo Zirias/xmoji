@@ -70,6 +70,7 @@ int Widget_draw(void *self) CMETHOD;
 int Widget_show(void *self) CMETHOD;
 int Widget_hide(void *self) CMETHOD;
 void Widget_setSize(void *self, Size size) CMETHOD;
+void Widget_setMaxSize(void *self, Size maxSize) CMETHOD;
 Size Widget_minSize(const void *self) CMETHOD;
 Size Widget_size(const void *self) CMETHOD;
 void Widget_setPadding(void *self, Box padding) CMETHOD;

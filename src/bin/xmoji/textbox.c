@@ -274,6 +274,7 @@ TextBox *TextBox_createBase(void *derived, void *parent, Font *font)
     self->scrollpos = 0;
     self->cursorvisible = 1;
 
+    Widget_setMaxSize(self, (Size){ -1, self->minSize.height });
     PSC_Service_setTickInterval(600);
     PSC_Event_register(PSC_Service_tick(), self, blink, 0);
 
