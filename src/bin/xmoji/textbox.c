@@ -55,28 +55,25 @@ static int draw(void *obj, xcb_render_picture_t picture)
     TextBox *self = Object_instance(obj);
     xcb_connection_t *c = X11Adapter_connection();
     Color color = Widget_color(self, COLOR_NORMAL);
-    Size size = Widget_size(self);
-    Pos pos = Widget_contentOrigin(self, size);
-    Box padding = Widget_padding(self);
-    size.width -= (padding.left + padding.right);
+    Rect contentArea = Rect_pad(Widget_geometry(self), Widget_padding(self));
     int rc = 0;
     unsigned cursorpos = 0;
     if (UniStr_len(UniStrBuilder_stringView(self->text)))
     {
 	Size textsz = TextRenderer_size(self->renderer);
 	if (self->scrollpos > textsz.width ||
-		textsz.width - self->scrollpos < size.width)
+		textsz.width - self->scrollpos < contentArea.size.width)
 	{
-	    if (size.width >= textsz.width) self->scrollpos = 0;
-	    else self->scrollpos = textsz.width - size.width - 1;
+	    if (contentArea.size.width >= textsz.width) self->scrollpos = 0;
+	    else self->scrollpos = textsz.width - contentArea.size.width - 1;
 	}
 	cursorpos = TextRenderer_pixelOffset(self->renderer, self->cursor);
 	if (cursorpos < self->scrollpos) self->scrollpos = cursorpos;
-	else if (cursorpos >= size.width + self->scrollpos)
+	else if (cursorpos >= contentArea.size.width + self->scrollpos)
 	{
-	    self->scrollpos = cursorpos - size.width + 1;
+	    self->scrollpos = cursorpos - contentArea.size.width + 1;
 	}
-	pos.x -= self->scrollpos;
+	contentArea.pos.x -= self->scrollpos;
 	if (self->selection.len)
 	{
 	    Selection rendersel;
@@ -87,22 +84,23 @@ static int draw(void *obj, xcb_render_picture_t picture)
 		- rendersel.start;
 	    Color selfgcol = Widget_color(self, COLOR_SELECTED);
 	    Color selbgcol = Widget_color(self, COLOR_BG_SELECTED);
-	    xcb_rectangle_t rect = { pos.x + rendersel.start, pos.y,
-		rendersel.len, self->minSize.height };
+	    xcb_rectangle_t rect = { contentArea.pos.x + rendersel.start,
+		contentArea.pos.y, rendersel.len, self->minSize.height };
 	    CHECK(xcb_render_fill_rectangles(c, XCB_RENDER_PICT_OP_OVER,
 			picture, Color_xcb(selbgcol), 1, &rect),
 		    "Cannot draw selection background on 0x%x",
 		    (unsigned)picture);
 	    rc = TextRenderer_renderWithSelection(self->renderer, picture,
-		    color, pos, rendersel, selfgcol);
+		    color, contentArea.pos, rendersel, selfgcol);
 	}
-	else rc = TextRenderer_render(self->renderer, picture, color, pos);
+	else rc = TextRenderer_render(self->renderer,
+		picture, color, contentArea.pos);
     }
     else self->scrollpos = 0;
     if (rc >= 0 && self->cursorvisible)
     {
-	xcb_rectangle_t rect = { pos.x + cursorpos, pos.y,
-	    1, self->minSize.height };
+	xcb_rectangle_t rect = { contentArea.pos.x + cursorpos,
+	    contentArea.pos.y, 1, self->minSize.height };
 	CHECK(xcb_render_fill_rectangles(c, XCB_RENDER_PICT_OP_OVER, picture,
 		    Color_xcb(color), 1, &rect),
 		"Cannot draw cursor on 0x%x", (unsigned)picture);

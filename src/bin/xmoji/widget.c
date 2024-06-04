@@ -314,6 +314,12 @@ void Widget_setOrigin(void *self, Pos pos)
     w->geometry.pos = pos;
 }
 
+Rect Widget_geometry(const void *self)
+{
+    const Widget *w = Object_instance(self);
+    return w->geometry;
+}
+
 Pos Widget_origin(const void *self)
 {
     const Widget *w = Object_instance(self);
