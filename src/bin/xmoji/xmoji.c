@@ -53,7 +53,6 @@ static void onprestartup(void *receiver, void *sender, void *args)
     Widget_setColor(win, COLOR_SELECTED, Color_fromRgb(0, 0, 0));
 
     VBox *box = VBox_create(win);
-    Window_setMainWidget(win, box);
 
     TextLabel *label = TextLabel_create(box, font);
     UniStr(hello, "Hello, World!\n\n"
@@ -66,7 +65,6 @@ static void onprestartup(void *receiver, void *sender, void *args)
     VBox_addWidget(box, label);
 
     TextBox *input = TextBox_create(box, font);
-    Window_setFocusWidget(win, input);
     Widget_setColor(input, COLOR_BG_NORMAL, Color_fromRgb(40, 50, 60));
     Widget_setBackground(input, 1, COLOR_BG_NORMAL);
     Widget_show(input);
@@ -80,6 +78,7 @@ static void onprestartup(void *receiver, void *sender, void *args)
     VBox_addWidget(box, label);
 
     Widget_show(box);
+    Window_setMainWidget(win, box);
 
     PSC_Event_register(Window_closed(win), 0, onclose, 0);
     PSC_Event_register(Window_errored(win), 0, onclose, 0);

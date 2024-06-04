@@ -47,12 +47,12 @@ Object *Object_create(void *derived)
 
 void Object_own(void *self, void *obj)
 {
-    ObjectBase *base = Object_instanceOf(self, 0);
+    ObjectBase *base = Object_instanceOf(self, 0, 1);
     if (!base->owned) base->owned = PSC_List_create();
     PSC_List_append(base->owned, obj, Object_destroy);
 }
 
-void *Object_instanceOf(void *self, uint32_t type)
+void *Object_instanceOf(void *self, uint32_t type, int mustMatch)
 {
     Object *obj = type ? Object_mostDerived(self) : self;
     while (obj)
@@ -60,12 +60,13 @@ void *Object_instanceOf(void *self, uint32_t type)
 	if (obj->type == type) return obj;
 	obj = obj->base;
     }
+    if (!mustMatch) return 0;
     PSC_Service_panic("Bug: type error!");
 }
 
 void *Object_mostDerived(void *self)
 {
-    ObjectBase *base = Object_instanceOf(self, 0);
+    ObjectBase *base = Object_instanceOf(self, 0, 1);
     return base->mostDerived;
 }
 
@@ -81,7 +82,7 @@ static void destroyRecursive(Object *obj)
 void Object_destroy(void *self)
 {
     if (!self) return;
-    ObjectBase *base = Object_instanceOf(self, 0);
+    ObjectBase *base = Object_instanceOf(self, 0, 1);
     PSC_List_destroy(base->owned);
     Object *obj = base->mostDerived;
     destroyRecursive(obj);

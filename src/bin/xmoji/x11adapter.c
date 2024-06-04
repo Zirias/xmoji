@@ -96,9 +96,12 @@ static struct xkb_keymap *keymap;
 static struct xkb_compose_table *kbdcompose;
 static struct xkb_state *kbdstate;
 static size_t maxRequestSize;
+static PSC_Event *buttonpress;
 static PSC_Event *clientmsg;
 static PSC_Event *configureNotify;
 static PSC_Event *expose;
+static PSC_Event *focusin;
+static PSC_Event *focusout;
 static PSC_Event *keypress;
 static PSC_Event *mapNotify;
 static PSC_Event *unmapNotify;
@@ -295,6 +298,11 @@ static void handleX11Event(xcb_generic_event_t *ev)
 
     else switch (ev->response_type & 0x7f)
     {
+	case XCB_BUTTON_PRESS:
+	    PSC_Event_raise(buttonpress,
+		    ((xcb_button_press_event_t *)ev)->event, ev);
+	    break;
+
 	case XCB_CLIENT_MESSAGE:
 	    PSC_Event_raise(clientmsg,
 		    ((xcb_client_message_event_t *)ev)->window, ev);
@@ -308,6 +316,16 @@ static void handleX11Event(xcb_generic_event_t *ev)
 	case XCB_EXPOSE:
 	    PSC_Event_raise(expose,
 		    ((xcb_expose_event_t *)ev)->window, ev);
+	    break;
+
+	case XCB_FOCUS_IN:
+	    PSC_Event_raise(focusin,
+		    ((xcb_focus_in_event_t *)ev)->event, ev);
+	    break;
+
+	case XCB_FOCUS_OUT:
+	    PSC_Event_raise(focusout,
+		    ((xcb_focus_out_event_t *)ev)->event, ev);
 	    break;
 
 	case XCB_KEY_PRESS:
@@ -720,9 +738,12 @@ int X11Adapter_init(int argc, char **argv, const char *classname)
     free(clnm);
     free(nm);
 
+    buttonpress = PSC_Event_create(0);
     clientmsg = PSC_Event_create(0);
     configureNotify = PSC_Event_create(0);
     expose = PSC_Event_create(0);
+    focusin = PSC_Event_create(0);
+    focusout = PSC_Event_create(0);
     keypress = PSC_Event_create(0);
     mapNotify = PSC_Event_create(0);
     unmapNotify = PSC_Event_create(0);
@@ -791,6 +812,11 @@ struct xkb_compose_table *X11Adapter_kbdcompose(void)
     return kbdcompose;
 }
 
+PSC_Event *X11Adapter_buttonpress(void)
+{
+    return buttonpress;
+}
+
 PSC_Event *X11Adapter_clientmsg(void)
 {
     return clientmsg;
@@ -804,6 +830,16 @@ PSC_Event *X11Adapter_configureNotify(void)
 PSC_Event *X11Adapter_expose(void)
 {
     return expose;
+}
+
+PSC_Event *X11Adapter_focusin(void)
+{
+    return focusin;
+}
+
+PSC_Event *X11Adapter_focusout(void)
+{
+    return focusout;
 }
 
 PSC_Event *X11Adapter_keypress(void)
@@ -907,17 +943,23 @@ void X11Adapter_done(void)
     PSC_Event_destroy(unmapNotify);
     PSC_Event_destroy(mapNotify);
     PSC_Event_destroy(keypress);
+    PSC_Event_destroy(focusout);
+    PSC_Event_destroy(focusin);
     PSC_Event_destroy(expose);
     PSC_Event_destroy(configureNotify);
     PSC_Event_destroy(clientmsg);
+    PSC_Event_destroy(buttonpress);
     eventsDone = 0;
     requestError = 0;
     unmapNotify = 0;
     mapNotify = 0;
     keypress = 0;
+    focusout = 0;
+    focusin = 0;
     expose = 0;
     configureNotify = 0;
     clientmsg = 0;
+    buttonpress = 0;
     rootformat = 0;
     alphaformat = 0;
     argbformat = 0;

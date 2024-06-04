@@ -4,6 +4,7 @@
 #include "textrenderer.h"
 #include "unistr.h"
 #include "unistrbuilder.h"
+#include "window.h"
 
 #include <poser/core.h>
 #include <stdlib.h>
@@ -11,11 +12,15 @@
 
 static void destroy(void *obj);
 static int draw(void *obj, xcb_render_picture_t picture);
+static int activate(void *obj);
+static int deactivate(void *obj);
 static Size minSize(const void *obj);
 static void keyPressed(void *obj, const KeyEvent *event);
+static void clicked(void *obj, const ClickEvent *click);
 
 static MetaTextBox mo = MetaTextBox_init("TextBox",
-	destroy, 0, draw, 0, 0, minSize, keyPressed);
+	destroy, 0, draw, 0, 0, activate, deactivate, minSize,
+	keyPressed, clicked);
 
 struct TextBox
 {
@@ -106,6 +111,28 @@ static int draw(void *obj, xcb_render_picture_t picture)
 		"Cannot draw cursor on 0x%x", (unsigned)picture);
     }
     return rc;
+}
+
+static int activate(void *obj)
+{
+    TextBox *self = Object_instance(obj);
+    PSC_Service_setTickInterval(600);
+    PSC_Event_register(PSC_Service_tick(), self, blink, 0);
+    self->cursorvisible = 1;
+    Widget_invalidate(self);
+    return 1;
+}
+
+static int deactivate(void *obj)
+{
+    TextBox *self = Object_instance(obj);
+    PSC_Event_unregister(PSC_Service_tick(), self, blink, 0);
+    if (self->cursorvisible)
+    {
+	self->cursorvisible = 0;
+	Widget_invalidate(self);
+    }
+    return 1;
 }
 
 static Size minSize(const void *obj)
@@ -256,6 +283,19 @@ cursoronly:
     Widget_invalidate(self);
 }
 
+static void clicked(void *obj, const ClickEvent *event)
+{
+    if (event->button == MB_LEFT)
+    {
+	Window *w = Window_fromWidget(obj);
+	if (w)
+	{
+	    Window_setFocusWidget(w, obj);
+	    Widget_activate(obj);
+	}
+    }
+}
+
 TextBox *TextBox_createBase(void *derived, void *parent, Font *font)
 {
     REGTYPE(0);
@@ -272,11 +312,9 @@ TextBox *TextBox_createBase(void *derived, void *parent, Font *font)
     self->selection = (Selection){ 0, 0 };
     self->cursor = 0;
     self->scrollpos = 0;
-    self->cursorvisible = 1;
+    self->cursorvisible = 0;
 
     Widget_setMaxSize(self, (Size){ -1, self->minSize.height });
-    PSC_Service_setTickInterval(600);
-    PSC_Event_register(PSC_Service_tick(), self, blink, 0);
 
     return self;
 }

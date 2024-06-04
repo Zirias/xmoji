@@ -8,9 +8,10 @@ static void destroy(void *obj);
 static void expose(void *obj, Rect region);
 static int draw(void *obj, xcb_render_picture_t picture);
 static Size minSize(const void *obj);
+static void clicked(void *obj, const ClickEvent *event);
 
 static MetaVBox mo = MetaVBox_init("VBox",
-	destroy, expose, draw, 0, 0, minSize, 0);
+	destroy, expose, draw, 0, 0, 0, 0, minSize, 0, clicked);
 
 typedef struct VBoxItem
 {
@@ -69,6 +70,25 @@ static Size minSize(const void *obj)
 {
     const VBox *self = Object_instance(obj);
     return self->minSize;
+}
+
+static void clicked(void *obj, const ClickEvent *event)
+{
+    const VBox *self = Object_instance(obj);
+    PSC_ListIterator *i = PSC_List_iterator(self->items);
+    while (PSC_ListIterator_moveNext(i))
+    {
+	VBoxItem *item = PSC_ListIterator_current(i);
+	Rect rect = Widget_geometry(item->widget);
+	if (event->pos.x >= rect.pos.x
+		&& event->pos.x < rect.pos.x + rect.size.width
+		&& event->pos.y >= rect.pos.y
+		&& event->pos.y < rect.pos.y + rect.size.height)
+	{
+	    Widget_clicked(item->widget, event);
+	}
+    }
+    PSC_ListIterator_destroy(i);
 }
 
 void layout(VBox *self, int updateMinSize)
@@ -179,7 +199,6 @@ void VBox_addWidget(void *self, void *widget)
     item->widget = widget;
     item->minSize = (Size){0, 0};
     Widget_setContainer(widget, b);
-    Widget_setDrawable(widget, Widget_drawable(b));
     PSC_Event_register(Widget_sizeRequested(widget), b, sizeRequested, 0);
     PSC_List_append(b->items, item, free);
     sizeRequested(b, widget, 0);

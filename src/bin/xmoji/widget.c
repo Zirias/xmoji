@@ -7,19 +7,21 @@
 #include <string.h>
 
 #define MAXDAMAGES 16
+
 static void destroy(void *obj);
 static int show(void *obj);
 static int hide(void *obj);
 static Size minSize(const void *obj);
 
 static MetaWidget mo = MetaWidget_init("Widget",
-	destroy, 0, 0, show, hide, minSize, 0);
+	destroy, 0, 0, show, hide, 0, 0, minSize, 0, 0);
 
 struct Widget
 {
     Object base;
     PSC_Event *shown;
     PSC_Event *hidden;
+    PSC_Event *activated;
     PSC_Event *sizeRequested;
     PSC_Event *sizeChanged;
     Widget *container;
@@ -37,6 +39,7 @@ struct Widget
     int drawBackground;
     int ndamages;
     int visible;
+    int active;
 };
 
 static void destroy(void *obj)
@@ -45,6 +48,7 @@ static void destroy(void *obj)
     ColorSet_destroy(self->colorSet);
     PSC_Event_destroy(self->sizeChanged);
     PSC_Event_destroy(self->sizeRequested);
+    PSC_Event_destroy(self->activated);
     PSC_Event_destroy(self->hidden);
     PSC_Event_destroy(self->shown);
     free(self);
@@ -101,6 +105,7 @@ Widget *Widget_createBase(void *derived, void *parent)
     self->base.type = OBJTYPE;
     self->shown = PSC_Event_create(self);
     self->hidden = PSC_Event_create(self);
+    self->activated = PSC_Event_create(self);
     self->sizeRequested = PSC_Event_create(self);
     self->sizeChanged = PSC_Event_create(self);
     self->colorSet = ColorSet_create(0, 0);
@@ -121,6 +126,12 @@ PSC_Event *Widget_hidden(void *self)
 {
     Widget *w = Object_instance(self);
     return w->hidden;
+}
+
+PSC_Event *Widget_activated(void *self)
+{
+    Widget *w = Object_instance(self);
+    return w->activated;
 }
 
 PSC_Event *Widget_sizeRequested(void *self)
@@ -144,8 +155,20 @@ Widget *Widget_container(const void *self)
 void Widget_setContainer(void *self, void *container)
 {
     Widget *w = Object_instance(self);
-    Widget *c = container ? Object_instance(container) : 0;
-    w->container = c;
+    Widget *cont = container ? Object_instance(container) : 0;
+    if (w->container != cont)
+    {
+	if (w->drawable)
+	{
+	    xcb_connection_t *c = X11Adapter_connection();
+	    xcb_render_free_picture(c, w->bgpicture);
+	    xcb_render_free_picture(c, w->picture);
+	}
+	w->bgpicture = 0;
+	w->picture = 0;
+	w->drawable = 0;
+	w->container = cont;
+    }
 }
 
 static void setContentClipArea(Widget *self, xcb_connection_t *c)
@@ -193,8 +216,8 @@ static void setContentClipArea(Widget *self, xcb_connection_t *c)
 
 int Widget_draw(void *self)
 {
+    if (!Widget_drawable(self)) return -1;
     Widget *w = Object_instance(self);
-    if (!w->drawable) return -1;
     if (!Widget_visible(self)) return 0;
     int rc = -1;
     if (!w->ndamages)
@@ -253,6 +276,27 @@ int Widget_hide(void *self)
     int rc = -1;
     Object_vcall(rc, Widget, hide, self);
     return rc;
+}
+
+void Widget_activate(void *self)
+{
+    Widget *w = Object_instance(self);
+    if (w->active) return;
+    int rc = 1;
+    Object_vcall(rc, Widget, activate, w);
+    if (!rc) return;
+    w->active = 1;
+    PSC_Event_raise(w->activated, 0, 0);
+}
+
+void Widget_deactivate(void *self)
+{
+    Widget *w = Object_instance(self);
+    if (!w->active) return;
+    int rc = 1;
+    Object_vcall(rc, Widget, deactivate, w);
+    if (!rc) return;
+    w->active = 0;
 }
 
 static void setSize(Widget *self, int external, Size size)
@@ -398,6 +442,7 @@ void Widget_setBackground(void *self, int enabled, ColorRole role)
 xcb_drawable_t Widget_drawable(const void *self)
 {
     Widget *w = Object_instance(self);
+    if (w->container) Widget_setDrawable(w, Widget_drawable(w->container));
     return w->drawable;
 }
 
@@ -433,7 +478,6 @@ void Widget_setDrawable(void *self, xcb_drawable_t drawable)
 int Widget_visible(const void *self)
 {
     const Widget *w = Object_instance(self);
-    if (!w->drawable) return 0;
     if (!w->visible) return 0;
     if (!w->container) return 1;
     return Widget_visible(w->container);
@@ -443,6 +487,12 @@ void Widget_keyPressed(void *self, const KeyEvent *event)
 {
     Widget *w = Object_instance(self);
     Object_vcallv(Widget, keyPressed, w, event);
+}
+
+void Widget_clicked(void *self, const ClickEvent *event)
+{
+    Widget *w = Object_instance(self);
+    Object_vcallv(Widget, clicked, w, event);
 }
 
 void Widget_requestSize(void *self)

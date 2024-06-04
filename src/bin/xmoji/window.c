@@ -15,7 +15,7 @@ static int show(void *obj);
 static int hide(void *obj);
 
 static MetaWindow mo = MetaWindow_init("Window",
-	destroy, expose, draw, show, hide, 0, 0);
+	destroy, expose, draw, show, hide, 0, 0, 0, 0, 0);
 
 struct Window
 {
@@ -78,6 +78,20 @@ static int hide(void *obj)
     return 0;
 }
 
+static void buttonpress(void *receiver, void *sender, void *args)
+{
+    (void)sender;
+
+    Window *self = receiver;
+    if (!self->mainWidget) return;
+    xcb_button_press_event_t *ev = args;
+    ClickEvent click = {
+	.button = 1 << (ev->detail - 1),
+	.pos = { ev->event_x, ev->event_y }
+    };
+    Widget_clicked(self->mainWidget, &click);
+}
+
 static void exposed(void *receiver, void *sender, void *args)
 {
     (void)sender;
@@ -96,6 +110,26 @@ static void exposed(void *receiver, void *sender, void *args)
     }
     Widget_invalidateRegion(self,
 	    (Rect){{ev->x, ev->y},{ev->width, ev->height}});
+}
+
+static void focusin(void *receiver, void *sender, void *args)
+{
+    (void)sender;
+    (void)args;
+
+    Window *self = receiver;
+    if (!self->focusWidget) return;
+    Widget_activate(self->focusWidget);
+}
+
+static void focusout(void *receiver, void *sender, void *args)
+{
+    (void)sender;
+    (void)args;
+
+    Window *self = receiver;
+    if (!self->focusWidget) return;
+    Widget_deactivate(self->focusWidget);
 }
 
 static void keypress(void *receiver, void *sender, void *args)
@@ -274,12 +308,18 @@ static void destroy(void *window)
 	    unmapped, self->w);
     PSC_Event_unregister(X11Adapter_mapNotify(), self,
 	    mapped, self->w);
+    PSC_Event_unregister(X11Adapter_focusout(), self,
+	    focusout, self->w);
+    PSC_Event_unregister(X11Adapter_focusin(), self,
+	    focusin, self->w);
     PSC_Event_unregister(X11Adapter_expose(), self,
 	    exposed, self->w);
     PSC_Event_unregister(X11Adapter_configureNotify(), self,
 	    configureNotify, self->w);
     PSC_Event_unregister(X11Adapter_clientmsg(), self,
 	    clientmsg, self->w);
+    PSC_Event_unregister(X11Adapter_buttonpress(), self,
+	    buttonpress, self->w);
     PSC_Event_unregister(X11Adapter_requestError(), self,
 	    requestError, self->w);
     xkb_compose_state_unref(self->kbcompose);
@@ -311,7 +351,9 @@ Window *Window_createBase(void *derived, void *parent)
     xcb_screen_t *s = X11Adapter_screen();
     uint32_t mask = XCB_CW_EVENT_MASK;
     uint32_t values[] = { 
-	XCB_EVENT_MASK_EXPOSURE
+	XCB_EVENT_MASK_BUTTON_PRESS
+	    | XCB_EVENT_MASK_EXPOSURE
+	    | XCB_EVENT_MASK_FOCUS_CHANGE
 	    | XCB_EVENT_MASK_KEY_PRESS
 	    | XCB_EVENT_MASK_STRUCTURE_NOTIFY
     };
@@ -337,12 +379,18 @@ Window *Window_createBase(void *derived, void *parent)
     Widget_setDrawable(self, self->w);
     Widget_setBackground(self, 1, COLOR_BG_NORMAL);
 
+    PSC_Event_register(X11Adapter_buttonpress(), self,
+	    buttonpress, self->w);
     PSC_Event_register(X11Adapter_clientmsg(), self,
 	    clientmsg, self->w);
     PSC_Event_register(X11Adapter_configureNotify(), self,
 	    configureNotify, self->w);
     PSC_Event_register(X11Adapter_expose(), self,
 	    exposed, self->w);
+    PSC_Event_register(X11Adapter_focusin(), self,
+	    focusin, self->w);
+    PSC_Event_register(X11Adapter_focusout(), self,
+	    focusout, self->w);
     PSC_Event_register(X11Adapter_keypress(), self,
 	    keypress, self->w);
     PSC_Event_register(X11Adapter_mapNotify(), self,
@@ -355,6 +403,18 @@ Window *Window_createBase(void *derived, void *parent)
 	    sizeChanged, 0);
 
     return self;
+}
+
+Window *Window_fromWidget(void *widget)
+{
+    Window *w = Object_cast(widget);
+    while (!w)
+    {
+	widget = Widget_container(widget);
+	if (!widget) break;
+	w = Object_cast(widget);
+    }
+    return w;
 }
 
 PSC_Event *Window_closed(void *self)
@@ -450,14 +510,12 @@ void Window_setMainWidget(void *self, void *widget)
     {
 	PSC_Event_unregister(Widget_sizeRequested(w->mainWidget), w,
 		sizeRequested, 0);
-	Widget_setDrawable(w->mainWidget, 0);
 	Widget_setContainer(w->mainWidget, 0);
     }
     w->mainWidget = widget;
     if (widget)
     {
 	Widget_setContainer(widget, w);
-	Widget_setDrawable(widget, w->w);
 	PSC_Event_register(Widget_sizeRequested(widget), w, sizeRequested, 0);
 	sizeRequested(w, 0, 0);
     }

@@ -9,9 +9,11 @@ typedef struct MetaVBox
 } MetaVBox;
 
 #define MetaVBox_init(name, destroy, \
-	expose, draw, show, hide, minSize, keyPressed) { \
+	expose, draw, show, hide, activate, deactivate, \
+	minSize, keyPressed, clicked) { \
     .base = MetaWidget_init(name, destroy, \
-	    expose, draw, show, hide, minSize, keyPressed) \
+	    expose, draw, show, hide, activate, deactivate, \
+	    minSize, keyPressed, clicked) \
 }
 
 C_CLASS_DECL(VBox);

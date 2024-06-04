@@ -27,7 +27,7 @@ const void *MetaObject_get(uint32_t id);
 
 Object *Object_create(void *derived);
 void Object_own(void *self, void *obj);
-void *Object_instanceOf(void *self, uint32_t type);
+void *Object_instanceOf(void *self, uint32_t type, int mustMatch);
 void *Object_mostDerived(void *self);
 void Object_destroy(void *self);
 
@@ -40,7 +40,8 @@ void Object_destroy(void *self);
 
 #define OBJTYPE ((MetaObject *)&mo)->id
 
-#define Object_instance(o) Object_instanceOf((void *)(o), OBJTYPE)
+#define Object_instance(o) Object_instanceOf((void *)(o), OBJTYPE, 1)
+#define Object_cast(o) Object_instanceOf((void *)(o), OBJTYPE, 0)
 
 #define priv_MO_docall(r, mo, m, ...) r = mo->m(__VA_ARGS__)
 #define priv_MO_docallv(r, mo, m, ...) mo->m(__VA_ARGS__)

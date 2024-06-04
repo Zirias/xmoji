@@ -13,15 +13,20 @@ typedef struct MetaWindow
 } MetaWindow;
 
 #define MetaWindow_init(name, destroy, \
-	expose, draw, show, hide, minSize, keyPressed) { \
+	expose, draw, show, hide, activate, deactivate, \
+	minSize, keyPressed, clicked) { \
     .base = MetaWidget_init(name, destroy, \
-	    expose, draw, show, hide, keyPressed, minSize) \
+	    expose, draw, show, hide, activate, deactivate, \
+	    keyPressed, minSize, clicked) \
 }
 
 C_CLASS_DECL(Window);
 
 Window *Window_createBase(void *derived, void *parent);
 #define Window_create(...) Window_createBase(0, __VA_ARGS__)
+
+Window *Window_fromWidget(void *widget)
+    ATTR_NONNULL((1));
 
 xcb_window_t Window_id(void *self)
     CMETHOD;
