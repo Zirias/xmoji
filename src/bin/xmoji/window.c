@@ -209,15 +209,6 @@ static void sizeChanged(void *receiver, void *sender, void *args)
 		    self->w, mask, values),
 		"Cannot configure window 0x%x", (unsigned)self->w);
     }
-    else if (self->mapped
-	    && ea->newSize.width <= ea->oldSize.width
-	    && ea->newSize.height <= ea->oldSize.height)
-    {
-	// Only if one dimension of the new size is larger than the old size,
-	// we will get an expose event. Otherwise, invalidate our widget to
-	// force a redraw.
-	Widget_invalidate(self);
-    }
     if (self->mainWidget) Widget_setSize(self->mainWidget, ea->newSize);
 }
 
