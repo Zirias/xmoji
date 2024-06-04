@@ -257,8 +257,17 @@ int Widget_hide(void *self)
 
 static void setSize(Widget *self, int external, Size size)
 {
-    if (size.width > self->maxSize.width) size.width = self->maxSize.width;
-    if (size.height > self->maxSize.height) size.height = self->maxSize.height;
+    Size max = self->maxSize;
+    if (max.width != (uint16_t)-1)
+    {
+	max.width += self->padding.left + self->padding.right;
+    }
+    if (max.height != (uint16_t)-1)
+    {
+	max.height += self->padding.top + self->padding.bottom;
+    }
+    if (size.width > max.width) size.width = max.width;
+    if (size.height > max.height) size.height = max.height;
     if (memcmp(&self->geometry.size, &size, sizeof size))
     {
 	SizeChangedEventArgs args = { external, self->geometry.size, size };
