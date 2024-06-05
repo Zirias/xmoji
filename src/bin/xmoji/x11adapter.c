@@ -98,6 +98,7 @@ static size_t wmclasssz;
 
 static xcb_connection_t *c;
 static xcb_screen_t *s;
+static XGlitch glitches;
 static struct xkb_context *kbdctx;
 static struct xkb_keymap *keymap;
 static struct xkb_compose_table *kbdcompose;
@@ -122,6 +123,7 @@ static xcb_atom_t atoms[NATOMS];
 static xcb_render_pictformat_t rootformat;
 static xcb_render_pictformat_t alphaformat;
 static xcb_render_pictformat_t argbformat;
+static xcb_render_pictformat_t rgbformat;
 static int32_t kbdid;
 static int fd;
 static uint8_t xkbevbase;
@@ -633,15 +635,15 @@ int X11Adapter_init(int argc, char **argv, const char *classname)
 	    }
 	}
 	if (fi.data->type != XCB_RENDER_PICT_TYPE_DIRECT) continue;
-	if (fi.data->direct.alpha_mask != 255) continue;
 	if (fi.data->depth == 8)
 	{
 	    if (fi.data->direct.red_mask != 0) continue;
 	    if (fi.data->direct.green_mask != 0) continue;
 	    if (fi.data->direct.blue_mask != 0) continue;
+	    if (fi.data->direct.alpha_mask != 255) continue;
 	    alphaformat = fi.data->id;
 	}
-	else if (fi.data->depth == 32)
+	else
 	{
 	    if (fi.data->direct.red_shift != 16) continue;
 	    if (fi.data->direct.red_mask != 255) continue;
@@ -649,7 +651,14 @@ int X11Adapter_init(int argc, char **argv, const char *classname)
 	    if (fi.data->direct.green_mask != 255) continue;
 	    if (fi.data->direct.blue_shift != 0) continue;
 	    if (fi.data->direct.blue_mask != 255) continue;
-	    argbformat = fi.data->id;
+	    if (fi.data->depth == 32 && fi.data->direct.alpha_mask == 255)
+	    {
+		argbformat = fi.data->id;
+	    }
+	    else if (fi.data->depth == 24 && fi.data->direct.alpha_mask == 0)
+	    {
+		rgbformat = fi.data->id;
+	    }
 	}
     }
     free(pf);
@@ -662,6 +671,11 @@ int X11Adapter_init(int argc, char **argv, const char *classname)
     if (!argbformat)
     {
 	PSC_Log_msg(PSC_L_ERROR, "No 32bit ARGB format found");
+	goto error;
+    }
+    if (!rgbformat)
+    {
+	PSC_Log_msg(PSC_L_ERROR, "No 24bit RGB format found");
 	goto error;
     }
 
@@ -733,7 +747,10 @@ int X11Adapter_init(int argc, char **argv, const char *classname)
 	if (!strcmp(argv[i], "-name"))
 	{
 	    nm = argv[++i];
-	    break;
+	}
+	else if (!strcmp(argv[i], "-glitches"))
+	{
+	    glitches = atoi(argv[++i]);
 	}
     }
     if (!nm) nm = getenv("RESOURCE_NAME");
@@ -824,6 +841,11 @@ size_t X11Adapter_maxRequestSize(void)
     return maxRequestSize;
 }
 
+XGlitch X11Adapter_glitches(void)
+{
+    return glitches;
+}
+
 xcb_atom_t X11Adapter_atom(XAtomId id)
 {
     return atoms[id];
@@ -842,6 +864,11 @@ xcb_render_pictformat_t X11Adapter_alphaformat(void)
 xcb_render_pictformat_t X11Adapter_argbformat(void)
 {
     return argbformat;
+}
+
+xcb_render_pictformat_t X11Adapter_rgbformat(void)
+{
+    return rgbformat;
 }
 
 struct xkb_compose_table *X11Adapter_kbdcompose(void)

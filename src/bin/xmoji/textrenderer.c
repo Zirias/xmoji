@@ -32,6 +32,7 @@ struct TextRenderer
     Color tcolor;
     Color scolor;
     Size size;
+    Pos pos;
     Selection selection;
     unsigned hblen;
     int haserror;
@@ -59,14 +60,14 @@ TextRenderer *TextRenderer_create(Font *font)
     self->pixmap = xcb_generate_id(c);
     PSC_Event_register(X11Adapter_requestError(), self, requestError,
 	    self->pixmap);
-    CHECK(xcb_create_pixmap(c, 32, self->pixmap,
+    CHECK(xcb_create_pixmap(c, 24, self->pixmap,
 		X11Adapter_screen()->root, 1, 1),
 	    "TextRenderer: Cannot create drawing pixmap 0x%x",
 	    (unsigned)self->pixmap);
     self->pen = xcb_generate_id(c);
     uint32_t repeat = XCB_RENDER_REPEAT_NORMAL;
     CHECK(xcb_render_create_picture(c, self->pen, self->pixmap,
-		X11Adapter_argbformat(), XCB_RENDER_CP_REPEAT, &repeat),
+		X11Adapter_rgbformat(), XCB_RENDER_CP_REPEAT, &repeat),
 	    "TextRenderer: Cannot create pen on pixmap 0x%x",
 	    (unsigned)self->pixmap);
     if (Font_glyphtype(self->font) == FGT_BITMAP_BGRA)
@@ -100,7 +101,7 @@ static void createTmpPicture(TextRenderer *self, xcb_connection_t *c)
 	    (unsigned)self->pixmap);
     self->tpic = xcb_generate_id(c);
     CHECK(xcb_render_create_picture(c, self->tpic, self->tmp,
-		X11Adapter_rootformat(), 0, 0),
+		X11Adapter_rgbformat(), 0, 0),
 	    "TextRenderer: Cannot create temporary picture for 0x%x",
 	    (unsigned)self->pixmap);
 }
@@ -242,10 +243,7 @@ int TextRenderer_renderWithSelection(TextRenderer *self,
     xcb_render_picture_t srcpic = self->pen;
     if (selection.len)
     {
-	if (!self->tpic)
-	{
-	    createTmpPicture(self, c);
-	}
+	if (!self->tpic) createTmpPicture(self, c);
 	if (memcmp(&selection, &self->selection, sizeof selection)
 		|| color != self->tcolor
 		|| selectionColor != self->scolor)
@@ -269,6 +267,19 @@ int TextRenderer_renderWithSelection(TextRenderer *self,
     }
     if (selection.len || Font_glyphtype(self->font) == FGT_BITMAP_BGRA)
     {
+	if (X11Adapter_glitches() & XG_RENDER_SRC_OFFSET
+		&& memcmp(&pos, &self->pos, sizeof pos))
+	{
+	    xcb_render_transform_t shift = {
+		1 << 16, 0, -pos.x << 16,
+		0, 1 << 16, -pos.y << 16,
+		0, 0, 1 << 16
+	    };
+	    CHECK(xcb_render_set_picture_transform(c, self->tpic, shift),
+		    "TextRenderer: Cannot shift temporary picture for 0x%x",
+		    (unsigned)self->pixmap);
+	    self->pos = pos;
+	}
 	srcpic = self->tpic;
     }
     else if (color != self->color)

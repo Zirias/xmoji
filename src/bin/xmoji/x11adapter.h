@@ -9,6 +9,12 @@
 C_CLASS_DECL(PSC_Event);
 struct xkb_compose_table;
 
+typedef enum XGlitch
+{
+    XG_NONE		    = 0,
+    XG_RENDER_SRC_OFFSET    = 1 << 0
+} XGlitch;
+
 #define X_ATOMS(X) \
     X(UTF8_STRING) \
     X(WM_CLASS) \
@@ -157,11 +163,13 @@ int X11Adapter_init(int argc, char **argv, const char *classname);
 
 xcb_connection_t *X11Adapter_connection(void);
 xcb_screen_t *X11Adapter_screen(void);
+XGlitch X11Adapter_glitches(void);
 size_t X11Adapter_maxRequestSize(void);
 xcb_atom_t X11Adapter_atom(XAtomId id);
 xcb_render_pictformat_t X11Adapter_rootformat(void);
 xcb_render_pictformat_t X11Adapter_alphaformat(void);
 xcb_render_pictformat_t X11Adapter_argbformat(void);
+xcb_render_pictformat_t X11Adapter_rgbformat(void);
 struct xkb_compose_table *X11Adapter_kbdcompose(void);
 PSC_Event *X11Adapter_buttonpress(void) ATTR_RETNONNULL;
 PSC_Event *X11Adapter_clientmsg(void) ATTR_RETNONNULL;

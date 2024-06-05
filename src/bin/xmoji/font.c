@@ -485,10 +485,10 @@ int Font_uploadGlyphs(Font *self, unsigned len, GlyphRenderInfo *glyphinfo)
 	    pixelsize = 4;
 	}
 	FT_Render_Glyph(slot, FT_RENDER_MODE_NORMAL);
-	glyphs[i].x = Font_scale(self, -slot->bitmap_left);
-	glyphs[i].y = Font_scale(self, slot->bitmap_top);
 	glyphs[i].width = Font_scale(self, slot->bitmap.width);
 	glyphs[i].height = Font_scale(self, slot->bitmap.rows);
+	glyphs[i].x = Font_scale(self, -slot->bitmap_left);
+	glyphs[i].y = Font_scale(self, slot->bitmap_top);
 	unsigned stride = (glyphs[i].width * pixelsize + 3) & ~3;
 	size_t bitmapsz = stride * glyphs[i].height;
 	unsigned maskstride = 0;
