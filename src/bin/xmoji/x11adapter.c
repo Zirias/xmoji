@@ -8,6 +8,7 @@
 #include <poser/core.h>
 #include <stdlib.h>
 #include <string.h>
+#include <xcb/xcb_cursor.h>
 #include <xcb/xcbext.h>
 SUPPRESS(pedantic)
 #include <xcb/xkb.h>
@@ -86,6 +87,12 @@ static const xcb_xkb_select_events_details_t xkbevdetails = {
     .stateDetails = XKBSTDETAILS
 };
 
+static const char *cursornames[] = {
+    "left_ptr",
+    "xterm"
+};
+static xcb_cursor_t cursors[sizeof cursornames / sizeof *cursornames];
+
 static char wmclass[512];
 static size_t wmclasssz;
 
@@ -95,15 +102,19 @@ static struct xkb_context *kbdctx;
 static struct xkb_keymap *keymap;
 static struct xkb_compose_table *kbdcompose;
 static struct xkb_state *kbdstate;
+static xcb_cursor_context_t *cctx;
 static size_t maxRequestSize;
 static PSC_Event *buttonpress;
 static PSC_Event *clientmsg;
 static PSC_Event *configureNotify;
+static PSC_Event *enter;
 static PSC_Event *expose;
 static PSC_Event *focusin;
 static PSC_Event *focusout;
 static PSC_Event *keypress;
+static PSC_Event *leave;
 static PSC_Event *mapNotify;
+static PSC_Event *motionNotify;
 static PSC_Event *unmapNotify;
 static PSC_Event *requestError;
 static PSC_Event *eventsDone;
@@ -313,6 +324,11 @@ static void handleX11Event(xcb_generic_event_t *ev)
 		    ((xcb_configure_notify_event_t *)ev)->window, ev);
 	    break;
 
+	case XCB_ENTER_NOTIFY:
+	    PSC_Event_raise(enter,
+		    ((xcb_enter_notify_event_t *)ev)->event, ev);
+	    break;
+
 	case XCB_EXPOSE:
 	    PSC_Event_raise(expose,
 		    ((xcb_expose_event_t *)ev)->window, ev);
@@ -359,9 +375,19 @@ static void handleX11Event(xcb_generic_event_t *ev)
 	    }
 	    break;
 
+	case XCB_LEAVE_NOTIFY:
+	    PSC_Event_raise(leave,
+		    ((xcb_leave_notify_event_t *)ev)->event, ev);
+	    break;
+
 	case XCB_MAP_NOTIFY:
 	    PSC_Event_raise(mapNotify,
 		    ((xcb_map_notify_event_t *)ev)->window, ev);
+	    break;
+
+	case XCB_MOTION_NOTIFY:
+	    PSC_Event_raise(motionNotify,
+		    ((xcb_motion_notify_event_t *)ev)->event, ev);
 	    break;
 
 	case XCB_UNMAP_NOTIFY:
@@ -738,14 +764,27 @@ int X11Adapter_init(int argc, char **argv, const char *classname)
     free(clnm);
     free(nm);
 
+    if (xcb_cursor_context_new(c, s, &cctx) < 0)
+    {
+	PSC_Log_msg(PSC_L_ERROR, "Could not initialize XCursor");
+	goto error;
+    }
+    for (unsigned i = 0; i < sizeof cursornames / sizeof *cursornames; ++i)
+    {
+	cursors[i] = xcb_cursor_load_cursor(cctx, cursornames[i]);
+    }
+
     buttonpress = PSC_Event_create(0);
     clientmsg = PSC_Event_create(0);
     configureNotify = PSC_Event_create(0);
+    enter = PSC_Event_create(0);
     expose = PSC_Event_create(0);
     focusin = PSC_Event_create(0);
     focusout = PSC_Event_create(0);
     keypress = PSC_Event_create(0);
+    leave = PSC_Event_create(0);
     mapNotify = PSC_Event_create(0);
+    motionNotify = PSC_Event_create(0);
     unmapNotify = PSC_Event_create(0);
     requestError = PSC_Event_create(0);
     eventsDone = PSC_Event_create(0);
@@ -760,9 +799,7 @@ int X11Adapter_init(int argc, char **argv, const char *classname)
 
 error:
     free(pf);
-    xcb_disconnect(c);
-    c = 0;
-    s = 0;
+    X11Adapter_done();
     return -1;
 }
 
@@ -827,6 +864,11 @@ PSC_Event *X11Adapter_configureNotify(void)
     return configureNotify;
 }
 
+PSC_Event *X11Adapter_enter(void)
+{
+    return enter;
+}
+
 PSC_Event *X11Adapter_expose(void)
 {
     return expose;
@@ -847,9 +889,19 @@ PSC_Event *X11Adapter_keypress(void)
     return keypress;
 }
 
+PSC_Event *X11Adapter_leave(void)
+{
+    return leave;
+}
+
 PSC_Event *X11Adapter_mapNotify(void)
 {
     return mapNotify;
+}
+
+PSC_Event *X11Adapter_motionNotify(void)
+{
+    return motionNotify;
 }
 
 PSC_Event *X11Adapter_unmapNotify(void)
@@ -871,6 +923,15 @@ const char *X11Adapter_wmClass(size_t *sz)
 {
     if (sz) *sz = wmclasssz;
     return wmclass;
+}
+
+xcb_cursor_t X11Adapter_cursor(XCursor id)
+{
+    if (id < 0 || (unsigned)id > sizeof cursornames / sizeof *cursornames)
+    {
+	return 0;
+    }
+    return cursors[id];
 }
 
 static unsigned await(unsigned sequence, int replytype, void *ctx,
@@ -941,28 +1002,40 @@ void X11Adapter_done(void)
     PSC_Event_destroy(eventsDone);
     PSC_Event_destroy(requestError);
     PSC_Event_destroy(unmapNotify);
+    PSC_Event_destroy(motionNotify);
     PSC_Event_destroy(mapNotify);
+    PSC_Event_destroy(leave);
     PSC_Event_destroy(keypress);
     PSC_Event_destroy(focusout);
     PSC_Event_destroy(focusin);
     PSC_Event_destroy(expose);
+    PSC_Event_destroy(enter);
     PSC_Event_destroy(configureNotify);
     PSC_Event_destroy(clientmsg);
     PSC_Event_destroy(buttonpress);
     eventsDone = 0;
     requestError = 0;
     unmapNotify = 0;
+    motionNotify = 0;
     mapNotify = 0;
+    leave = 0;
     keypress = 0;
     focusout = 0;
     focusin = 0;
     expose = 0;
+    enter = 0;
     configureNotify = 0;
     clientmsg = 0;
     buttonpress = 0;
     rootformat = 0;
     alphaformat = 0;
     argbformat = 0;
+    for (unsigned i = 0; i < sizeof cursornames / sizeof *cursornames; ++i)
+    {
+	xcb_free_cursor(c, cursors[i]);
+    }
+    xcb_cursor_context_free(cctx);
+    cctx = 0;
     xkb_state_unref(kbdstate);
     kbdstate = 0;
     xkb_keymap_unref(keymap);
@@ -976,5 +1049,6 @@ void X11Adapter_done(void)
     s = 0;
     c = 0;
     memset(atoms, 0, sizeof atoms);
+    memset(cursors, 0, sizeof cursors);
 }
 

@@ -8,12 +8,8 @@ typedef struct MetaVBox
     MetaWidget base;
 } MetaVBox;
 
-#define MetaVBox_init(name, destroy, \
-	expose, draw, show, hide, activate, deactivate, \
-	minSize, keyPressed, clicked) { \
-    .base = MetaWidget_init(name, destroy, \
-	    expose, draw, show, hide, activate, deactivate, \
-	    minSize, keyPressed, clicked) \
+#define MetaVBox_init(...) { \
+    .base = MetaWidget_init(__VA_ARGS__) \
 }
 
 C_CLASS_DECL(VBox);

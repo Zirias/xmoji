@@ -12,12 +12,8 @@ typedef struct MetaWindow
     MetaWidget base;
 } MetaWindow;
 
-#define MetaWindow_init(name, destroy, \
-	expose, draw, show, hide, activate, deactivate, \
-	minSize, keyPressed, clicked) { \
-    .base = MetaWidget_init(name, destroy, \
-	    expose, draw, show, hide, activate, deactivate, \
-	    keyPressed, minSize, clicked) \
+#define MetaWindow_init(...) { \
+    .base = MetaWidget_init(__VA_ARGS__) \
 }
 
 C_CLASS_DECL(Window);

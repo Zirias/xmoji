@@ -41,21 +41,28 @@ typedef struct MetaWidget
     int (*hide)(void *widget);
     int (*activate)(void *widget);
     int (*deactivate)(void *widget);
+    int (*enter)(void *widget);
+    int (*leave)(void *widget);
+    void *(*childAt)(void *widget, Pos pos);
     Size (*minSize)(const void *widget);
     void (*keyPressed)(void *widget, const KeyEvent *event);
     void (*clicked)(void *widget, const ClickEvent *event);
 } MetaWidget;
 
-#define MetaWidget_init(name, destroy, \
-	mexpose, mdraw, mshow, mhide, mactivate, mdeactivate, \
-	mminSize, mkeyPressed, mclicked) { \
-    .base = MetaObject_init(name, destroy), \
+#define MetaWidget_init(mexpose, mdraw, mshow, mhide, \
+	mactivate, mdeactivate, menter, mleave, mchildAt, \
+	mminSize, mkeyPressed, mclicked, \
+	...) { \
+    .base = MetaObject_init(__VA_ARGS__), \
     .expose = mexpose, \
     .draw = mdraw, \
     .show = mshow, \
     .hide = mhide, \
     .activate = mactivate, \
     .deactivate = mdeactivate, \
+    .enter = menter, \
+    .leave = mleave, \
+    .childAt = mchildAt, \
     .minSize = mminSize, \
     .keyPressed = mkeyPressed, \
     .clicked = mclicked \
@@ -90,6 +97,8 @@ int Widget_show(void *self) CMETHOD;
 int Widget_hide(void *self) CMETHOD;
 void Widget_activate(void *self) CMETHOD;
 void Widget_deactivate(void *self) CMETHOD;
+void *Widget_enterAt(void *self, Pos pos) CMETHOD;
+void Widget_leave(void *self) CMETHOD;
 void Widget_setSize(void *self, Size size) CMETHOD;
 void Widget_setMaxSize(void *self, Size maxSize) CMETHOD;
 Size Widget_minSize(const void *self) CMETHOD;
@@ -98,6 +107,8 @@ void Widget_setPadding(void *self, Box padding) CMETHOD;
 Box Widget_padding(const void *self) CMETHOD;
 void Widget_setAlign(void *self, Align align) CMETHOD;
 Align Widget_align(const void *self) CMETHOD;
+void Widget_setCursor(void *self, XCursor cursor) CMETHOD;
+XCursor Widget_cursor(const void *self) CMETHOD;
 void Widget_setOrigin(void *self, Pos origin) CMETHOD;
 Rect Widget_geometry(const void *self) CMETHOD;
 Pos Widget_origin(const void *self) CMETHOD;

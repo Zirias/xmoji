@@ -8,10 +8,14 @@ static void destroy(void *obj);
 static void expose(void *obj, Rect region);
 static int draw(void *obj, xcb_render_picture_t picture);
 static Size minSize(const void *obj);
+static void *childAt(void *obj, Pos pos);
 static void clicked(void *obj, const ClickEvent *event);
 
-static MetaVBox mo = MetaVBox_init("VBox",
-	destroy, expose, draw, 0, 0, 0, 0, minSize, 0, clicked);
+static MetaVBox mo = MetaVBox_init(
+	expose, draw, 0, 0,
+	0, 0, 0, 0, childAt,
+	minSize, 0, clicked,
+	"VBox", destroy);
 
 typedef struct VBoxItem
 {
@@ -70,6 +74,30 @@ static Size minSize(const void *obj)
 {
     const VBox *self = Object_instance(obj);
     return self->minSize;
+}
+
+static void *childAt(void *obj, Pos pos)
+{
+    VBox *self = Object_instance(obj);
+    void *child = obj;
+    PSC_ListIterator *i = PSC_List_iterator(self->items);
+    while (PSC_ListIterator_moveNext(i))
+    {
+	VBoxItem *item = PSC_ListIterator_current(i);
+	Rect rect = Widget_geometry(item->widget);
+	if (pos.x >= rect.pos.x && pos.y >= rect.pos.y
+		&& pos.x < rect.pos.x + rect.size.width
+		&& pos.y < rect.pos.y + rect.size.height)
+	{
+	    child = Widget_enterAt(item->widget, pos);
+	}
+	else
+	{
+	    Widget_leave(item->widget);
+	}
+    }
+    PSC_ListIterator_destroy(i);
+    return child;
 }
 
 static void clicked(void *obj, const ClickEvent *event)

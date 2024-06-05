@@ -13,8 +13,9 @@ static int show(void *obj);
 static int hide(void *obj);
 static Size minSize(const void *obj);
 
-static MetaWidget mo = MetaWidget_init("Widget",
-	destroy, 0, 0, show, hide, 0, 0, minSize, 0, 0);
+static MetaWidget mo = MetaWidget_init(0, 0, show, hide,
+	0, 0, 0, 0, 0, minSize, 0, 0,
+	"Widget", destroy);
 
 struct Widget
 {
@@ -36,10 +37,12 @@ struct Widget
     xcb_render_picture_t bgpicture;
     ColorRole backgroundRole;
     Align align;
+    XCursor cursor;
     int drawBackground;
     int ndamages;
     int visible;
     int active;
+    int entered;
 };
 
 static void destroy(void *obj)
@@ -111,6 +114,7 @@ Widget *Widget_createBase(void *derived, void *parent)
     self->colorSet = ColorSet_create(0, 0);
     self->padding = (Box){ 3, 3, 3, 3 };
     self->maxSize = (Size){ -1, -1 };
+    self->cursor = XC_LEFTPTR;
 
     if (parent) Object_own(parent, derived);
     return self;
@@ -299,6 +303,27 @@ void Widget_deactivate(void *self)
     w->active = 0;
 }
 
+void *Widget_enterAt(void *self, Pos pos)
+{
+    Widget *w = Object_instance(self);
+    if (!w->entered)
+    {
+	w->entered = 1;
+	Object_vcallv(Widget, enter, w);
+    }
+    Widget *child = self;
+    Object_vcall(child, Widget, childAt, self, pos);
+    return child;
+}
+
+void Widget_leave(void *self)
+{
+    Widget *w = Object_instance(self);
+    if (!w->entered) return;
+    w->entered = 0;
+    Object_vcallv(Widget, leave, w);
+}
+
 static void setSize(Widget *self, int external, Size size)
 {
     Size max = self->maxSize;
@@ -376,6 +401,18 @@ Align Widget_align(const void *self)
     return w->align;
 }
 
+void Widget_setCursor(void *self, XCursor cursor)
+{
+    Widget *w = Object_instance(self);
+    w->cursor = cursor;
+}
+
+XCursor Widget_cursor(const void *self)
+{
+    const Widget *w = Object_instance(self);
+    return w->cursor;
+}
+
 void Widget_setOrigin(void *self, Pos pos)
 {
     Widget *w = Object_instance(self);
@@ -449,6 +486,7 @@ xcb_drawable_t Widget_drawable(const void *self)
 void Widget_setDrawable(void *self, xcb_drawable_t drawable)
 {
     Widget *w = Object_instance(self);
+    if (w->drawable == drawable) return;
     xcb_connection_t *c = X11Adapter_connection();
     if (w->drawable)
     {

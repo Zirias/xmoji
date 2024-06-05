@@ -77,6 +77,12 @@ typedef struct XkbKeyEventArgs
     XkbModifier rawmods;
 } XkbKeyEventArgs;
 
+typedef enum XCursor
+{
+    XC_LEFTPTR,
+    XC_XTERM
+} XCursor;
+
 typedef void (*X11ReplyHandler)(void *ctx, unsigned sequence, void *reply,
 	xcb_generic_error_t *error);
 
@@ -160,15 +166,19 @@ struct xkb_compose_table *X11Adapter_kbdcompose(void);
 PSC_Event *X11Adapter_buttonpress(void) ATTR_RETNONNULL;
 PSC_Event *X11Adapter_clientmsg(void) ATTR_RETNONNULL;
 PSC_Event *X11Adapter_configureNotify(void) ATTR_RETNONNULL;
+PSC_Event *X11Adapter_enter(void) ATTR_RETNONNULL;
 PSC_Event *X11Adapter_expose(void) ATTR_RETNONNULL;
 PSC_Event *X11Adapter_focusin(void) ATTR_RETNONNULL;
 PSC_Event *X11Adapter_focusout(void) ATTR_RETNONNULL;
 PSC_Event *X11Adapter_keypress(void) ATTR_RETNONNULL;
+PSC_Event *X11Adapter_leave(void) ATTR_RETNONNULL;
 PSC_Event *X11Adapter_mapNotify(void) ATTR_RETNONNULL;
+PSC_Event *X11Adapter_motionNotify(void) ATTR_RETNONNULL;
 PSC_Event *X11Adapter_unmapNotify(void) ATTR_RETNONNULL;
 PSC_Event *X11Adapter_requestError(void) ATTR_RETNONNULL;
 PSC_Event *X11Adapter_eventsDone(void) ATTR_RETNONNULL;
 const char *X11Adapter_wmClass(size_t *sz) ATTR_RETNONNULL;
+xcb_cursor_t X11Adapter_cursor(XCursor id);
 
 unsigned X11Adapter_await(unsigned sequence, void *ctx,
 	X11ReplyHandler handler) ATTR_NONNULL((3));

@@ -14,8 +14,9 @@ static int draw(void *obj, xcb_render_picture_t picture);
 static int show(void *obj);
 static int hide(void *obj);
 
-static MetaWindow mo = MetaWindow_init("Window",
-	destroy, expose, draw, show, hide, 0, 0, 0, 0, 0);
+static MetaWindow mo = MetaWindow_init(expose, draw, show, hide,
+	0, 0, 0, 0, 0, 0, 0, 0,
+	"Window", destroy);
 
 struct Window
 {
@@ -27,6 +28,10 @@ struct Window
     char *iconName;
     void *mainWidget;
     void *focusWidget;
+    void *hoverWidget;
+    Pos mouse;
+    Pos mouseUpdate;
+    XCursor cursor;
     xcb_window_t w;
     int haserror;
     int haveMinSize;
@@ -90,6 +95,16 @@ static void buttonpress(void *receiver, void *sender, void *args)
 	.pos = { ev->event_x, ev->event_y }
     };
     Widget_clicked(self->mainWidget, &click);
+}
+
+static void enter(void *receiver, void *sender, void *args)
+{
+    (void)sender;
+
+    Window *self = receiver;
+    xcb_enter_notify_event_t *ev = args;
+    self->mouseUpdate.x = ev->event_x;
+    self->mouseUpdate.y = ev->event_y;
 }
 
 static void exposed(void *receiver, void *sender, void *args)
@@ -169,6 +184,16 @@ static void keypress(void *receiver, void *sender, void *args)
     Widget_keyPressed(self->focusWidget, &event);
 }
 
+static void leave(void *receiver, void *sender, void *args)
+{
+    (void)sender;
+    (void)args;
+
+    Window *self = receiver;
+    self->mouseUpdate.x = -1;
+    self->mouseUpdate.y = -1;
+}
+
 static void configureNotify(void *receiver, void *sender, void *args)
 {
     (void)sender;
@@ -182,6 +207,16 @@ static void configureNotify(void *receiver, void *sender, void *args)
     {
 	Widget_setWindowSize(self, newsz);
     }
+}
+
+static void motionNotify(void *receiver, void *sender, void *args)
+{
+    (void)sender;
+
+    Window *self = receiver;
+    xcb_motion_notify_event_t *ev = args;
+    self->mouseUpdate.x = ev->event_x;
+    self->mouseUpdate.y = ev->event_y;
 }
 
 static void clientmsg(void *receiver, void *sender, void *args)
@@ -210,12 +245,35 @@ static void requestError(void *receiver, void *sender, void *args)
     PSC_Event_raise(self->errored, 0, 0);
 }
 
-static void trydraw(void *receiver, void *sender, void *args)
+static void doupdates(void *receiver, void *sender, void *args)
 {
     (void)sender;
     (void)args;
 
-    Widget_draw(receiver);
+    Window *self = receiver;
+    if (memcmp(&self->mouse, &self->mouseUpdate, sizeof self->mouse))
+    {
+	self->mouse = self->mouseUpdate;
+	if (self->mouse.x >= 0 && self->mouse.y >= 0)
+	{
+	    self->hoverWidget = Widget_enterAt(self->mainWidget, self->mouse);
+	    XCursor cursor = Widget_cursor(self->hoverWidget);
+	    if (cursor != self->cursor)
+	    {
+		CHECK(xcb_change_window_attributes(X11Adapter_connection(),
+			    self->w, XCB_CW_CURSOR, (uint32_t[]){
+			    X11Adapter_cursor(cursor) }),
+			"Cannot change cursor for 0x%x", (unsigned)self->w);
+		self->cursor = cursor;
+	    }
+	}
+	else
+	{
+	    self->hoverWidget = 0;
+	    Widget_leave(self->mainWidget);
+	}
+    }
+    Widget_draw(self);
 }
 
 static void sizeChanged(void *receiver, void *sender, void *args)
@@ -303,17 +361,23 @@ static void destroy(void *window)
 {
     Window *self = window;
     PSC_Event_unregister(Widget_sizeChanged(self), self, sizeChanged, 0);
-    PSC_Event_unregister(X11Adapter_eventsDone(), self, trydraw, 0);
+    PSC_Event_unregister(X11Adapter_eventsDone(), self, doupdates, 0);
     PSC_Event_unregister(X11Adapter_unmapNotify(), self,
 	    unmapped, self->w);
+    PSC_Event_unregister(X11Adapter_motionNotify(), self,
+	    motionNotify, self->w);
     PSC_Event_unregister(X11Adapter_mapNotify(), self,
 	    mapped, self->w);
+    PSC_Event_unregister(X11Adapter_leave(), self,
+	    leave, self->w);
     PSC_Event_unregister(X11Adapter_focusout(), self,
 	    focusout, self->w);
     PSC_Event_unregister(X11Adapter_focusin(), self,
 	    focusin, self->w);
     PSC_Event_unregister(X11Adapter_expose(), self,
 	    exposed, self->w);
+    PSC_Event_unregister(X11Adapter_enter(), self,
+	    enter, self->w);
     PSC_Event_unregister(X11Adapter_configureNotify(), self,
 	    configureNotify, self->w);
     PSC_Event_unregister(X11Adapter_clientmsg(), self,
@@ -343,6 +407,7 @@ Window *Window_createBase(void *derived, void *parent)
     self->errored = PSC_Event_create(self);
     self->kbcompose = xkb_compose_state_new(
 	    X11Adapter_kbdcompose(), XKB_COMPOSE_STATE_NO_FLAGS);
+    self->mouseUpdate = (Pos){-1, -1};
 
     xcb_connection_t *c = X11Adapter_connection();
     self->w = xcb_generate_id(c);
@@ -351,10 +416,14 @@ Window *Window_createBase(void *derived, void *parent)
     xcb_screen_t *s = X11Adapter_screen();
     uint32_t mask = XCB_CW_EVENT_MASK;
     uint32_t values[] = { 
-	XCB_EVENT_MASK_BUTTON_PRESS
+	XCB_EVENT_MASK_BUTTON_MOTION
+	    | XCB_EVENT_MASK_BUTTON_PRESS
+	    | XCB_EVENT_MASK_ENTER_WINDOW
 	    | XCB_EVENT_MASK_EXPOSURE
 	    | XCB_EVENT_MASK_FOCUS_CHANGE
 	    | XCB_EVENT_MASK_KEY_PRESS
+	    | XCB_EVENT_MASK_LEAVE_WINDOW
+	    | XCB_EVENT_MASK_POINTER_MOTION
 	    | XCB_EVENT_MASK_STRUCTURE_NOTIFY
     };
     CHECK(xcb_create_window(c, XCB_COPY_FROM_PARENT, self->w, s->root,
@@ -385,6 +454,8 @@ Window *Window_createBase(void *derived, void *parent)
 	    clientmsg, self->w);
     PSC_Event_register(X11Adapter_configureNotify(), self,
 	    configureNotify, self->w);
+    PSC_Event_register(X11Adapter_enter(), self,
+	    enter, self->w);
     PSC_Event_register(X11Adapter_expose(), self,
 	    exposed, self->w);
     PSC_Event_register(X11Adapter_focusin(), self,
@@ -393,12 +464,16 @@ Window *Window_createBase(void *derived, void *parent)
 	    focusout, self->w);
     PSC_Event_register(X11Adapter_keypress(), self,
 	    keypress, self->w);
+    PSC_Event_register(X11Adapter_leave(), self,
+	    leave, self->w);
     PSC_Event_register(X11Adapter_mapNotify(), self,
 	    mapped, self->w);
+    PSC_Event_register(X11Adapter_motionNotify(), self,
+	    motionNotify, self->w);
     PSC_Event_register(X11Adapter_unmapNotify(), self,
 	    unmapped, self->w);
     PSC_Event_register(X11Adapter_eventsDone(), self,
-	    trydraw, 0);
+	    doupdates, 0);
     PSC_Event_register(Widget_sizeChanged(self), self,
 	    sizeChanged, 0);
 

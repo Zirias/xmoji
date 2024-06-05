@@ -20,6 +20,7 @@ xmoji_PKGDEPS=		fontconfig \
 			harfbuzz \
 			posercore \
 			xcb \
+			xcb-cursor \
 			xcb-render \
 			xcb-xkb \
 			xkbcommon \

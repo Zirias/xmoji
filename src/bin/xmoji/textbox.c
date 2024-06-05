@@ -18,9 +18,11 @@ static Size minSize(const void *obj);
 static void keyPressed(void *obj, const KeyEvent *event);
 static void clicked(void *obj, const ClickEvent *click);
 
-static MetaTextBox mo = MetaTextBox_init("TextBox",
-	destroy, 0, draw, 0, 0, activate, deactivate, minSize,
-	keyPressed, clicked);
+static MetaTextBox mo = MetaTextBox_init(
+	0, draw, 0, 0,
+	activate, deactivate, 0, 0, 0,
+	minSize, keyPressed, clicked,
+	"TextBox", destroy);
 
 struct TextBox
 {
@@ -315,6 +317,7 @@ TextBox *TextBox_createBase(void *derived, void *parent, Font *font)
     self->cursorvisible = 0;
 
     Widget_setMaxSize(self, (Size){ -1, self->minSize.height });
+    Widget_setCursor(self, XC_XTERM);
 
     return self;
 }
