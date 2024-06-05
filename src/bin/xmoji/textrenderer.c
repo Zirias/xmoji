@@ -32,7 +32,6 @@ struct TextRenderer
     Color tcolor;
     Color scolor;
     Size size;
-    Pos pos;
     Selection selection;
     unsigned hblen;
     int haserror;
@@ -90,6 +89,20 @@ Size TextRenderer_size(const TextRenderer *self)
 void TextRenderer_setNoLigatures(TextRenderer *self, int noLigatures)
 {
     self->noligatures = !!noLigatures;
+}
+
+static void createTmpPicture(TextRenderer *self, xcb_connection_t *c)
+{
+    self->tmp = xcb_generate_id(c);
+    CHECK(xcb_create_pixmap(c, 24, self->tmp, X11Adapter_screen()->root,
+		self->size.width, self->size.height),
+	    "TextRenderer: Cannot create temporary pixmap for 0x%x",
+	    (unsigned)self->pixmap);
+    self->tpic = xcb_generate_id(c);
+    CHECK(xcb_render_create_picture(c, self->tpic, self->tmp,
+		X11Adapter_rootformat(), 0, 0),
+	    "TextRenderer: Cannot create temporary picture for 0x%x",
+	    (unsigned)self->pixmap);
 }
 
 int TextRenderer_setText(TextRenderer *self, const UniStr *text)
@@ -150,19 +163,6 @@ int TextRenderer_setText(TextRenderer *self, const UniStr *text)
 	self->tpic = 0;
 	self->tmp = 0;
     }
-    if (Font_glyphtype(self->font) == FGT_BITMAP_BGRA)
-    {
-	self->tmp = xcb_generate_id(c);
-	CHECK(xcb_create_pixmap(c, 24, self->tmp, X11Adapter_screen()->root,
-		    self->size.width, self->size.height),
-		"TextRenderer: Cannot create temporary pixmap for 0x%x",
-		(unsigned)self->pixmap);
-	self->tpic = xcb_generate_id(c);
-	CHECK(xcb_render_create_picture(c, self->tpic, self->tmp,
-		    X11Adapter_rootformat(), 0, 0),
-		"TextRenderer: Cannot create temporary picture for 0x%x",
-		(unsigned)self->pixmap);
-    }
     free(self->glyphs);
     self->glyphs = PSC_malloc(self->hblen * sizeof *self->glyphs);
     memset(self->glyphs, 0, self->hblen * sizeof *self->glyphs);
@@ -197,6 +197,7 @@ int TextRenderer_setText(TextRenderer *self, const UniStr *text)
     Font_uploadGlyphs(self->font, self->hblen, self->glyphs);
     if (Font_glyphtype(self->font) == FGT_BITMAP_BGRA)
     {
+	createTmpPicture(self, c);
 	CHECK(xcb_render_composite_glyphs_32(c, XCB_RENDER_PICT_OP_IN,
 		    self->pen, self->tpic, 0, Font_glyphset(self->font), 0, 0,
 		    self->hblen * sizeof *self->glyphs,
@@ -243,18 +244,7 @@ int TextRenderer_renderWithSelection(TextRenderer *self,
     {
 	if (!self->tpic)
 	{
-	    self->tmp = xcb_generate_id(c);
-	    CHECK(xcb_create_pixmap(c, 24, self->tmp,
-			X11Adapter_screen()->root,
-			self->size.width, self->size.height),
-		    "TextRenderer: Cannot create temporary pixmap for 0x%x",
-		    (unsigned)self->pixmap);
-	    self->tpic = xcb_generate_id(c);
-	    CHECK(xcb_render_create_picture(c, self->tpic, self->tmp,
-			X11Adapter_rootformat(), 0, 0),
-		    "TextRenderer: Cannot create temporary picture for 0x%x",
-		    (unsigned)self->pixmap);
-	    self->pos = (Pos){0, 0};
+	    createTmpPicture(self, c);
 	}
 	if (memcmp(&selection, &self->selection, sizeof selection)
 		|| color != self->tcolor
@@ -279,18 +269,6 @@ int TextRenderer_renderWithSelection(TextRenderer *self,
     }
     if (selection.len || Font_glyphtype(self->font) == FGT_BITMAP_BGRA)
     {
-	if (memcmp(&pos, &self->pos, sizeof pos))
-	{
-	    xcb_render_transform_t shift = {
-		1 << 16, 0, -pos.x << 16,
-		0, 1 << 16, -pos.y << 16,
-		0, 0, 1 << 16
-	    };
-	    CHECK(xcb_render_set_picture_transform(c, self->tpic, shift),
-		    "TextRenderer: Cannot shift temporary picture for 0x%x",
-		    (unsigned)self->pixmap);
-	    self->pos = pos;
-	}
 	srcpic = self->tpic;
     }
     else if (color != self->color)
@@ -305,7 +283,7 @@ int TextRenderer_renderWithSelection(TextRenderer *self,
     CHECK(xcb_render_composite_glyphs_32(c, XCB_RENDER_PICT_OP_OVER, srcpic,
 		picture, 0, Font_glyphtype(self->font) == FGT_BITMAP_BGRA ?
 		Font_maskGlyphset(self->font) : Font_glyphset(self->font),
-		0, 0, self->hblen * sizeof *self->glyphs,
+		0, ody, self->hblen * sizeof *self->glyphs,
 		(const uint8_t *)self->glyphs),
 	    "TextRenderer: Cannot render glyphs for 0x%x",
 	    (unsigned)self->pixmap);
