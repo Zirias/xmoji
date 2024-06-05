@@ -251,6 +251,7 @@ static void doupdates(void *receiver, void *sender, void *args)
     (void)args;
 
     Window *self = receiver;
+    if (!self->mainWidget) return;
     if (memcmp(&self->mouse, &self->mouseUpdate, sizeof self->mouse))
     {
 	self->mouse = self->mouseUpdate;
