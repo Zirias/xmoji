@@ -105,4 +105,6 @@ char *UniStr_toUtf8(const UniStr *str, size_t *len)
 size_t UniStr_utf32len(const char32_t *s)
     ATTR_NONNULL((1));
 
+int UniStr_equals(const UniStr *str, const UniStr *other);
+
 #endif

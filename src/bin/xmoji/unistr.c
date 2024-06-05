@@ -305,3 +305,11 @@ size_t UniStr_utf32len(const char32_t *s)
     return endp - s;
 }
 
+int UniStr_equals(const UniStr *str, const UniStr *other)
+{
+    if (str == other) return 1;
+    if (!str || !other) return 0;
+    if (str->len != other->len) return 0;
+    return !memcmp(str->str, other->str, str->len * sizeof *str->str);
+}
+

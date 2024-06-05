@@ -32,6 +32,8 @@ struct TextBox
     Font *font;
     UniStrBuilder *text;
     TextRenderer *renderer;
+    UniStr *phtext;
+    TextRenderer *placeholder;
     Size minSize;
     Selection selection;
     unsigned cursor;
@@ -53,6 +55,8 @@ static void destroy(void *obj)
 {
     TextBox *self = obj;
     PSC_Event_unregister(PSC_Service_tick(), self, blink, 0);
+    TextRenderer_destroy(self->placeholder);
+    UniStr_destroy(self->phtext);
     TextRenderer_destroy(self->renderer);
     UniStrBuilder_destroy(self->text);
     free(self);
@@ -105,7 +109,15 @@ static int draw(void *obj, xcb_render_picture_t picture)
 	else rc = TextRenderer_render(self->renderer,
 		picture, color, contentArea.pos);
     }
-    else self->scrollpos = 0;
+    else
+    {
+	self->scrollpos = 0;
+	if (self->placeholder && !Widget_active(self))
+	{
+	    rc = TextRenderer_render(self->placeholder, picture,
+		    Widget_color(self, COLOR_DISABLED), contentArea.pos);
+	}
+    }
     if (rc >= 0 && self->cursorvisible)
     {
 	xcb_rectangle_t rect = { contentArea.pos.x + cursorpos,
@@ -328,6 +340,8 @@ TextBox *TextBox_createBase(void *derived, void *parent, Font *font)
     self->text = UniStrBuilder_create();
     self->renderer = TextRenderer_create(font);
     TextRenderer_setNoLigatures(self->renderer, 1);
+    self->phtext = 0;
+    self->placeholder = 0;
     self->minSize = (Size){ 120, (Font_maxHeight(self->font) + 0x3f) >> 6 };
     self->selection = (Selection){ 0, 0 };
     self->cursor = 0;
@@ -351,5 +365,28 @@ void TextBox_setText(void *self, const UniStr *text)
 {
     (void)self;
     (void)text;
+}
+
+void TextBox_setPlaceholder(void *self, const UniStr *text)
+{
+    TextBox *b = Object_instance(self);
+
+    if (!text || !UniStr_len(text))
+    {
+	if (!b->placeholder) return;
+	TextRenderer_destroy(b->placeholder);
+	b->placeholder = 0;
+	UniStr_destroy(b->phtext);
+	b->phtext = 0;
+    }
+    else if (UniStr_equals(b->phtext, text)) return;
+    if (b->placeholder) UniStr_destroy(b->phtext);
+    else b->placeholder = TextRenderer_create(b->font);
+    b->phtext = UniStr_ref(text);
+    TextRenderer_setText(b->placeholder, b->phtext);
+    if (!UniStr_len(UniStrBuilder_stringView(b->text)))
+    {
+	Widget_invalidate(b);
+    }
 }
 

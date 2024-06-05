@@ -52,6 +52,7 @@ static void onprestartup(void *receiver, void *sender, void *args)
     Widget_setColor(win, COLOR_BG_SELECTED, Color_fromRgb(100, 200, 255));
     Widget_setColor(win, COLOR_SELECTED, Color_fromRgb(0, 0, 0));
     Widget_setColor(win, COLOR_BG_ACTIVE, Color_fromRgb(40, 50, 60));
+    Widget_setColor(win, COLOR_DISABLED, Color_fromRgb(120, 120, 120));
 
     VBox *box = VBox_create(win);
 
@@ -66,6 +67,8 @@ static void onprestartup(void *receiver, void *sender, void *args)
     VBox_addWidget(box, label);
 
     TextBox *input = TextBox_create(box, font);
+    UniStr(clickhere, "Click here to type ...");
+    TextBox_setPlaceholder(input, clickhere);
     Widget_show(input);
     VBox_addWidget(box, input);
 
@@ -77,6 +80,7 @@ static void onprestartup(void *receiver, void *sender, void *args)
     VBox_addWidget(box, label);
 
     input = TextBox_create(box, font);
+    TextBox_setPlaceholder(input, clickhere);
     Widget_show(input);
     VBox_addWidget(box, input);
 
