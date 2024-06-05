@@ -41,8 +41,8 @@ typedef struct MetaWidget
     int (*hide)(void *widget);
     int (*activate)(void *widget);
     int (*deactivate)(void *widget);
-    int (*enter)(void *widget);
-    int (*leave)(void *widget);
+    void (*enter)(void *widget);
+    void (*leave)(void *widget);
     void *(*childAt)(void *widget, Pos pos);
     Size (*minSize)(const void *widget);
     void (*keyPressed)(void *widget, const KeyEvent *event);
@@ -97,6 +97,7 @@ int Widget_show(void *self) CMETHOD;
 int Widget_hide(void *self) CMETHOD;
 void Widget_activate(void *self) CMETHOD;
 void Widget_deactivate(void *self) CMETHOD;
+int Widget_active(const void *self) CMETHOD;
 void *Widget_enterAt(void *self, Pos pos) CMETHOD;
 void Widget_leave(void *self) CMETHOD;
 void Widget_setSize(void *self, Size size) CMETHOD;

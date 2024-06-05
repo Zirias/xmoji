@@ -303,6 +303,12 @@ void Widget_deactivate(void *self)
     w->active = 0;
 }
 
+int Widget_active(const void *self)
+{
+    const Widget *w = Object_instance(self);
+    return w->active;
+}
+
 void *Widget_enterAt(void *self, Pos pos)
 {
     Widget *w = Object_instance(self);

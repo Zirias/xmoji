@@ -14,13 +14,15 @@ static void destroy(void *obj);
 static int draw(void *obj, xcb_render_picture_t picture);
 static int activate(void *obj);
 static int deactivate(void *obj);
+static void enter(void *obj);
+static void leave(void *obj);
 static Size minSize(const void *obj);
 static void keyPressed(void *obj, const KeyEvent *event);
 static void clicked(void *obj, const ClickEvent *click);
 
 static MetaTextBox mo = MetaTextBox_init(
 	0, draw, 0, 0,
-	activate, deactivate, 0, 0, 0,
+	activate, deactivate, enter, leave, 0,
 	minSize, keyPressed, clicked,
 	"TextBox", destroy);
 
@@ -121,6 +123,7 @@ static int activate(void *obj)
     PSC_Service_setTickInterval(600);
     PSC_Event_register(PSC_Service_tick(), self, blink, 0);
     self->cursorvisible = 1;
+    Widget_setBackground(self, 1, COLOR_BG_ACTIVE);
     Widget_invalidate(self);
     return 1;
 }
@@ -132,9 +135,25 @@ static int deactivate(void *obj)
     if (self->cursorvisible)
     {
 	self->cursorvisible = 0;
-	Widget_invalidate(self);
     }
+    Widget_setBackground(self, 1, COLOR_BG_NORMAL);
+    Widget_invalidate(self);
     return 1;
+}
+
+static void enter(void *obj)
+{
+    Widget_setBackground(obj, 1, COLOR_BG_ACTIVE);
+    Widget_invalidate(obj);
+}
+
+static void leave(void *obj)
+{
+    if (!Widget_active(obj))
+    {
+	Widget_setBackground(obj, 1, COLOR_BG_NORMAL);
+	Widget_invalidate(obj);
+    }
 }
 
 static Size minSize(const void *obj)
@@ -293,7 +312,6 @@ static void clicked(void *obj, const ClickEvent *event)
 	if (w)
 	{
 	    Window_setFocusWidget(w, obj);
-	    Widget_activate(obj);
 	}
     }
 }
@@ -317,6 +335,7 @@ TextBox *TextBox_createBase(void *derived, void *parent, Font *font)
     self->cursorvisible = 0;
 
     Widget_setMaxSize(self, (Size){ -1, self->minSize.height });
+    Widget_setBackground(self, 1, COLOR_BG_NORMAL);
     Widget_setCursor(self, XC_XTERM);
 
     return self;
