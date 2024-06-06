@@ -23,6 +23,8 @@ unsigned TextRenderer_glyphLen(const TextRenderer *self, unsigned index)
     CMETHOD;
 unsigned TextRenderer_pixelOffset(const TextRenderer *self, unsigned index)
     CMETHOD;
+unsigned TextRenderer_charIndex(const TextRenderer *self, unsigned pixelpos)
+    CMETHOD;
 int TextRenderer_renderWithSelection(TextRenderer *self,
 	xcb_render_picture_t picture, Color color, Pos pos,
 	Selection selection, Color selectionColor)

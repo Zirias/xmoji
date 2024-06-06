@@ -318,13 +318,26 @@ cursoronly:
 
 static void clicked(void *obj, const ClickEvent *event)
 {
+    TextBox *self = Object_instance(obj);
     if (event->button == MB_LEFT)
     {
-	Window *w = Window_fromWidget(obj);
-	if (w)
+	Window *w = Window_fromWidget(self);
+	if (w) Window_setFocusWidget(w, self);
+	unsigned len = UniStr_len(UniStrBuilder_stringView(self->text));
+	unsigned index = self->cursor;
+	if (len)
 	{
-	    Window_setFocusWidget(w, obj);
+	    Pos origin = Widget_contentOrigin(self, self->minSize);
+	    index = TextRenderer_charIndex(self->renderer,
+		    event->pos.x + self->scrollpos - origin.x);
+	    if (index > len) index = len;
 	}
+	if (index != self->cursor || self->selection.len)
+	{
+	    Widget_invalidate(self);
+	}
+	self->cursor = index;
+	self->selection.len = 0;
     }
 }
 

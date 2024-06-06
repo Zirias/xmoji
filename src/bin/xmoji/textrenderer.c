@@ -230,6 +230,23 @@ unsigned TextRenderer_pixelOffset(const TextRenderer *self, unsigned index)
     return (offset + 0x20) >> 6;
 }
 
+unsigned TextRenderer_charIndex(const TextRenderer *self, unsigned pixelpos)
+{
+    uint32_t pos = pixelpos << 6;
+    uint32_t offset = 0;
+    for (unsigned i = 0; i < self->hblen - 1; ++i)
+    {
+	uint32_t afterpos = offset + self->hbpos[i].x_advance;
+	if (afterpos > pos)
+	{
+	    if (afterpos - pos < pos - offset) ++i;
+	    return self->hbglyphs[i].cluster;
+	}
+	offset = afterpos;
+    }
+    return (unsigned)-1;
+}
+
 int TextRenderer_renderWithSelection(TextRenderer *self,
 	xcb_render_picture_t picture, Color color, Pos pos,
 	Selection selection, Color selectionColor)
