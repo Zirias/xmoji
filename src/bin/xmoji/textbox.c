@@ -328,13 +328,14 @@ static void clicked(void *obj, const ClickEvent *event)
     }
 }
 
-TextBox *TextBox_createBase(void *derived, void *parent, Font *font)
+TextBox *TextBox_createBase(void *derived, const char *name,
+	void *parent, Font *font)
 {
     REGTYPE(0);
 
     TextBox *self = PSC_malloc(sizeof *self);
     if (!derived) derived = self;
-    self->base.base = Widget_createBase(derived, parent);
+    self->base.base = Widget_createBase(derived, name, parent);
     self->base.type = OBJTYPE;
     self->font = font;
     self->text = UniStrBuilder_create();

@@ -205,10 +205,11 @@ const char *XRdb_value(const XRdb *self, XRdbKey key)
     while (keylen < XRDB_KEYLEN && key[arglen])
     {
 	uintptr_t id = (uintptr_t)PSC_HashTable_get(self->ids, key[arglen]);
-	if (!id) return 0;
 	instid[keylen] = id - 1;
 	id = (uintptr_t)PSC_HashTable_get(self->instances, key[arglen]);
 	classid[keylen] = id - 1;
+	if (instid[keylen] == (unsigned)-1
+		&& classid[keylen] == (unsigned)-1) return 0;
 	++keylen;
 	++arglen;
     }
@@ -267,6 +268,9 @@ const char *XRdb_value(const XRdb *self, XRdbKey key)
 			  || entry->key[ekpos+1] == classid[kpos])) ekpos += 2;
 	    }
 	    int quality = 0;
+	    if (ekpos < entry->keylen && entry->key[ekpos] == XRDB_FLEX &&
+		    (entry->key[ekpos+1] == instid[checkpos] ||
+		     entry->key[ekpos+1] == classid[checkpos])) ++ekpos;
 	    if (ekpos > 0 && entry->key[ekpos-1] != XRDB_FLEX) quality = 1;
 	    if (entry->key[ekpos] != XRDB_FLEX)
 	    {

@@ -83,7 +83,7 @@ typedef struct SizeChangedEventArgs
     Size newSize;
 } SizeChangedEventArgs;
 
-Widget *Widget_createBase(void *derived, void *parent);
+Widget *Widget_createBase(void *derived, const char *name, void *parent);
 #define Widget_create(...) Widget_createBase(0, __VA_ARGS__)
 PSC_Event *Widget_shown(void *self) CMETHOD ATTR_RETNONNULL;
 PSC_Event *Widget_hidden(void *self) CMETHOD ATTR_RETNONNULL;

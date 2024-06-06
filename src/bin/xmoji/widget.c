@@ -1,6 +1,7 @@
 #include "widget.h"
 
 #include "x11adapter.h"
+#include "xrdb.h"
 
 #include <poser/core.h>
 #include <stdlib.h>
@@ -20,6 +21,7 @@ static MetaWidget mo = MetaWidget_init(0, 0, show, hide,
 struct Widget
 {
     Object base;
+    const char *name;
     PSC_Event *shown;
     PSC_Event *hidden;
     PSC_Event *activated;
@@ -97,7 +99,7 @@ static Size minSize(const void *obj)
     return (Size){0, 0};
 }
 
-Widget *Widget_createBase(void *derived, void *parent)
+Widget *Widget_createBase(void *derived, const char *name, void *parent)
 {
     REGTYPE(0);
 
@@ -106,12 +108,12 @@ Widget *Widget_createBase(void *derived, void *parent)
     if (!derived) derived = self;
     self->base.base = Object_create(derived);
     self->base.type = OBJTYPE;
+    self->name = name;
     self->shown = PSC_Event_create(self);
     self->hidden = PSC_Event_create(self);
     self->activated = PSC_Event_create(self);
     self->sizeRequested = PSC_Event_create(self);
     self->sizeChanged = PSC_Event_create(self);
-    self->colorSet = ColorSet_create(0, 0);
     self->padding = (Box){ 3, 3, 3, 3 };
     self->maxSize = (Size){ -1, -1 };
     self->cursor = XC_LEFTPTR;
@@ -463,9 +465,22 @@ Pos Widget_contentOrigin(const void *self, Size contentSize)
 Color Widget_color(const void *self, ColorRole role)
 {
     Widget *w = Object_instance(self);
+    if (!w->colorSet)
+    {
+	const char *resname;
+	if (w->name)
+	{
+	    resname = w->name;
+	    XRdb_register(X11Adapter_resources(),
+		    Object_className(w), w->name);
+	}
+	else resname = Object_className(w);
+	w->colorSet = ColorSet_createFor(resname);
+    }
     Color color = ColorSet_color(w->colorSet, role);
-    if (!w->container) return color;
-    if (!color) color = Widget_color(w->container, role);
+    if (!color) color = w->container
+	? Widget_color(w->container, role)
+	: ColorSet_color(ColorSet_default(), role);
     return color;
 }
 

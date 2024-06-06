@@ -223,7 +223,7 @@ VBox *VBox_createBase(void *derived, void *parent)
 
     VBox *self = PSC_malloc(sizeof *self);
     if (!derived) derived = self;
-    self->base.base = Widget_createBase(derived, parent);
+    self->base.base = Widget_createBase(derived, 0, parent);
     self->base.type = OBJTYPE;
     self->items = PSC_List_create();
     self->minSize = (Size){0, 0};

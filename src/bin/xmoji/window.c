@@ -395,14 +395,14 @@ static void destroy(void *window)
     free(self);
 }
 
-Window *Window_createBase(void *derived, void *parent)
+Window *Window_createBase(void *derived, const char *name, void *parent)
 {
     REGTYPE(0);
 
     Window *self = PSC_malloc(sizeof *self);
     if (!derived) derived = self;
     memset(self, 0, sizeof *self);
-    self->base.base = Widget_createBase(derived, parent);
+    self->base.base = Widget_createBase(derived, name, parent);
     self->base.type = OBJTYPE;
     self->closed = PSC_Event_create(self);
     self->errored = PSC_Event_create(self);

@@ -54,18 +54,12 @@ static void onprestartup(void *receiver, void *sender, void *args)
     if (Font_init(.15) < 0) goto error;
     font = Font_create(3, fontname);
     emojifont = Font_create(0, emojifontname);
-    if (!(win = Window_create(0))) goto error;
+    if (!(win = Window_create("mainWindow", 0))) goto error;
     Window_setTitle(win, "Xmoji 😀 äöüß");
-    Widget_setColor(win, COLOR_BG_NORMAL, Color_fromRgb(50, 60, 70));
-    Widget_setColor(win, COLOR_NORMAL, Color_fromRgb(200, 255, 240));
-    Widget_setColor(win, COLOR_BG_SELECTED, Color_fromRgb(100, 200, 255));
-    Widget_setColor(win, COLOR_SELECTED, Color_fromRgb(0, 0, 0));
-    Widget_setColor(win, COLOR_BG_ACTIVE, Color_fromRgb(40, 50, 60));
-    Widget_setColor(win, COLOR_DISABLED, Color_fromRgb(120, 120, 120));
 
     VBox *box = VBox_create(win);
 
-    TextLabel *label = TextLabel_create(box, font);
+    TextLabel *label = TextLabel_create("helloLabel", box, font);
     UniStr(hello, "Hello, World!\n\n"
 	    "This is just a quick little\n"
 	    "text rendering test.\n\n"
@@ -75,20 +69,20 @@ static void onprestartup(void *receiver, void *sender, void *args)
     Widget_show(label);
     VBox_addWidget(box, label);
 
-    TextBox *input = TextBox_create(box, font);
+    TextBox *input = TextBox_create("upperBox", box, font);
     UniStr(clickhere, "Click here to type ...");
     TextBox_setPlaceholder(input, clickhere);
     Widget_show(input);
     VBox_addWidget(box, input);
 
-    label = TextLabel_create(box, emojifont);
+    label = TextLabel_create("emojiLabel", box, emojifont);
     UniStr(emojis, "😀🤡🇩🇪👺🧩🔮🐅🍻🧑🏾‍🤝‍🧑🏻");
     TextLabel_setText(label, emojis);
     Widget_setAlign(label, AH_CENTER|AV_MIDDLE);
     Widget_show(label);
     VBox_addWidget(box, label);
 
-    input = TextBox_create(box, font);
+    input = TextBox_create("lowerBox", box, font);
     TextBox_setPlaceholder(input, clickhere);
     Widget_show(input);
     VBox_addWidget(box, input);

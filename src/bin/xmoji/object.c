@@ -70,6 +70,15 @@ void *Object_mostDerived(void *self)
     return base->mostDerived;
 }
 
+const char *Object_className(void *self)
+{
+    Object *o = Object_mostDerived(self);
+    if (!o) return 0;
+    const MetaObject *m = MetaObject_get(o->type);
+    if (!m) return 0;
+    return m->name;
+}
+
 static void destroyRecursive(Object *obj)
 {
     if (!obj) return;

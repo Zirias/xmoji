@@ -29,6 +29,7 @@ Object *Object_create(void *derived);
 void Object_own(void *self, void *obj);
 void *Object_instanceOf(void *self, uint32_t type, int mustMatch);
 void *Object_mostDerived(void *self);
+const char *Object_className(void *self);
 void Object_destroy(void *self);
 
 #define REGTYPE(errval) do { \

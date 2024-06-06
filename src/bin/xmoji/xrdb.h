@@ -7,7 +7,7 @@
 C_CLASS_DECL(XRdb);
 
 #define XRDB_KEYLEN 5
-typedef char *XRdbKey[XRDB_KEYLEN];
+typedef const char *XRdbKey[XRDB_KEYLEN];
 #define XRdbKey(...) (XRdbKey){ __VA_ARGS__ }
 
 XRdb *XRdb_create(const char *str, size_t strlen,

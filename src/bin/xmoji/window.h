@@ -18,7 +18,7 @@ typedef struct MetaWindow
 
 C_CLASS_DECL(Window);
 
-Window *Window_createBase(void *derived, void *parent);
+Window *Window_createBase(void *derived, const char *name, void *parent);
 #define Window_create(...) Window_createBase(0, __VA_ARGS__)
 
 Window *Window_fromWidget(void *widget)
