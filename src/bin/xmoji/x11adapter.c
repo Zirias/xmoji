@@ -2,6 +2,7 @@
 
 #include "suppress.h"
 #include "unistr.h"
+#include "xrdb.h"
 
 #include <inttypes.h>
 #include <locale.h>
@@ -98,7 +99,8 @@ static size_t wmclasssz;
 
 static xcb_connection_t *c;
 static xcb_screen_t *s;
-static XGlitch glitches;
+static XGlitch glitches = -1;
+static XRdb *rdb;
 static struct xkb_context *kbdctx;
 static struct xkb_keymap *keymap;
 static struct xkb_compose_table *kbdcompose;
@@ -705,6 +707,9 @@ int X11Adapter_init(int argc, char **argv, const char *classname)
 	goto error;
     }
 
+    xcb_get_property_cookie_t rescookie = xcb_get_property(c, 0, s->root,
+	    XCB_ATOM_RESOURCE_MANAGER, XCB_ATOM_STRING, 0, 64 * 1024);
+
     char *lc = setlocale(LC_ALL, "");
     if (!lc) lc = "C";
     char *lcdot = strchr(lc, '.');
@@ -731,13 +736,6 @@ int X11Adapter_init(int argc, char **argv, const char *classname)
     if (!kbdcompose)
     {
 	PSC_Log_fmt(PSC_L_ERROR, "Couldn't create compose table for `%s'", lc);
-	goto error;
-    }
-    xcb_generic_error_t *rqerr = xcb_request_check(c, xkbeventscookie);
-    if (rqerr)
-    {
-	PSC_Log_msg(PSC_L_ERROR, "Could not request XKB events");
-	free(rqerr);
 	goto error;
     }
 
@@ -778,6 +776,26 @@ int X11Adapter_init(int argc, char **argv, const char *classname)
     if (wmclasssz > sizeof wmclass) wmclasssz = sizeof wmclass;
     PSC_Log_fmt(PSC_L_INFO,
 	    "starting with window class \"%s\", \"%s\"", nm, classname);
+    xcb_generic_error_t *rqerr = xcb_request_check(c, xkbeventscookie);
+    if (rqerr)
+    {
+	PSC_Log_msg(PSC_L_ERROR, "Could not request XKB events");
+	free(rqerr);
+	goto error;
+    }
+    xcb_get_property_reply_t *resreply = xcb_get_property_reply(c,
+	    rescookie, &rqerr);
+    if (rqerr) free(rqerr);
+    if (resreply)
+    {
+	rdb = XRdb_create(xcb_get_property_value(resreply),
+		xcb_get_property_value_length(resreply),
+		classname, nm);
+	free(resreply);
+	const char *glitchstr = XRdb_value(rdb, XRdbKey("glitches"));
+	if (glitches < 0) glitches = atoi(glitchstr);
+    }
+    if (glitches < 0) glitches = 0;
     free(clnm);
     free(nm);
 
@@ -834,6 +852,11 @@ xcb_connection_t *X11Adapter_connection(void)
 xcb_screen_t *X11Adapter_screen(void)
 {
     return s;
+}
+
+XRdb *X11Adapter_resources(void)
+{
+    return rdb;
 }
 
 size_t X11Adapter_maxRequestSize(void)
@@ -1063,6 +1086,8 @@ void X11Adapter_done(void)
     }
     xcb_cursor_context_free(cctx);
     cctx = 0;
+    XRdb_destroy(rdb);
+    rdb = 0;
     xkb_state_unref(kbdstate);
     kbdstate = 0;
     xkb_keymap_unref(keymap);

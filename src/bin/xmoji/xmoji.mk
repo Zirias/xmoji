@@ -13,7 +13,8 @@ xmoji_MODULES=		colorset \
 			widget \
 			window \
 			x11adapter \
-			xmoji
+			xmoji \
+			xrdb
 xmoji_LIBS+=		m
 xmoji_PKGDEPS=		fontconfig \
 			freetype2 \

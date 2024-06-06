@@ -8,6 +8,7 @@
 #include "vbox.h"
 #include "window.h"
 #include "x11adapter.h"
+#include "xrdb.h"
 
 #include <inttypes.h>
 #include <poser/core.h>
@@ -15,7 +16,7 @@
 #include <stdlib.h>
 
 static const char *fontname;
-static const char *emojifontname = "emoji";
+static const char *emojifontname;
 static PSC_LogLevel loglevel = PSC_L_WARNING;
 
 static Font *font;
@@ -42,6 +43,14 @@ static void onprestartup(void *receiver, void *sender, void *args)
 
     if (X11Adapter_init(
 		startupargs.argc, startupargs.argv, "Xmoji") < 0) goto error;
+    XRdb *res = X11Adapter_resources();
+    if (res)
+    {
+	if (!fontname) fontname = XRdb_value(res, XRdbKey("font"));
+	if (!emojifontname) emojifontname = XRdb_value(
+		res, XRdbKey("emojifont"));
+    }
+    if (!emojifontname) emojifontname = "emoji";
     if (Font_init(.15) < 0) goto error;
     font = Font_create(3, fontname);
     emojifont = Font_create(0, emojifontname);

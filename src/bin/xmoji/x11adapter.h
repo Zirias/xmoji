@@ -7,6 +7,7 @@
 #include <xcb/render.h>
 
 C_CLASS_DECL(PSC_Event);
+C_CLASS_DECL(XRdb);
 struct xkb_compose_table;
 
 typedef enum XGlitch
@@ -163,6 +164,7 @@ int X11Adapter_init(int argc, char **argv, const char *classname);
 
 xcb_connection_t *X11Adapter_connection(void);
 xcb_screen_t *X11Adapter_screen(void);
+XRdb *X11Adapter_resources(void);
 XGlitch X11Adapter_glitches(void);
 size_t X11Adapter_maxRequestSize(void);
 xcb_atom_t X11Adapter_atom(XAtomId id);
