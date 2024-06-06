@@ -600,7 +600,11 @@ void Window_setMainWidget(void *self, void *widget)
 void Window_setFocusWidget(void *self, void *widget)
 {
     Window *w = Object_instance(self);
-    if (w->focusWidget) Widget_deactivate(w->focusWidget);
+    if (w->focusWidget)
+    {
+	if (w->focusWidget == widget) return;
+	Widget_deactivate(w->focusWidget);
+    }
     w->focusWidget = widget;
     Widget_activate(widget);
 }
