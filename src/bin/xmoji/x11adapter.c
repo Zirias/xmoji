@@ -792,10 +792,13 @@ int X11Adapter_init(int argc, char **argv, const char *classname)
 		xcb_get_property_value_length(resreply),
 		classname, nm);
 	free(resreply);
-	const char *glitchstr = XRdb_value(rdb, XRdbKey("glitches"));
-	if (glitches < 0) glitches = atoi(glitchstr);
+	if ((int)glitches < 0)
+	{
+	    const char *glitchstr = XRdb_value(rdb, XRdbKey("glitches"));
+	    if (glitchstr) glitches = atoi(glitchstr);
+	}
     }
-    if (glitches < 0) glitches = 0;
+    if ((int)glitches < 0) glitches = 0;
     free(clnm);
     free(nm);
 
