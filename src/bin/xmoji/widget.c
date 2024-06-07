@@ -1,5 +1,6 @@
 #include "widget.h"
 
+#include "window.h"
 #include "x11adapter.h"
 #include "xrdb.h"
 
@@ -15,7 +16,7 @@ static int hide(void *obj);
 static Size minSize(const void *obj);
 
 static MetaWidget mo = MetaWidget_init(0, 0, show, hide,
-	0, 0, 0, 0, 0, minSize, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, minSize, 0, 0, 0,
 	"Widget", destroy);
 
 struct Widget
@@ -46,6 +47,8 @@ struct Widget
     int visible;
     int active;
     int entered;
+    int canfocus;
+    int focused;
 };
 
 static void destroy(void *obj)
@@ -350,6 +353,42 @@ void Widget_leave(void *self)
     if (!w->entered) return;
     w->entered = 0;
     Object_vcallv(Widget, leave, w);
+}
+
+void Widget_acceptFocus(void *self, int accept)
+{
+    Widget *w = Object_instance(self);
+    w->canfocus = accept;
+}
+
+void Widget_focus(void *self)
+{
+    Widget *w = Object_instance(self);
+    if (!w->canfocus) return;
+    if (w->focused) return;
+    Window *win = Window_fromWidget(w);
+    if (!win) return;
+    w->focused = 1;
+    Object_vcallv(Widget, focus, w);
+    Window_setFocusWidget(win, w);
+    Widget_activate(w);
+}
+
+void Widget_unfocus(void *self)
+{
+    Widget *w = Object_instance(self);
+    if (!w->focused) return;
+    w->focused = 0;
+    Object_vcallv(Widget, unfocus, self);
+    Widget_deactivate(w);
+    Window *win = Window_fromWidget(w);
+    if (win) Window_setFocusWidget(win, 0);
+}
+
+int Widget_focused(const void *self)
+{
+    const Widget *w = Object_instance(self);
+    return w->focused;
 }
 
 static void setSize(Widget *self, int external, Size size)

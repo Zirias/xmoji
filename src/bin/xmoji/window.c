@@ -19,7 +19,7 @@ static int show(void *obj);
 static int hide(void *obj);
 
 static MetaWindow mo = MetaWindow_init(expose, draw, show, hide,
-	0, 0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 	"Window", destroy);
 
 struct Window
@@ -771,9 +771,10 @@ void Window_setFocusWidget(void *self, void *widget)
     if (w->focusWidget)
     {
 	if (w->focusWidget == widget) return;
-	Widget_deactivate(w->focusWidget);
+	Widget *prev = w->focusWidget;
+	w->focusWidget = 0;
+	Widget_unfocus(prev);
     }
     w->focusWidget = widget;
-    Widget_activate(widget);
 }
 

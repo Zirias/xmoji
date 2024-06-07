@@ -14,7 +14,7 @@ static void clicked(void *obj, const ClickEvent *event);
 
 static MetaVBox mo = MetaVBox_init(
 	expose, draw, 0, 0,
-	0, 0, 0, leave, childAt,
+	0, 0, 0, leave, 0, 0, childAt,
 	minSize, 0, clicked, 0,
 	"VBox", destroy);
 

@@ -51,6 +51,8 @@ typedef struct MetaWidget
     int (*deactivate)(void *widget);
     void (*enter)(void *widget);
     void (*leave)(void *widget);
+    void (*focus)(void *widget);
+    void (*unfocus)(void *widget);
     void *(*childAt)(void *widget, Pos pos);
     Size (*minSize)(const void *widget);
     void (*keyPressed)(void *widget, const KeyEvent *event);
@@ -59,8 +61,8 @@ typedef struct MetaWidget
 } MetaWidget;
 
 #define MetaWidget_init(mexpose, mdraw, mshow, mhide, \
-	mactivate, mdeactivate, menter, mleave, mchildAt, \
-	mminSize, mkeyPressed, mclicked, mdragged, \
+	mactivate, mdeactivate, menter, mleave, mfocus, munfocus, \
+	mchildAt, mminSize, mkeyPressed, mclicked, mdragged, \
 	...) { \
     .base = MetaObject_init(__VA_ARGS__), \
     .expose = mexpose, \
@@ -71,6 +73,8 @@ typedef struct MetaWidget
     .deactivate = mdeactivate, \
     .enter = menter, \
     .leave = mleave, \
+    .focus = mfocus, \
+    .unfocus = munfocus, \
     .childAt = mchildAt, \
     .minSize = mminSize, \
     .keyPressed = mkeyPressed, \
@@ -112,6 +116,10 @@ void Widget_deactivate(void *self) CMETHOD;
 int Widget_active(const void *self) CMETHOD;
 void *Widget_enterAt(void *self, Pos pos) CMETHOD;
 void Widget_leave(void *self) CMETHOD;
+void Widget_acceptFocus(void *self, int accept) CMETHOD;
+void Widget_focus(void *self) CMETHOD;
+void Widget_unfocus(void *self) CMETHOD;
+int Widget_focused(const void *self) CMETHOD;
 void Widget_setSize(void *self, Size size) CMETHOD;
 void Widget_setMaxSize(void *self, Size maxSize) CMETHOD;
 Size Widget_minSize(const void *self) CMETHOD;

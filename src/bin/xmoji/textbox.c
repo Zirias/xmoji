@@ -4,7 +4,6 @@
 #include "textrenderer.h"
 #include "unistr.h"
 #include "unistrbuilder.h"
-#include "window.h"
 
 #include <poser/core.h>
 #include <stdlib.h>
@@ -16,6 +15,7 @@ static int activate(void *obj);
 static int deactivate(void *obj);
 static void enter(void *obj);
 static void leave(void *obj);
+static void unfocus(void *obj);
 static Size minSize(const void *obj);
 static void keyPressed(void *obj, const KeyEvent *event);
 static void clicked(void *obj, const ClickEvent *event);
@@ -23,7 +23,7 @@ static void dragged(void *obj, const DragEvent *event);
 
 static MetaTextBox mo = MetaTextBox_init(
 	0, draw, 0, 0,
-	activate, deactivate, enter, leave, 0,
+	activate, deactivate, enter, leave, 0, unfocus, 0,
 	minSize, keyPressed, clicked, dragged,
 	"TextBox", destroy);
 
@@ -114,7 +114,7 @@ static int draw(void *obj, xcb_render_picture_t picture)
     else
     {
 	self->scrollpos = 0;
-	if (self->placeholder && !Widget_active(self))
+	if (self->placeholder && !Widget_focused(self))
 	{
 	    rc = TextRenderer_render(self->placeholder, picture,
 		    Widget_color(self, COLOR_DISABLED), contentArea.pos);
@@ -167,6 +167,16 @@ static void leave(void *obj)
     {
 	Widget_setBackground(obj, 1, COLOR_BG_NORMAL);
 	Widget_invalidate(obj);
+    }
+}
+
+static void unfocus(void *obj)
+{
+    TextBox *self = Object_instance(obj);
+    if (self->selection.len)
+    {
+	self->selection.len = 0;
+	Widget_invalidate(self);
     }
 }
 
@@ -349,8 +359,7 @@ static void clicked(void *obj, const ClickEvent *event)
     TextBox *self = Object_instance(obj);
     if (event->button == MB_LEFT)
     {
-	Window *w = Window_fromWidget(self);
-	if (w) Window_setFocusWidget(w, self);
+	Widget_focus(self);
 	unsigned len = UniStr_len(UniStrBuilder_stringView(self->text));
 	unsigned index = self->cursor;
 	unsigned selectlen = 0;
@@ -452,6 +461,7 @@ TextBox *TextBox_createBase(void *derived, const char *name,
     Widget_setMaxSize(self, (Size){ -1, self->minSize.height });
     Widget_setBackground(self, 1, COLOR_BG_NORMAL);
     Widget_setCursor(self, XC_XTERM);
+    Widget_acceptFocus(self, 1);
 
     return self;
 }
