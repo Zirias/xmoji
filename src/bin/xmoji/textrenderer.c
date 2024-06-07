@@ -104,6 +104,10 @@ static void createTmpPicture(TextRenderer *self, xcb_connection_t *c)
 		X11Adapter_rgbformat(), 0, 0),
 	    "TextRenderer: Cannot create temporary picture for 0x%x",
 	    (unsigned)self->pixmap);
+    if (X11Adapter_glitches() & XG_RENDER_SRC_OFFSET)
+    {
+	self->pos = (Pos){0, 0};
+    }
 }
 
 int TextRenderer_setText(TextRenderer *self, const UniStr *text)
