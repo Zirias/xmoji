@@ -215,10 +215,13 @@ static void keyPressed(void *obj, const KeyEvent *event)
 	    break;
 
 	case XKB_KEY_Left:
-	    if (!len || !self->cursor) return;
-	    glen = TextRenderer_glyphLen(self->renderer, self->cursor);
+	    if (!len) return;
+	    if (self->cursor) glen = TextRenderer_glyphLen(
+		    self->renderer, self->cursor);
+	    else glen = 0;
 	    if (event->modifiers & XM_SHIFT)
 	    {
+		if (!self->cursor) return;
 		if (self->selection.len)
 		{
 		    if (self->cursor == self->selection.start)
@@ -234,15 +237,22 @@ static void keyPressed(void *obj, const KeyEvent *event)
 		    self->selection.start = self->cursor - glen;
 		}
 	    }
-	    else self->selection.len = 0;
+	    else
+	    {
+		if (!self->selection.len && !self->cursor) return;
+		self->selection.len = 0;
+	    }
 	    self->cursor -= glen;
 	    goto cursoronly;
 
 	case XKB_KEY_Right:
-	    if (!len || self->cursor == len) return;
-	    glen = TextRenderer_glyphLen(self->renderer, self->cursor + 1);
+	    if (!len) return;
+	    if (self->cursor < len) glen = TextRenderer_glyphLen(
+		    self->renderer, self->cursor + 1);
+	    else glen = 0;
 	    if (event->modifiers & XM_SHIFT)
 	    {
+		if (self->cursor == len) return;
 		if (self->selection.len)
 		{
 		    if (self->cursor == self->selection.start)
@@ -258,15 +268,20 @@ static void keyPressed(void *obj, const KeyEvent *event)
 		    self->selection.start = self->cursor;
 		}
 	    }
-	    else self->selection.len = 0;
+	    else
+	    {
+		if (!self->selection.len && self->cursor == len) return;
+		self->selection.len = 0;
+	    }
 	    self->cursor += glen;
 	    goto cursoronly;
 
 	case XKB_KEY_Home:
 	case XKB_KEY_Begin:
-	    if (!len || !self->cursor) return;
+	    if (!len) return;
 	    if (event->modifiers & XM_SHIFT)
 	    {
+		if (!self->cursor) return;
 		if (self->selection.len)
 		{
 		    if (self->cursor == self->selection.start)
@@ -278,14 +293,19 @@ static void keyPressed(void *obj, const KeyEvent *event)
 		else self->selection.len = self->cursor;
 		self->selection.start = 0;
 	    }
-	    else self->selection.len = 0;
+	    else
+	    {
+		if (!self->selection.len && !self->cursor) return;
+		self->selection.len = 0;
+	    }
 	    self->cursor = 0;
 	    goto cursoronly;
 
 	case XKB_KEY_End:
-	    if (!len || self->cursor == len) return;
+	    if (!len) return;
 	    if (event->modifiers & XM_SHIFT)
 	    {
+		if (self->cursor == len) return;
 		if (self->selection.len)
 		{
 		    if (self->cursor == self->selection.start)
@@ -296,7 +316,11 @@ static void keyPressed(void *obj, const KeyEvent *event)
 		else self->selection.start = self->cursor;
 		self->selection.len = len - self->selection.start;
 	    }
-	    else self->selection.len = 0;
+	    else
+	    {
+		if (!self->selection.len && self->cursor == len) return;
+		self->selection.len = 0;
+	    }
 	    self->cursor = len;
 	    goto cursoronly;
 
