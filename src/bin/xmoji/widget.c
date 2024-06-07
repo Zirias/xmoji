@@ -22,6 +22,7 @@ struct Widget
 {
     Object base;
     const char *name;
+    const char *resname;
     PSC_Event *shown;
     PSC_Event *hidden;
     PSC_Event *activated;
@@ -64,7 +65,6 @@ static int doshow(Widget *self, int external)
     if (!self->visible)
     {
 	self->visible = 1;
-	Widget_invalidate(self);
 	WidgetEventArgs args = { external };
 	PSC_Event_raise(self->shown, 0, &args);
     }
@@ -106,20 +106,40 @@ Widget *Widget_createBase(void *derived, const char *name, void *parent)
     Widget *self = PSC_malloc(sizeof *self);
     memset(self, 0, sizeof *self);
     if (!derived) derived = self;
-    self->base.base = Object_create(derived);
     self->base.type = OBJTYPE;
+    self->base.base = Object_create(derived);
     self->name = name;
+    if (name)
+    {
+	self->resname = name;
+	XRdb_register(X11Adapter_resources(),
+		Object_className(self), name);
+    }
+    else self->resname = Object_className(self);
     self->shown = PSC_Event_create(self);
     self->hidden = PSC_Event_create(self);
     self->activated = PSC_Event_create(self);
     self->sizeRequested = PSC_Event_create(self);
     self->sizeChanged = PSC_Event_create(self);
+    self->colorSet = ColorSet_createFor(self->resname);
     self->padding = (Box){ 3, 3, 3, 3 };
     self->maxSize = (Size){ -1, -1 };
     self->cursor = XC_LEFTPTR;
 
     if (parent) Object_own(parent, derived);
     return self;
+}
+
+const char *Widget_name(const void *self)
+{
+    const Widget *w = Object_instance(self);
+    return w->name;
+}
+
+const char *Widget_resname(const void *self)
+{
+    const Widget *w = Object_instance(self);
+    return w->resname;
 }
 
 PSC_Event *Widget_shown(void *self)
@@ -465,18 +485,6 @@ Pos Widget_contentOrigin(const void *self, Size contentSize)
 Color Widget_color(const void *self, ColorRole role)
 {
     Widget *w = Object_instance(self);
-    if (!w->colorSet)
-    {
-	const char *resname;
-	if (w->name)
-	{
-	    resname = w->name;
-	    XRdb_register(X11Adapter_resources(),
-		    Object_className(w), w->name);
-	}
-	else resname = Object_className(w);
-	w->colorSet = ColorSet_createFor(resname);
-    }
     Color color = ColorSet_color(w->colorSet, role);
     if (!color) color = w->container
 	? Widget_color(w->container, role)
@@ -525,6 +533,7 @@ void Widget_setDrawable(void *self, xcb_drawable_t drawable)
 	CHECK(xcb_render_create_picture(c, w->bgpicture, drawable,
 		    X11Adapter_rootformat(), 0, 0),
 		"Cannot create XRender picture for 0x%x", (unsigned)drawable);
+	w->ndamages = -1;
     }
     else
     {
@@ -585,8 +594,9 @@ void Widget_invalidate(void *self)
     if (!Widget_visible(self)) return;
     Widget *w = Object_instance(self);
     if (w->ndamages < 0) return;
-    w->ndamages = -1;
-    Object_vcallv(Widget, expose, w, w->geometry);
+    Rect region = w->geometry;
+    while (w->container) w = w->container;
+    Widget_invalidateRegion(w, region);
 }
 
 void Widget_setWindowSize(void *self, Size size)

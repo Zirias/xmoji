@@ -16,6 +16,8 @@ void XRdb_register(XRdb *self, const char *className, const char *instanceName)
     CMETHOD ATTR_NONNULL((2)) ATTR_NONNULL((3));
 const char *XRdb_value(const XRdb *self, XRdbKey key)
     CMETHOD;
+int XRdb_bool(const XRdb *self, XRdbKey key, int def)
+    CMETHOD;
 void XRdb_destroy(XRdb *self);
 
 #endif

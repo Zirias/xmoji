@@ -81,8 +81,8 @@ TextLabel *TextLabel_createBase(void *derived, const char *name,
 
     TextLabel *self = PSC_malloc(sizeof *self);
     if (!derived) derived = self;
-    self->base.base = Widget_createBase(derived, name, parent);
     self->base.type = OBJTYPE;
+    self->base.base = Widget_createBase(derived, name, parent);
     self->font = font;
     self->text = 0;
     self->renderers = PSC_List_create();

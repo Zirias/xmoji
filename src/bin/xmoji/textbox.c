@@ -411,8 +411,8 @@ TextBox *TextBox_createBase(void *derived, const char *name,
 
     TextBox *self = PSC_malloc(sizeof *self);
     if (!derived) derived = self;
-    self->base.base = Widget_createBase(derived, name, parent);
     self->base.type = OBJTYPE;
+    self->base.base = Widget_createBase(derived, name, parent);
     self->font = font;
     self->text = UniStrBuilder_create();
     self->renderer = TextRenderer_create(font);

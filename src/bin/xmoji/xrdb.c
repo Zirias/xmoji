@@ -1,5 +1,6 @@
 #include "xrdb.h"
 
+#include <ctype.h>
 #include <poser/core.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -293,6 +294,30 @@ const char *XRdb_value(const XRdb *self, XRdbKey key)
 done:
     PSC_List_destroy(matches);
     return result;
+}
+
+static int strequalslc(const char *a, const char *b)
+{
+    for (;;)
+    {
+	if (tolower(*a) != *b) return 0;
+	if (!*a) return 1;
+	++a;
+	++b;
+    }
+}
+
+int XRdb_bool(const XRdb *self, XRdbKey key, int def)
+{
+    const char *val = XRdb_value(self, key);
+    if (!val) return def;
+    if (strequalslc(val, "false")
+	    || strequalslc(val, "off")
+	    || strequalslc(val, "disabled")) return 0;
+    if (strequalslc(val, "true")
+	    || strequalslc(val, "on")
+	    || strequalslc(val, "enabled")) return 1;
+    return def;
 }
 
 void XRdb_destroy(XRdb *self)

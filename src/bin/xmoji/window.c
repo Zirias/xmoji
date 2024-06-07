@@ -2,6 +2,7 @@
 
 #include "unistr.h"
 #include "x11adapter.h"
+#include "xrdb.h"
 
 #include <poser/core.h>
 #include <stdlib.h>
@@ -9,6 +10,7 @@
 #include <xkbcommon/xkbcommon-compose.h>
 
 #define DBLCLICK_MS 300
+#define MAXDAMAGES 16
 
 static void destroy(void *obj);
 static void expose(void *obj, Rect region);
@@ -34,14 +36,19 @@ struct Window
     Pos mouse;
     Pos mouseUpdate;
     Pos anchorPos;
+    Rect damages[MAXDAMAGES];
     MouseButton anchorButton;
     XCursor cursor;
     xcb_window_t w;
+    xcb_pixmap_t p;
+    xcb_render_picture_t src;
+    xcb_render_picture_t dst;
     xcb_timestamp_t clicktime;
     int haserror;
     int haveMinSize;
     int mapped;
     int wantmap;
+    int ndamages;
 };
 
 static void map(Window *self)
@@ -64,7 +71,28 @@ static int draw(void *obj, xcb_render_picture_t picture)
 
     Window *self = Object_instance(obj);
     if (!self->mainWidget) return -1;
-    return Widget_draw(self->mainWidget);
+    int rc = Widget_draw(self->mainWidget);
+    if (self->p && (picture || self->ndamages < 0))
+    {
+	Size size = Widget_size(self->mainWidget);
+	CHECK(xcb_render_composite(X11Adapter_connection(),
+		    XCB_RENDER_PICT_OP_SRC, self->src, 0, self->dst, 0, 0,
+		    0, 0, 0, 0, size.width, size.height),
+		"Cannot composite from backing store for 0x%x",
+		(unsigned)self->w);
+    }
+    else if (self->ndamages > 0) for (int i = 0; i < self->ndamages; ++i)
+    {
+	CHECK(xcb_render_composite(X11Adapter_connection(),
+		    XCB_RENDER_PICT_OP_SRC, self->src, 0, self->dst,
+		    self->damages[i].pos.x, self->damages[i].pos.y, 0, 0,
+		    self->damages[i].pos.x, self->damages[i].pos.y,
+		    self->damages[i].size.width, self->damages[i].size.height),
+		"Cannot composite from backing store for 0x%x",
+		(unsigned)self->w);
+    }
+    self->ndamages = 0;
+    return rc;
 }
 
 static int show(void *obj)
@@ -83,7 +111,7 @@ static int hide(void *obj)
     self->wantmap = -1;
     self->mapped = 0;
     CHECK(xcb_unmap_window(X11Adapter_connection(), self->w),
-	    "Cannot map window 0x%x", (unsigned)self->w);
+	    "Cannot unmap window 0x%x", (unsigned)self->w);
     PSC_Log_fmt(PSC_L_DEBUG, "Unmapping window 0x%x", (unsigned)self->w);
     return 0;
 }
@@ -160,7 +188,15 @@ static void exposed(void *receiver, void *sender, void *args)
 	Widget_showWindow(receiver);
 	self->mapped = 2;
     }
-    Widget_invalidateRegion(self,
+    if (self->p)
+    {
+	if (self->ndamages < 0) return;
+	if (self->ndamages == MAXDAMAGES) self->ndamages = -1;
+	else self->damages[self->ndamages++] = (Rect){
+	    .pos = { .x = ev->x, .y = ev->y },
+	    .size = { .width = ev->width, .height = ev->height}};
+    }
+    else Widget_invalidateRegion(self,
 	    (Rect){{ev->x, ev->y},{ev->width, ev->height}});
 }
 
@@ -370,6 +406,24 @@ static void sizeChanged(void *receiver, void *sender, void *args)
 		"Cannot configure window 0x%x", (unsigned)self->w);
     }
     if (self->mainWidget) Widget_setSize(self->mainWidget, ea->newSize);
+    if (self->p && (ea->newSize.width > ea->oldSize.width
+		|| ea->newSize.height > ea->oldSize.height))
+    {
+	xcb_connection_t *c = X11Adapter_connection();
+	xcb_render_free_picture(c, self->src);
+	xcb_free_pixmap(c, self->p);
+	self->p = xcb_generate_id(c);
+	CHECK(xcb_create_pixmap(c, 24, self->p, X11Adapter_screen()->root,
+		    ea->newSize.width, ea->newSize.height),
+		"Cannot create backing store pixmap for 0x%x",
+		(unsigned)self->w);
+	self->src = xcb_generate_id(c);
+	CHECK(xcb_render_create_picture(c, self->src, self->p,
+		    X11Adapter_rgbformat(), 0, 0),
+		"Cannot create XRender picture for backing store on 0x%x",
+		(unsigned)self->w);
+	Widget_setDrawable(self, self->p);
+    }
 }
 
 static void sizeRequested(void *receiver, void *sender, void *args)
@@ -417,7 +471,9 @@ static void unmapped(void *receiver, void *sender, void *args)
     (void)args;
 
     Window *self = receiver;
+    self->mapped = 0;
     Widget_hideWindow(self);
+    PSC_Log_fmt(PSC_L_DEBUG, "Window 0x%x unmapped", (unsigned)self->w);
     if (self->wantmap < 0)
     {
 	self->wantmap = 0;
@@ -459,6 +515,14 @@ static void destroy(void *window)
     xkb_compose_state_unref(self->kbcompose);
     PSC_Event_destroy(self->errored);
     PSC_Event_destroy(self->closed);
+    xcb_connection_t *c = X11Adapter_connection();
+    if (self->p)
+    {
+	xcb_render_free_picture(c, self->dst);
+	xcb_render_free_picture(c, self->src);
+	xcb_free_pixmap(c, self->p);
+    }
+    xcb_destroy_window(c, self->w);
     free(self->iconName);
     free(self->title);
     free(self);
@@ -471,8 +535,8 @@ Window *Window_createBase(void *derived, const char *name, void *parent)
     Window *self = PSC_malloc(sizeof *self);
     if (!derived) derived = self;
     memset(self, 0, sizeof *self);
-    self->base.base = Widget_createBase(derived, name, parent);
     self->base.type = OBJTYPE;
+    self->base.base = Widget_createBase(derived, name, parent);
     self->closed = PSC_Event_create(self);
     self->errored = PSC_Event_create(self);
     self->kbcompose = xkb_compose_state_new(
@@ -515,8 +579,33 @@ Window *Window_createBase(void *derived, const char *name, void *parent)
 		A(_NET_WM_WINDOW_TYPE), 4, 32, 1, &wtnorm),
 	    "Cannot set window type for 0x%x", (unsigned)self->w);
 
+    int backingstore = XRdb_bool(X11Adapter_resources(),
+	    XRdbKey(Widget_resname(self), "backingStore"), 1);
+    if (backingstore)
+    {
+	self->p = xcb_generate_id(c);
+	CHECK(xcb_create_pixmap(c, 24, self->p, s->root, 1, 1),
+		"Cannot create backing store pixmap for 0x%x",
+		(unsigned)self->w);
+	self->src = xcb_generate_id(c);
+	CHECK(xcb_render_create_picture(c, self->src, self->p,
+		    X11Adapter_rgbformat(), 0, 0),
+		"Cannot create XRender picture for backing store on 0x%x",
+		(unsigned)self->w);
+	self->dst = xcb_generate_id(c);
+	CHECK(xcb_render_create_picture(c, self->dst, self->w,
+		    X11Adapter_rootformat(), 0, 0),
+		"Cannot create XRender picture for window surface on 0x%x",
+		(unsigned)self->w);
+    }
+    else
+    {
+	PSC_Log_fmt(PSC_L_INFO, "Disabled backing store for window 0x%x",
+		(unsigned)self->w);
+    }
+
     Widget_setSize(self, (Size){1, 1});
-    Widget_setDrawable(self, self->w);
+    Widget_setDrawable(self, self->p ? self->p : self->w);
     Widget_setBackground(self, 1, COLOR_BG_NORMAL);
 
     PSC_Event_register(X11Adapter_buttonpress(), self,
