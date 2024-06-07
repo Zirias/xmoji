@@ -327,21 +327,28 @@ static void clicked(void *obj, const ClickEvent *event)
 	if (w) Window_setFocusWidget(w, self);
 	unsigned len = UniStr_len(UniStrBuilder_stringView(self->text));
 	unsigned index = self->cursor;
-	if (len)
+	unsigned selectlen = 0;
+	if (event->dblclick)
+	{
+	    index = len;
+	    selectlen = len;
+	}
+	else if (len)
 	{
 	    Pos origin = Widget_contentOrigin(self, self->minSize);
 	    index = TextRenderer_charIndex(self->renderer,
 		    event->pos.x + self->scrollpos - origin.x);
 	    if (index > len) index = len;
 	}
-	if (index != self->cursor || self->selection.len)
+	if (index != self->cursor || self->selection.len != selectlen)
 	{
 	    Widget_invalidate(self);
 	    PSC_Service_setTickInterval(600);
 	    self->cursorvisible = 1;
 	}
 	self->cursor = index;
-	self->selection.len = 0;
+	self->selection.len = selectlen;
+	self->selection.start = 0;
     }
 }
 

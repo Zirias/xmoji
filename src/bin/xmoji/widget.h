@@ -30,6 +30,7 @@ typedef struct ClickEvent
 {
     MouseButton button;
     Pos pos;
+    int dblclick;
 } ClickEvent;
 
 typedef struct MetaWidget

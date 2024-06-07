@@ -8,6 +8,8 @@
 #include <string.h>
 #include <xkbcommon/xkbcommon-compose.h>
 
+#define DBLCLICK_MS 300
+
 static void destroy(void *obj);
 static void expose(void *obj, Rect region);
 static int draw(void *obj, xcb_render_picture_t picture);
@@ -33,6 +35,7 @@ struct Window
     Pos mouseUpdate;
     XCursor cursor;
     xcb_window_t w;
+    xcb_timestamp_t clicktime;
     int haserror;
     int haveMinSize;
     int mapped;
@@ -92,8 +95,14 @@ static void buttonpress(void *receiver, void *sender, void *args)
     xcb_button_press_event_t *ev = args;
     ClickEvent click = {
 	.button = 1 << (ev->detail - 1),
-	.pos = { ev->event_x, ev->event_y }
+	.pos = { ev->event_x, ev->event_y },
+	.dblclick = 0
     };
+    if (click.button == MB_LEFT)
+    {
+	if (ev->time - self->clicktime <= DBLCLICK_MS) click.dblclick = 1;
+	self->clicktime = ev->time;
+    }
     Widget_clicked(self->mainWidget, &click);
 }
 
