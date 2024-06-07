@@ -145,5 +145,6 @@ void Widget_disableDrawing(void *self) CMETHOD;
 void Widget_setWindowSize(void *self, Size size) CMETHOD;
 void Widget_showWindow(void *self) CMETHOD;
 void Widget_hideWindow(void *self) CMETHOD;
+const Rect *Widget_damages(const void *self, int *num) CMETHOD;
 
 #endif

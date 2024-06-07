@@ -614,3 +614,9 @@ void Widget_hideWindow(void *self)
     dohide(Object_instance(self), 1);
 }
 
+const Rect *Widget_damages(const void *self, int *num)
+{
+    const Widget *w = Object_instance(self);
+    if (num) *num = w->ndamages;
+    return w->damages;
+}

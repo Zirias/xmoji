@@ -72,26 +72,32 @@ static int draw(void *obj, xcb_render_picture_t picture)
     Window *self = Object_instance(obj);
     if (!self->mainWidget) return -1;
     int rc = Widget_draw(self->mainWidget);
-    if (self->p && (picture || self->ndamages < 0))
+    if (self->p)
     {
-	Size size = Widget_size(self->mainWidget);
-	CHECK(xcb_render_composite(X11Adapter_connection(),
-		    XCB_RENDER_PICT_OP_SRC, self->src, 0, self->dst, 0, 0,
-		    0, 0, 0, 0, size.width, size.height),
-		"Cannot composite from backing store for 0x%x",
-		(unsigned)self->w);
+	int num = self->ndamages;
+	const Rect *damages = self->damages;
+	if (!num) damages = Widget_damages(self, &num);
+	if (num < 0)
+	{
+	    Size size = Widget_size(self->mainWidget);
+	    CHECK(xcb_render_composite(X11Adapter_connection(),
+			XCB_RENDER_PICT_OP_SRC, self->src, 0, self->dst, 0, 0,
+			0, 0, 0, 0, size.width, size.height),
+		    "Cannot composite from backing store for 0x%x",
+		    (unsigned)self->w);
+	}
+	else if (num > 0) for (int i = 0; i < num; ++i)
+	{
+	    CHECK(xcb_render_composite(X11Adapter_connection(),
+			XCB_RENDER_PICT_OP_SRC, self->src, 0, self->dst,
+			damages[i].pos.x, damages[i].pos.y, 0, 0,
+			damages[i].pos.x, damages[i].pos.y,
+			damages[i].size.width, damages[i].size.height),
+		    "Cannot composite from backing store for 0x%x",
+		    (unsigned)self->w);
+	}
+	self->ndamages = 0;
     }
-    else if (self->ndamages > 0) for (int i = 0; i < self->ndamages; ++i)
-    {
-	CHECK(xcb_render_composite(X11Adapter_connection(),
-		    XCB_RENDER_PICT_OP_SRC, self->src, 0, self->dst,
-		    self->damages[i].pos.x, self->damages[i].pos.y, 0, 0,
-		    self->damages[i].pos.x, self->damages[i].pos.y,
-		    self->damages[i].size.width, self->damages[i].size.height),
-		"Cannot composite from backing store for 0x%x",
-		(unsigned)self->w);
-    }
-    self->ndamages = 0;
     return rc;
 }
 
