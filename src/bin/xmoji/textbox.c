@@ -381,8 +381,12 @@ const UniStr *TextBox_text(const void *self)
 
 void TextBox_setText(void *self, const UniStr *text)
 {
-    (void)self;
-    (void)text;
+    TextBox *b = Object_instance(self);
+    UniStrBuilder_clear(b->text);
+    UniStrBuilder_appendStr(b->text, UniStr_str(text));
+    b->cursor = 0;
+    TextRenderer_setText(b->renderer, text);
+    Widget_invalidate(b);
 }
 
 void TextBox_setPlaceholder(void *self, const UniStr *text)

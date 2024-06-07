@@ -84,6 +84,8 @@ static void onprestartup(void *receiver, void *sender, void *args)
 
     input = TextBox_create("lowerBox", box, font);
     TextBox_setPlaceholder(input, clickhere);
+    UniStr(prefilled, "This textbox is prefilled!");
+    TextBox_setText(input, prefilled);
     Widget_show(input);
     VBox_addWidget(box, input);
 
