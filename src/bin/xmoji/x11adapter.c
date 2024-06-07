@@ -108,6 +108,7 @@ static struct xkb_state *kbdstate;
 static xcb_cursor_context_t *cctx;
 static size_t maxRequestSize;
 static PSC_Event *buttonpress;
+static PSC_Event *buttonrelease;
 static PSC_Event *clientmsg;
 static PSC_Event *configureNotify;
 static PSC_Event *enter;
@@ -316,6 +317,11 @@ static void handleX11Event(xcb_generic_event_t *ev)
 	case XCB_BUTTON_PRESS:
 	    PSC_Event_raise(buttonpress,
 		    ((xcb_button_press_event_t *)ev)->event, ev);
+	    break;
+
+	case XCB_BUTTON_RELEASE:
+	    PSC_Event_raise(buttonrelease,
+		    ((xcb_button_release_event_t *)ev)->event, ev);
 	    break;
 
 	case XCB_CLIENT_MESSAGE:
@@ -813,6 +819,7 @@ int X11Adapter_init(int argc, char **argv, const char *classname)
     }
 
     buttonpress = PSC_Event_create(0);
+    buttonrelease = PSC_Event_create(0);
     clientmsg = PSC_Event_create(0);
     configureNotify = PSC_Event_create(0);
     enter = PSC_Event_create(0);
@@ -905,6 +912,11 @@ struct xkb_compose_table *X11Adapter_kbdcompose(void)
 PSC_Event *X11Adapter_buttonpress(void)
 {
     return buttonpress;
+}
+
+PSC_Event *X11Adapter_buttonrelease(void)
+{
+    return buttonrelease;
 }
 
 PSC_Event *X11Adapter_clientmsg(void)
@@ -1065,6 +1077,7 @@ void X11Adapter_done(void)
     PSC_Event_destroy(enter);
     PSC_Event_destroy(configureNotify);
     PSC_Event_destroy(clientmsg);
+    PSC_Event_destroy(buttonrelease);
     PSC_Event_destroy(buttonpress);
     eventsDone = 0;
     requestError = 0;
@@ -1079,6 +1092,7 @@ void X11Adapter_done(void)
     enter = 0;
     configureNotify = 0;
     clientmsg = 0;
+    buttonrelease = 0;
     buttonpress = 0;
     rootformat = 0;
     alphaformat = 0;

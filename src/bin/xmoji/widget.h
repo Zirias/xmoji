@@ -20,8 +20,8 @@ typedef enum MouseButton
 {
     MB_NONE	    = 0,
     MB_LEFT	    = 1 << 0,
-    MB_RIGHT	    = 1 << 1,
-    MB_MIDDLE	    = 1 << 2,
+    MB_MIDDLE	    = 1 << 1,
+    MB_RIGHT	    = 1 << 2,
     MB_WHEEL_UP	    = 1 << 3,
     MB_WHEEL_DOWN   = 1 << 4
 } MouseButton;
@@ -32,6 +32,13 @@ typedef struct ClickEvent
     Pos pos;
     int dblclick;
 } ClickEvent;
+
+typedef struct DragEvent
+{
+    MouseButton button;
+    Pos from;
+    Pos to;
+} DragEvent;
 
 typedef struct MetaWidget
 {
@@ -48,11 +55,12 @@ typedef struct MetaWidget
     Size (*minSize)(const void *widget);
     void (*keyPressed)(void *widget, const KeyEvent *event);
     void (*clicked)(void *widget, const ClickEvent *event);
+    void (*dragged)(void *widget, const DragEvent *event);
 } MetaWidget;
 
 #define MetaWidget_init(mexpose, mdraw, mshow, mhide, \
 	mactivate, mdeactivate, menter, mleave, mchildAt, \
-	mminSize, mkeyPressed, mclicked, \
+	mminSize, mkeyPressed, mclicked, mdragged, \
 	...) { \
     .base = MetaObject_init(__VA_ARGS__), \
     .expose = mexpose, \
@@ -66,7 +74,8 @@ typedef struct MetaWidget
     .childAt = mchildAt, \
     .minSize = mminSize, \
     .keyPressed = mkeyPressed, \
-    .clicked = mclicked \
+    .clicked = mclicked, \
+    .dragged = mdragged \
 }
 
 C_CLASS_DECL(PSC_Event);
@@ -123,6 +132,7 @@ xcb_drawable_t Widget_drawable(const void *self) CMETHOD;
 int Widget_visible(const void *self) CMETHOD;
 void Widget_keyPressed(void *self, const KeyEvent *event) CMETHOD;
 void Widget_clicked(void *self, const ClickEvent *event) CMETHOD;
+void Widget_dragged(void *self, const DragEvent *event) CMETHOD;
 
 // "protected" API meant only for derived classes
 void Widget_setDrawable(void *self, xcb_drawable_t drawable) CMETHOD;

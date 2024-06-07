@@ -17,7 +17,7 @@ static int show(void *obj);
 static int hide(void *obj);
 
 static MetaWindow mo = MetaWindow_init(expose, draw, show, hide,
-	0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0, 0,
 	"Window", destroy);
 
 struct Window
@@ -33,6 +33,8 @@ struct Window
     void *hoverWidget;
     Pos mouse;
     Pos mouseUpdate;
+    Pos anchorPos;
+    MouseButton anchorButton;
     XCursor cursor;
     xcb_window_t w;
     xcb_timestamp_t clicktime;
@@ -98,12 +100,32 @@ static void buttonpress(void *receiver, void *sender, void *args)
 	.pos = { ev->event_x, ev->event_y },
 	.dblclick = 0
     };
+    if (!self->anchorButton)
+    {
+	self->anchorButton = click.button;
+	self->anchorPos = click.pos;
+    }
     if (click.button == MB_LEFT)
     {
 	if (ev->time - self->clicktime <= DBLCLICK_MS) click.dblclick = 1;
 	self->clicktime = ev->time;
     }
     Widget_clicked(self->mainWidget, &click);
+}
+
+static void buttonrelease(void *receiver, void *sender, void *args)
+{
+    (void)sender;
+
+    Window *self = receiver;
+    if (!self->mainWidget) return;
+    xcb_button_release_event_t *ev = args;
+    MouseButton releasedButton = 1 << (ev->detail - 1);
+    if (releasedButton == self->anchorButton)
+    {
+	self->anchorButton = 0;
+	self->anchorPos = (Pos){-1, -1};
+    }
 }
 
 static void enter(void *receiver, void *sender, void *args)
@@ -114,6 +136,12 @@ static void enter(void *receiver, void *sender, void *args)
     xcb_enter_notify_event_t *ev = args;
     self->mouseUpdate.x = ev->event_x;
     self->mouseUpdate.y = ev->event_y;
+    MouseButton heldButtons = ev->state >> 8;
+    if (!(self->anchorButton & heldButtons))
+    {
+	self->anchorButton = 0;
+	self->anchorPos = (Pos){-1, -1};
+    }
 }
 
 static void exposed(void *receiver, void *sender, void *args)
@@ -199,8 +227,11 @@ static void leave(void *receiver, void *sender, void *args)
     (void)args;
 
     Window *self = receiver;
-    self->mouseUpdate.x = -1;
-    self->mouseUpdate.y = -1;
+    if (!self->anchorButton)
+    {
+	self->mouseUpdate.x = -1;
+	self->mouseUpdate.y = -1;
+    }
 }
 
 static void configureNotify(void *receiver, void *sender, void *args)
@@ -226,6 +257,15 @@ static void motionNotify(void *receiver, void *sender, void *args)
     xcb_motion_notify_event_t *ev = args;
     self->mouseUpdate.x = ev->event_x;
     self->mouseUpdate.y = ev->event_y;
+    if (self->anchorButton)
+    {
+	MouseButton heldButtons = ev->state >> 8;
+	if (!(heldButtons & self->anchorButton))
+	{
+	    self->anchorButton = 0;
+	    self->anchorPos = (Pos){-1, -1};
+	}
+    }
 }
 
 static void clientmsg(void *receiver, void *sender, void *args)
@@ -264,9 +304,18 @@ static void doupdates(void *receiver, void *sender, void *args)
     if (memcmp(&self->mouse, &self->mouseUpdate, sizeof self->mouse))
     {
 	self->mouse = self->mouseUpdate;
-	if (self->mouse.x >= 0 && self->mouse.y >= 0)
+	Pos hoverPos;
+	if (self->anchorPos.x >= 0 && self->anchorPos.y >= 0)
 	{
-	    self->hoverWidget = Widget_enterAt(self->mainWidget, self->mouse);
+	    hoverPos = self->anchorPos;
+	}
+	else
+	{
+	    hoverPos = self->mouse;
+	}
+	if (hoverPos.x >= 0 && hoverPos.y >= 0)
+	{
+	    self->hoverWidget = Widget_enterAt(self->mainWidget, hoverPos);
 	    XCursor cursor = Widget_cursor(self->hoverWidget);
 	    if (cursor != self->cursor)
 	    {
@@ -275,6 +324,15 @@ static void doupdates(void *receiver, void *sender, void *args)
 			    X11Adapter_cursor(cursor) }),
 			"Cannot change cursor for 0x%x", (unsigned)self->w);
 		self->cursor = cursor;
+	    }
+	    if (self->anchorButton)
+	    {
+		DragEvent event = {
+		    .button = self->anchorButton,
+		    .from = self->anchorPos,
+		    .to = self->mouse
+		};
+		Widget_dragged(self->hoverWidget, &event);
 	    }
 	}
 	else
@@ -392,6 +450,8 @@ static void destroy(void *window)
 	    configureNotify, self->w);
     PSC_Event_unregister(X11Adapter_clientmsg(), self,
 	    clientmsg, self->w);
+    PSC_Event_unregister(X11Adapter_buttonrelease(), self,
+	    buttonrelease, self->w);
     PSC_Event_unregister(X11Adapter_buttonpress(), self,
 	    buttonpress, self->w);
     PSC_Event_unregister(X11Adapter_requestError(), self,
@@ -418,6 +478,7 @@ Window *Window_createBase(void *derived, const char *name, void *parent)
     self->kbcompose = xkb_compose_state_new(
 	    X11Adapter_kbdcompose(), XKB_COMPOSE_STATE_NO_FLAGS);
     self->mouseUpdate = (Pos){-1, -1};
+    self->anchorPos = (Pos){-1, -1};
 
     xcb_connection_t *c = X11Adapter_connection();
     self->w = xcb_generate_id(c);
@@ -460,6 +521,8 @@ Window *Window_createBase(void *derived, const char *name, void *parent)
 
     PSC_Event_register(X11Adapter_buttonpress(), self,
 	    buttonpress, self->w);
+    PSC_Event_register(X11Adapter_buttonrelease(), self,
+	    buttonrelease, self->w);
     PSC_Event_register(X11Adapter_clientmsg(), self,
 	    clientmsg, self->w);
     PSC_Event_register(X11Adapter_configureNotify(), self,

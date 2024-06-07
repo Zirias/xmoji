@@ -12,7 +12,7 @@ static int draw(void *obj, xcb_render_picture_t picture);
 static Size minSize(const void *obj);
 
 static MetaTextLabel mo = MetaTextLabel_init(
-	0, draw, 0, 0, 0, 0, 0, 0, 0, minSize, 0, 0,
+	0, draw, 0, 0, 0, 0, 0, 0, 0, minSize, 0, 0, 0,
 	"TextLabel", destroy);
 
 #define dummy ((void *)&mo)

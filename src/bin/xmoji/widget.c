@@ -15,7 +15,7 @@ static int hide(void *obj);
 static Size minSize(const void *obj);
 
 static MetaWidget mo = MetaWidget_init(0, 0, show, hide,
-	0, 0, 0, 0, 0, minSize, 0, 0,
+	0, 0, 0, 0, 0, minSize, 0, 0, 0,
 	"Widget", destroy);
 
 struct Widget
@@ -544,14 +544,17 @@ int Widget_visible(const void *self)
 
 void Widget_keyPressed(void *self, const KeyEvent *event)
 {
-    Widget *w = Object_instance(self);
-    Object_vcallv(Widget, keyPressed, w, event);
+    Object_vcallv(Widget, keyPressed, self, event);
 }
 
 void Widget_clicked(void *self, const ClickEvent *event)
 {
-    Widget *w = Object_instance(self);
-    Object_vcallv(Widget, clicked, w, event);
+    Object_vcallv(Widget, clicked, self, event);
+}
+
+void Widget_dragged(void *self, const DragEvent *event)
+{
+    Object_vcallv(Widget, dragged, self, event);
 }
 
 void Widget_requestSize(void *self)

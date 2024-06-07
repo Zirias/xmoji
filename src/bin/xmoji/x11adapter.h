@@ -174,6 +174,7 @@ xcb_render_pictformat_t X11Adapter_argbformat(void);
 xcb_render_pictformat_t X11Adapter_rgbformat(void);
 struct xkb_compose_table *X11Adapter_kbdcompose(void);
 PSC_Event *X11Adapter_buttonpress(void) ATTR_RETNONNULL;
+PSC_Event *X11Adapter_buttonrelease(void) ATTR_RETNONNULL;
 PSC_Event *X11Adapter_clientmsg(void) ATTR_RETNONNULL;
 PSC_Event *X11Adapter_configureNotify(void) ATTR_RETNONNULL;
 PSC_Event *X11Adapter_enter(void) ATTR_RETNONNULL;

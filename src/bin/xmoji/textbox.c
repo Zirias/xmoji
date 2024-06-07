@@ -18,12 +18,13 @@ static void enter(void *obj);
 static void leave(void *obj);
 static Size minSize(const void *obj);
 static void keyPressed(void *obj, const KeyEvent *event);
-static void clicked(void *obj, const ClickEvent *click);
+static void clicked(void *obj, const ClickEvent *event);
+static void dragged(void *obj, const DragEvent *event);
 
 static MetaTextBox mo = MetaTextBox_init(
 	0, draw, 0, 0,
 	activate, deactivate, enter, leave, 0,
-	minSize, keyPressed, clicked,
+	minSize, keyPressed, clicked, dragged,
 	"TextBox", destroy);
 
 struct TextBox
@@ -38,6 +39,7 @@ struct TextBox
     Selection selection;
     unsigned cursor;
     unsigned scrollpos;
+    unsigned dragAnchor;
     int cursorvisible;
 };
 
@@ -349,6 +351,56 @@ static void clicked(void *obj, const ClickEvent *event)
 	self->cursor = index;
 	self->selection.len = selectlen;
 	self->selection.start = 0;
+	self->dragAnchor = -1;
+    }
+}
+
+static void dragged(void *obj, const DragEvent *event)
+{
+    TextBox *self = Object_instance(obj);
+    if (event->button == MB_LEFT)
+    {
+	unsigned len = UniStr_len(UniStrBuilder_stringView(self->text));
+	if (!len) return;
+	Pos origin = Widget_contentOrigin(self, self->minSize);
+	unsigned fromidx = self->dragAnchor;
+	if (fromidx == (unsigned)-1)
+	{
+	    int frompos = event->from.x + self->scrollpos - origin.x;
+	    fromidx = TextRenderer_charIndex(self->renderer,
+		frompos > 0 ? frompos : 0);
+	    if (fromidx > len) fromidx = len;
+	    self->dragAnchor = fromidx;
+	}
+	int topos = event->to.x + self->scrollpos - origin.x;
+	unsigned toidx = TextRenderer_charIndex(self->renderer,
+		topos > 0 ? topos : 0);
+	if (toidx > len) toidx = len;
+	if (fromidx == toidx)
+	{
+	    if (fromidx == self->cursor) return;
+	    self->cursor = fromidx;
+	    self->selection.len = 0;
+	    Widget_invalidate(self);
+	    return;
+	}
+	unsigned selpos = fromidx;
+	unsigned sellen;
+	if (toidx < fromidx)
+	{
+	    selpos = toidx;
+	    sellen = fromidx - toidx;
+	}
+	else sellen = toidx - fromidx;
+	if (toidx != self->cursor
+		|| selpos != self->selection.start
+		|| sellen != self->selection.len)
+	{
+	    self->cursor = toidx;
+	    self->selection.start = selpos;
+	    self->selection.len = sellen;
+	    Widget_invalidate(self);
+	}
     }
 }
 

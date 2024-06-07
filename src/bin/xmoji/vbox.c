@@ -15,7 +15,7 @@ static void clicked(void *obj, const ClickEvent *event);
 static MetaVBox mo = MetaVBox_init(
 	expose, draw, 0, 0,
 	0, 0, 0, leave, childAt,
-	minSize, 0, clicked,
+	minSize, 0, clicked, 0,
 	"VBox", destroy);
 
 typedef struct VBoxItem
