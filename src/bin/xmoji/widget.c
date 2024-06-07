@@ -369,8 +369,8 @@ static void setSize(Widget *self, int external, Size size)
     {
 	SizeChangedEventArgs args = { external, self->geometry.size, size };
 	self->geometry.size = size;
-	Widget_invalidate(self);
 	PSC_Event_raise(self->sizeChanged, 0, &args);
+	Widget_invalidate(self);
     }
 }
 
