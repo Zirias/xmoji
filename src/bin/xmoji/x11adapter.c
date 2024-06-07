@@ -119,6 +119,8 @@ static PSC_Event *keypress;
 static PSC_Event *leave;
 static PSC_Event *mapNotify;
 static PSC_Event *motionNotify;
+static PSC_Event *selectionNotify;
+static PSC_Event *selectionRequest;
 static PSC_Event *unmapNotify;
 static PSC_Event *requestError;
 static PSC_Event *eventsDone;
@@ -398,6 +400,16 @@ static void handleX11Event(xcb_generic_event_t *ev)
 	case XCB_MOTION_NOTIFY:
 	    PSC_Event_raise(motionNotify,
 		    ((xcb_motion_notify_event_t *)ev)->event, ev);
+	    break;
+
+	case XCB_SELECTION_NOTIFY:
+	    PSC_Event_raise(selectionNotify,
+		    ((xcb_selection_notify_event_t *)ev)->requestor, ev);
+	    break;
+
+	case XCB_SELECTION_REQUEST:
+	    PSC_Event_raise(selectionRequest,
+		    ((xcb_selection_request_event_t *)ev)->owner, ev);
 	    break;
 
 	case XCB_UNMAP_NOTIFY:
@@ -830,6 +842,8 @@ int X11Adapter_init(int argc, char **argv, const char *classname)
     leave = PSC_Event_create(0);
     mapNotify = PSC_Event_create(0);
     motionNotify = PSC_Event_create(0);
+    selectionNotify = PSC_Event_create(0);
+    selectionRequest = PSC_Event_create(0);
     unmapNotify = PSC_Event_create(0);
     requestError = PSC_Event_create(0);
     eventsDone = PSC_Event_create(0);
@@ -969,6 +983,16 @@ PSC_Event *X11Adapter_motionNotify(void)
     return motionNotify;
 }
 
+PSC_Event *X11Adapter_selectionNotify(void)
+{
+    return selectionNotify;
+}
+
+PSC_Event *X11Adapter_selectionRequest(void)
+{
+    return selectionRequest;
+}
+
 PSC_Event *X11Adapter_unmapNotify(void)
 {
     return unmapNotify;
@@ -1067,6 +1091,8 @@ void X11Adapter_done(void)
     PSC_Event_destroy(eventsDone);
     PSC_Event_destroy(requestError);
     PSC_Event_destroy(unmapNotify);
+    PSC_Event_destroy(selectionRequest);
+    PSC_Event_destroy(selectionNotify);
     PSC_Event_destroy(motionNotify);
     PSC_Event_destroy(mapNotify);
     PSC_Event_destroy(leave);
@@ -1082,6 +1108,8 @@ void X11Adapter_done(void)
     eventsDone = 0;
     requestError = 0;
     unmapNotify = 0;
+    selectionRequest = 0;
+    selectionNotify = 0;
     motionNotify = 0;
     mapNotify = 0;
     leave = 0;

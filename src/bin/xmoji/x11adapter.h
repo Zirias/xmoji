@@ -17,6 +17,8 @@ typedef enum XGlitch
 } XGlitch;
 
 #define X_ATOMS(X) \
+    X(TARGETS) \
+    X(TEXT) \
     X(UTF8_STRING) \
     X(WM_CLASS) \
     X(WM_DELETE_WINDOW) \
@@ -185,6 +187,8 @@ PSC_Event *X11Adapter_keypress(void) ATTR_RETNONNULL;
 PSC_Event *X11Adapter_leave(void) ATTR_RETNONNULL;
 PSC_Event *X11Adapter_mapNotify(void) ATTR_RETNONNULL;
 PSC_Event *X11Adapter_motionNotify(void) ATTR_RETNONNULL;
+PSC_Event *X11Adapter_selectionNotify(void) ATTR_RETNONNULL;
+PSC_Event *X11Adapter_selectionRequest(void) ATTR_RETNONNULL;
 PSC_Event *X11Adapter_unmapNotify(void) ATTR_RETNONNULL;
 PSC_Event *X11Adapter_requestError(void) ATTR_RETNONNULL;
 PSC_Event *X11Adapter_eventsDone(void) ATTR_RETNONNULL;

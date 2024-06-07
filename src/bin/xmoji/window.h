@@ -16,6 +16,7 @@ typedef struct MetaWindow
     .base = MetaWidget_init(__VA_ARGS__) \
 }
 
+C_CLASS_DECL(UniStr);
 C_CLASS_DECL(Window);
 
 Window *Window_createBase(void *derived, const char *name, void *parent);
@@ -49,6 +50,13 @@ void Window_setMainWidget(void *self, void *widget)
     CMETHOD;
 
 void Window_setFocusWidget(void *self, void *widget)
+    CMETHOD;
+
+void Window_requestSelection(void *self, void *widget,
+	void (*callback)(void *widget, const UniStr *data))
+    CMETHOD ATTR_NONNULL((2)) ATTR_NONNULL((3));
+
+void Window_offerSelection(void *self, const UniStr *data)
     CMETHOD;
 
 #endif

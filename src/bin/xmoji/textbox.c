@@ -4,6 +4,7 @@
 #include "textrenderer.h"
 #include "unistr.h"
 #include "unistrbuilder.h"
+#include "window.h"
 
 #include <poser/core.h>
 #include <stdlib.h>
@@ -34,6 +35,7 @@ struct TextBox
     UniStrBuilder *text;
     TextRenderer *renderer;
     UniStr *phtext;
+    UniStr *selected;
     TextRenderer *placeholder;
     Size minSize;
     Selection selection;
@@ -42,6 +44,24 @@ struct TextBox
     unsigned dragAnchor;
     int cursorvisible;
 };
+
+static void updateSelected(TextBox *self)
+{
+    UniStr_destroy(self->selected);
+    self->selected = 0;
+    if (self->selection.len)
+    {
+	char32_t *substr = PSC_malloc(
+		(self->selection.len + 1) * sizeof *substr);
+	memcpy(substr, UniStr_str(UniStrBuilder_stringView(self->text))
+		+ self->selection.start,
+		self->selection.len * sizeof *substr);
+	substr[self->selection.len] = 0;
+	self->selected = UniStr_create(substr);
+    }
+    Window *win = Window_fromWidget(self);
+    if (win) Window_offerSelection(win, self->selected);
+}
 
 void blink(void *receiver, void *sender, void *args)
 {
@@ -177,6 +197,7 @@ static void unfocus(void *obj)
     {
 	self->selection.len = 0;
 	Widget_invalidate(self);
+	updateSelected(self);
     }
 }
 
@@ -192,6 +213,7 @@ static void keyPressed(void *obj, const KeyEvent *event)
     const UniStr *str = UniStrBuilder_stringView(self->text);
     size_t len = UniStr_len(str);
     unsigned glen;
+    Selection oldSelection = self->selection;
 
     switch (event->keysym)
     {
@@ -352,39 +374,64 @@ cursoronly:
     PSC_Service_setTickInterval(600);
     self->cursorvisible = 1;
     Widget_invalidate(self);
+    if (oldSelection.len != self->selection.len
+	    || oldSelection.start != self->selection.start)
+    {
+	updateSelected(self);
+    }
+}
+
+static void receiveSelection(void *widget, const UniStr *data)
+{
+    if (!data || !UniStr_len(data)) return;
+    TextBox *self = Object_instance(widget);
+    UniStrBuilder_insertStr(self->text, self->cursor, UniStr_str(data));
+    self->cursor += UniStr_len(data);
+    TextRenderer_setText(self->renderer, UniStrBuilder_stringView(self->text));
+    Widget_invalidate(self);
 }
 
 static void clicked(void *obj, const ClickEvent *event)
 {
     TextBox *self = Object_instance(obj);
-    if (event->button == MB_LEFT)
+    if (event->button != MB_LEFT &&
+	    !(event->button == MB_MIDDLE && Widget_active(self))) return;
+    if (event->button == MB_LEFT) Widget_focus(self);
+    unsigned len = UniStr_len(UniStrBuilder_stringView(self->text));
+    unsigned index = self->cursor;
+    unsigned selectlen = 0;
+    Selection oldSelection = self->selection;
+    if (event->button == MB_LEFT && event->dblclick)
     {
-	Widget_focus(self);
-	unsigned len = UniStr_len(UniStrBuilder_stringView(self->text));
-	unsigned index = self->cursor;
-	unsigned selectlen = 0;
-	if (event->dblclick)
-	{
-	    index = len;
-	    selectlen = len;
-	}
-	else if (len)
-	{
-	    Pos origin = Widget_contentOrigin(self, self->minSize);
-	    index = TextRenderer_charIndex(self->renderer,
-		    event->pos.x + self->scrollpos - origin.x);
-	    if (index > len) index = len;
-	}
-	if (index != self->cursor || self->selection.len != selectlen)
-	{
-	    Widget_invalidate(self);
-	    PSC_Service_setTickInterval(600);
-	    self->cursorvisible = 1;
-	}
-	self->cursor = index;
-	self->selection.len = selectlen;
-	self->selection.start = 0;
-	self->dragAnchor = -1;
+	index = len;
+	selectlen = len;
+    }
+    else if (len)
+    {
+	Pos origin = Widget_contentOrigin(self, self->minSize);
+	index = TextRenderer_charIndex(self->renderer,
+		event->pos.x + self->scrollpos - origin.x);
+	if (index > len) index = len;
+    }
+    if (index != self->cursor || self->selection.len != selectlen)
+    {
+	Widget_invalidate(self);
+	PSC_Service_setTickInterval(600);
+	self->cursorvisible = 1;
+    }
+    self->cursor = index;
+    self->selection.len = selectlen;
+    self->selection.start = 0;
+    self->dragAnchor = -1;
+    if (event->button == MB_MIDDLE)
+    {
+	Window *win = Window_fromWidget(self);
+	if (win) Window_requestSelection(win, self, receiveSelection);
+    }
+    else if (oldSelection.len != self->selection.len
+	    || oldSelection.start != self->selection.start)
+    {
+	updateSelected(self);
     }
 }
 
@@ -395,6 +442,7 @@ static void dragged(void *obj, const DragEvent *event)
     {
 	unsigned len = UniStr_len(UniStrBuilder_stringView(self->text));
 	if (!len) return;
+	Selection oldSelection = self->selection;
 	Pos origin = Widget_contentOrigin(self, self->minSize);
 	unsigned fromidx = self->dragAnchor;
 	if (fromidx == (unsigned)-1)
@@ -434,6 +482,11 @@ static void dragged(void *obj, const DragEvent *event)
 	    self->selection.len = sellen;
 	    Widget_invalidate(self);
 	}
+	if (oldSelection.len != self->selection.len
+		|| oldSelection.start != self->selection.start)
+	{
+	    updateSelected(self);
+	}
     }
 }
 
@@ -452,6 +505,7 @@ TextBox *TextBox_createBase(void *derived, const char *name,
     TextRenderer_setNoLigatures(self->renderer, 1);
     self->phtext = 0;
     self->placeholder = 0;
+    self->selected = 0;
     self->minSize = (Size){ 120, (Font_maxHeight(self->font) + 0x3f) >> 6 };
     self->selection = (Selection){ 0, 0 };
     self->cursor = 0;

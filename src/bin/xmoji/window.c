@@ -33,6 +33,9 @@ struct Window
     void *mainWidget;
     void *focusWidget;
     void *hoverWidget;
+    void (*srcallback)(void *, const UniStr *);
+    void *srwidget;
+    UniStr *selection;
     Pos mouse;
     Pos mouseUpdate;
     Pos anchorPos;
@@ -310,6 +313,116 @@ static void motionNotify(void *receiver, void *sender, void *args)
     }
 }
 
+static void onPrimaryReceived(void *obj, unsigned sequence,
+	void *reply, xcb_generic_error_t *error)
+{
+    (void)sequence;
+
+    Window *self = obj;
+    if (!self->srcallback) return;
+    if (error)
+    {
+	PSC_Log_fmt(PSC_L_DEBUG, "Reading PRIMARY selection failed on 0x%x",
+		(unsigned)self->w);
+	self->srcallback(self->srwidget, 0);
+	self->srcallback = 0;
+	self->srwidget = 0;
+    }
+    else if (reply)
+    {
+	xcb_get_property_reply_t *prop = reply;
+	uint32_t len = xcb_get_property_value_length(prop);
+	char *utf8 = PSC_malloc(len+1);
+	memcpy(utf8, xcb_get_property_value(prop), len);
+	utf8[len] = 0;
+	UniStr *data = UniStr_create(utf8);
+	free(utf8);
+	self->srcallback(self->srwidget, data);
+	UniStr_destroy(data);
+	self->srcallback = 0;
+	self->srwidget = 0;
+    }
+    return;
+    CHECK(xcb_delete_property(X11Adapter_connection(), self->w,
+		XCB_ATOM_PRIMARY),
+	    "Cannot delete selection property on 0x%x", (unsigned)self->w);
+}
+
+static void selectionNotify(void *receiver, void *sender, void *args)
+{
+    (void)sender;
+
+    Window *self = receiver;
+    if (!self->srcallback) return;
+    xcb_selection_notify_event_t *ev = args;
+    if (ev->property != XCB_ATOM_PRIMARY)
+    {
+	self->srcallback(self->srwidget, 0);
+	self->srcallback = 0;
+	self->srwidget = 0;
+	return;
+    }
+    AWAIT(xcb_get_property(X11Adapter_connection(), 0, self->w,
+		XCB_ATOM_PRIMARY, A(UTF8_STRING), 0, 64 * 1024),
+	    self, onPrimaryReceived);
+}
+
+static void selectionRequest(void *receiver, void *sender, void *args)
+{
+    (void)sender;
+
+    Window *self = receiver;
+    xcb_selection_request_event_t *ev = args;
+    xcb_selection_notify_event_t not = {
+	.response_type = XCB_SELECTION_NOTIFY,
+	.pad0 = 0,
+	.sequence = 0,
+	.time = ev->time,
+	.requestor = ev->requestor,
+	.selection = ev->selection,
+	.target = ev->target,
+	.property = ev->property
+    };
+    xcb_connection_t *c = X11Adapter_connection();
+    if (!self->selection || ev->selection != XCB_ATOM_PRIMARY)
+    {
+	not.property = XCB_ATOM_NONE;
+    }
+    else if (ev->target == A(TARGETS))
+    {
+	xcb_atom_t targets[] = { XCB_ATOM_STRING, A(TEXT), A(UTF8_STRING) };
+	CHECK(xcb_change_property(c, XCB_PROP_MODE_REPLACE, ev->requestor,
+		    ev->property, XCB_ATOM_ATOM, 32,
+		    sizeof targets / sizeof *targets, targets),
+		"Cannot set property for selection request to 0x%x",
+		(unsigned)self->w);
+    }
+    else if (ev->target == XCB_ATOM_STRING)
+    {
+	char *str = LATIN1(self->selection);
+	CHECK(xcb_change_property(c, XCB_PROP_MODE_REPLACE, ev->requestor,
+		    ev->property, XCB_ATOM_STRING, 8, strlen(str), str),
+		"Cannot set property for selection request to 0x%x",
+		(unsigned)self->w);
+    }
+    else if (ev->target == A(TEXT) || ev->target == A(UTF8_STRING))
+    {
+	size_t len;
+	char *str = UniStr_toUtf8(self->selection, &len);
+	CHECK(xcb_change_property(c, XCB_PROP_MODE_REPLACE, ev->requestor,
+		    ev->property, ev->target, 8, len, str),
+		"Cannot set property for selection request to 0x%x",
+		(unsigned)self->w);
+    }
+    else
+    {
+	not.property = XCB_ATOM_NONE;
+    }
+    CHECK(xcb_send_event(c, 0, ev->requestor, 0, (const char *)&not),
+	    "Cannot sent selection notification for 0x%x",
+	    (unsigned)self->w);
+}
+
 static void clientmsg(void *receiver, void *sender, void *args)
 {
     (void)sender;
@@ -494,6 +607,10 @@ static void destroy(void *window)
     PSC_Event_unregister(X11Adapter_eventsDone(), self, doupdates, 0);
     PSC_Event_unregister(X11Adapter_unmapNotify(), self,
 	    unmapped, self->w);
+    PSC_Event_unregister(X11Adapter_selectionRequest(), self,
+	    selectionRequest, self->w);
+    PSC_Event_unregister(X11Adapter_selectionNotify(), self,
+	    selectionNotify, self->w);
     PSC_Event_unregister(X11Adapter_motionNotify(), self,
 	    motionNotify, self->w);
     PSC_Event_unregister(X11Adapter_mapNotify(), self,
@@ -639,6 +756,10 @@ Window *Window_createBase(void *derived, const char *name, void *parent)
 	    mapped, self->w);
     PSC_Event_register(X11Adapter_motionNotify(), self,
 	    motionNotify, self->w);
+    PSC_Event_register(X11Adapter_selectionNotify(), self,
+	    selectionNotify, self->w);
+    PSC_Event_register(X11Adapter_selectionRequest(), self,
+	    selectionRequest, self->w);
     PSC_Event_register(X11Adapter_unmapNotify(), self,
 	    unmapped, self->w);
     PSC_Event_register(X11Adapter_eventsDone(), self,
@@ -776,5 +897,48 @@ void Window_setFocusWidget(void *self, void *widget)
 	Widget_unfocus(prev);
     }
     w->focusWidget = widget;
+}
+
+static void onSelectionConverted(void *obj, unsigned sequence,
+	void *reply, xcb_generic_error_t *error)
+{
+    (void)sequence;
+    (void)reply;
+
+    Window *self = obj;
+    if (error)
+    {
+	PSC_Log_fmt(PSC_L_DEBUG, "Requesting selection failed for 0x%x",
+		(unsigned)self->w);
+	self->srcallback(self->srwidget, 0);
+	self->srwidget = 0;
+	self->srcallback = 0;
+    }
+}
+
+void Window_requestSelection(void *self, void *widget,
+	void (*callback)(void *widget, const UniStr *data))
+{
+    Window *w = Object_instance(self);
+    w->srcallback = callback;
+    w->srwidget = widget;
+    AWAIT(xcb_convert_selection(X11Adapter_connection(), w->w,
+		XCB_ATOM_PRIMARY, A(UTF8_STRING), XCB_ATOM_PRIMARY,
+		XCB_CURRENT_TIME),
+	    w, onSelectionConverted);
+}
+
+void Window_offerSelection(void *self, const UniStr *data)
+{
+    Window *w = Object_instance(self);
+    UniStr_destroy(w->selection);
+    w->selection = 0;
+    if (data && UniStr_len(data))
+    {
+	w->selection = UniStr_ref(data);
+	CHECK(xcb_set_selection_owner(X11Adapter_connection(), w->w,
+		    XCB_ATOM_PRIMARY, XCB_CURRENT_TIME),
+		"Cannot obtain selection ownership for 0x%x", (unsigned)w->w);
+    }
 }
 
