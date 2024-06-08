@@ -469,7 +469,7 @@ static void selectionRequest(void *receiver, void *sender, void *args)
 	size_t len;
 	char *str = UniStr_toUtf8(self->selection, &len);
 	CHECK(xcb_change_property(c, XCB_PROP_MODE_REPLACE, ev->requestor,
-		    ev->property, ev->target, 8, len, str),
+		    ev->property, A(UTF8_STRING), 8, len, str),
 		"Cannot set property for selection request to 0x%x",
 		(unsigned)self->w);
 	free(str);
