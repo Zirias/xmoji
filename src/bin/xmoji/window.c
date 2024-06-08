@@ -404,6 +404,7 @@ static void selectionRequest(void *receiver, void *sender, void *args)
 		    ev->property, XCB_ATOM_STRING, 8, strlen(str), str),
 		"Cannot set property for selection request to 0x%x",
 		(unsigned)self->w);
+	free(str);
     }
     else if (ev->target == A(TEXT) || ev->target == A(UTF8_STRING))
     {
@@ -413,6 +414,7 @@ static void selectionRequest(void *receiver, void *sender, void *args)
 		    ev->property, ev->target, 8, len, str),
 		"Cannot set property for selection request to 0x%x",
 		(unsigned)self->w);
+	free(str);
     }
     else
     {
