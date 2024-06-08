@@ -390,7 +390,7 @@ static void selectionRequest(void *receiver, void *sender, void *args)
     }
     else if (ev->target == A(TARGETS))
     {
-	xcb_atom_t targets[] = { XCB_ATOM_STRING, A(TEXT), A(UTF8_STRING) };
+	xcb_atom_t targets[] = { A(UTF8_STRING), A(TEXT), XCB_ATOM_STRING };
 	CHECK(xcb_change_property(c, XCB_PROP_MODE_REPLACE, ev->requestor,
 		    ev->property, XCB_ATOM_ATOM, 32,
 		    sizeof targets / sizeof *targets, targets),

@@ -369,9 +369,9 @@ void Widget_focus(void *self)
     Window *win = Window_fromWidget(w);
     if (!win) return;
     w->focused = 1;
-    Object_vcallv(Widget, focus, w);
     Window_setFocusWidget(win, w);
     Widget_activate(w);
+    Object_vcallv(Widget, focus, w);
 }
 
 void Widget_unfocus(void *self)

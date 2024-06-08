@@ -58,9 +58,9 @@ static void updateSelected(TextBox *self)
 		self->selection.len * sizeof *substr);
 	substr[self->selection.len] = 0;
 	self->selected = UniStr_create(substr);
+	Window *win = Window_fromWidget(self);
+	if (win) Window_offerSelection(win, self->selected);
     }
-    Window *win = Window_fromWidget(self);
-    if (win) Window_offerSelection(win, self->selected);
 }
 
 void blink(void *receiver, void *sender, void *args)
