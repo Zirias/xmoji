@@ -42,6 +42,9 @@ UniStr *UniStr_createFromUtf32(const char32_t *utf32)
 UniStr *UniStr_createOwned(char32_t *utf32)
     ATTR_NONNULL((1)) ATTR_RETNONNULL;
 
+UniStr *UniStr_createFromLatin1(const char *latin1, size_t len)
+    ATTR_NONNULL((1)) ATTR_RETNONNULL;
+
 /* reference */
 
 UniStr *UniStr_ref(const UniStr *self)

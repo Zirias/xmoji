@@ -313,6 +313,23 @@ static void motionNotify(void *receiver, void *sender, void *args)
     }
 }
 
+static void onSelectionConverted(void *obj, unsigned sequence,
+	void *reply, xcb_generic_error_t *error)
+{
+    (void)sequence;
+    (void)reply;
+
+    Window *self = obj;
+    if (error)
+    {
+	PSC_Log_fmt(PSC_L_DEBUG, "Requesting selection failed for 0x%x",
+		(unsigned)self->w);
+	self->srcallback(self->srwidget, 0);
+	self->srwidget = 0;
+	self->srcallback = 0;
+    }
+}
+
 static void onPrimaryReceived(void *obj, unsigned sequence,
 	void *reply, xcb_generic_error_t *error)
 {
@@ -332,17 +349,55 @@ static void onPrimaryReceived(void *obj, unsigned sequence,
     {
 	xcb_get_property_reply_t *prop = reply;
 	uint32_t len = xcb_get_property_value_length(prop);
-	char *utf8 = PSC_malloc(len+1);
-	memcpy(utf8, xcb_get_property_value(prop), len);
-	utf8[len] = 0;
-	UniStr *data = UniStr_create(utf8);
-	free(utf8);
-	self->srcallback(self->srwidget, data);
-	UniStr_destroy(data);
+	if (prop->type == XCB_ATOM_ATOM)
+	{
+	    xcb_atom_t reqtgt = XCB_ATOM_NONE;
+	    xcb_atom_t *targets = xcb_get_property_value(prop);
+	    for (uint32_t i = 0; i < len; ++i)
+	    {
+		if (targets[i] == A(UTF8_STRING))
+		{
+		    reqtgt = targets[i];
+		    break;
+		}
+		if (targets[i] == XCB_ATOM_STRING) reqtgt = targets[i];
+	    }
+	    if (reqtgt == XCB_ATOM_NONE)
+	    {
+		PSC_Log_fmt(PSC_L_DEBUG,
+			"No suitable selection format offered to 0x%x",
+			(unsigned)self->w);
+	    }
+	    else
+	    {
+		AWAIT(xcb_convert_selection(X11Adapter_connection(), self->w,
+			    XCB_ATOM_PRIMARY, reqtgt, XCB_ATOM_PRIMARY,
+			    XCB_CURRENT_TIME),
+			self, onSelectionConverted);
+		goto done;
+	    }
+	}
+	else if (prop->type == XCB_ATOM_STRING)
+	{
+	    UniStr *data = UniStr_createFromLatin1(
+		    xcb_get_property_value(prop), len);
+	    self->srcallback(self->srwidget, data);
+	    UniStr_destroy(data);
+	}
+	else if (prop->type == A(UTF8_STRING))
+	{
+	    char *utf8 = PSC_malloc(len+1);
+	    memcpy(utf8, xcb_get_property_value(prop), len);
+	    utf8[len] = 0;
+	    UniStr *data = UniStr_create(utf8);
+	    free(utf8);
+	    self->srcallback(self->srwidget, data);
+	    UniStr_destroy(data);
+	}
 	self->srcallback = 0;
 	self->srwidget = 0;
     }
-    return;
+done:
     CHECK(xcb_delete_property(X11Adapter_connection(), self->w,
 		XCB_ATOM_PRIMARY),
 	    "Cannot delete selection property on 0x%x", (unsigned)self->w);
@@ -362,8 +417,10 @@ static void selectionNotify(void *receiver, void *sender, void *args)
 	self->srwidget = 0;
 	return;
     }
+    xcb_atom_t proptype = ev->target;
+    if (proptype == A(TARGETS)) proptype = XCB_ATOM_ATOM;
     AWAIT(xcb_get_property(X11Adapter_connection(), 0, self->w,
-		XCB_ATOM_PRIMARY, A(UTF8_STRING), 0, 64 * 1024),
+		XCB_ATOM_PRIMARY, proptype, 0, 64 * 1024),
 	    self, onPrimaryReceived);
 }
 
@@ -422,7 +479,7 @@ static void selectionRequest(void *receiver, void *sender, void *args)
 	not.property = XCB_ATOM_NONE;
     }
     CHECK(xcb_send_event(c, 0, ev->requestor, 0, (const char *)&not),
-	    "Cannot sent selection notification for 0x%x",
+	    "Cannot send selection notification for 0x%x",
 	    (unsigned)self->w);
 }
 
@@ -902,23 +959,6 @@ void Window_setFocusWidget(void *self, void *widget)
     w->focusWidget = widget;
 }
 
-static void onSelectionConverted(void *obj, unsigned sequence,
-	void *reply, xcb_generic_error_t *error)
-{
-    (void)sequence;
-    (void)reply;
-
-    Window *self = obj;
-    if (error)
-    {
-	PSC_Log_fmt(PSC_L_DEBUG, "Requesting selection failed for 0x%x",
-		(unsigned)self->w);
-	self->srcallback(self->srwidget, 0);
-	self->srwidget = 0;
-	self->srcallback = 0;
-    }
-}
-
 void Window_requestSelection(void *self, void *widget,
 	void (*callback)(void *widget, const UniStr *data))
 {
@@ -926,7 +966,7 @@ void Window_requestSelection(void *self, void *widget,
     w->srcallback = callback;
     w->srwidget = widget;
     AWAIT(xcb_convert_selection(X11Adapter_connection(), w->w,
-		XCB_ATOM_PRIMARY, A(UTF8_STRING), XCB_ATOM_PRIMARY,
+		XCB_ATOM_PRIMARY, A(TARGETS), XCB_ATOM_PRIMARY,
 		XCB_CURRENT_TIME),
 	    w, onSelectionConverted);
 }

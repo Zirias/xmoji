@@ -143,6 +143,15 @@ UniStr *UniStr_createOwned(char32_t *utf32)
     return create(utf32, UniStr_utf32len(utf32));
 }
 
+UniStr *UniStr_createFromLatin1(const char *latin1, size_t len)
+{
+    if (!len) return create(0, 0);
+    char32_t *str = PSC_malloc((len + 1) *sizeof *str);
+    for (size_t i = 0; i < len; ++i) str[i] = latin1[i];
+    str[len] = 0;
+    return create(str, len);
+}
+
 UniStr *UniStr_ref(const UniStr *self)
 {
     UniStr *ref = (UniStr *)self;
