@@ -401,7 +401,8 @@ static void selectionRequest(void *receiver, void *sender, void *args)
     {
 	char *str = LATIN1(self->selection);
 	CHECK(xcb_change_property(c, XCB_PROP_MODE_REPLACE, ev->requestor,
-		    ev->property, XCB_ATOM_STRING, 8, strlen(str), str),
+		    ev->property, XCB_ATOM_STRING, 8,
+		    UniStr_len(self->selection), str),
 		"Cannot set property for selection request to 0x%x",
 		(unsigned)self->w);
 	free(str);
