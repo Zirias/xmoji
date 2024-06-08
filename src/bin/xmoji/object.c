@@ -18,6 +18,7 @@ typedef struct ObjectBase
     Object base;
     void *mostDerived;
     PSC_List *owned;
+    int refcnt;
 } ObjectBase;
 
 int MetaObject_register(void *meta)
@@ -42,7 +43,15 @@ Object *Object_create(void *derived)
     base->base.type = 0;
     base->mostDerived = derived;
     base->owned = 0;
+    base->refcnt = 1;
     return (Object *)base;
+}
+
+void *Object_ref(void *self)
+{
+    ObjectBase *base = Object_instanceOf(self, 0, 1);
+    ++base->refcnt;
+    return self;
 }
 
 void Object_own(void *self, void *obj)
@@ -92,6 +101,7 @@ void Object_destroy(void *self)
 {
     if (!self) return;
     ObjectBase *base = Object_instanceOf(self, 0, 1);
+    if (--base->refcnt) return;
     PSC_List_destroy(base->owned);
     Object *obj = base->mostDerived;
     destroyRecursive(obj);

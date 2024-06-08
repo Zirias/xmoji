@@ -26,6 +26,7 @@ int MetaObject_register(void *meta);
 const void *MetaObject_get(uint32_t id);
 
 Object *Object_create(void *derived);
+void *Object_ref(void *self);
 void Object_own(void *self, void *obj);
 void *Object_instanceOf(void *self, uint32_t type, int mustMatch);
 void *Object_mostDerived(void *self);
