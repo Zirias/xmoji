@@ -18,6 +18,7 @@ typedef struct MetaWindow
 
 C_CLASS_DECL(UniStr);
 C_CLASS_DECL(Window);
+C_CLASS_DECL(XSelection);
 
 Window *Window_createBase(void *derived, const char *name, void *parent);
 #define Window_create(...) Window_createBase(0, __VA_ARGS__)
@@ -25,8 +26,8 @@ Window *Window_createBase(void *derived, const char *name, void *parent);
 Window *Window_fromWidget(void *widget)
     ATTR_NONNULL((1));
 
-xcb_window_t Window_id(void *self)
-    CMETHOD;
+xcb_window_t Window_id(const void *self)
+    CMETHOD ATTR_PURE;
 
 PSC_Event *Window_closed(void *self)
     CMETHOD ATTR_RETNONNULL;
@@ -52,11 +53,7 @@ void Window_setMainWidget(void *self, void *widget)
 void Window_setFocusWidget(void *self, void *widget)
     CMETHOD;
 
-void Window_requestSelection(void *self, void *widget,
-	void (*callback)(void *widget, const UniStr *data))
-    CMETHOD ATTR_NONNULL((2)) ATTR_NONNULL((3));
-
-void Window_offerSelection(void *self, const UniStr *data)
+XSelection *Window_primary(void *self)
     CMETHOD;
 
 #endif

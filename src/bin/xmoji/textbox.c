@@ -5,6 +5,7 @@
 #include "unistr.h"
 #include "unistrbuilder.h"
 #include "window.h"
+#include "xselection.h"
 
 #include <poser/core.h>
 #include <stdlib.h>
@@ -58,7 +59,8 @@ static void updateSelected(TextBox *self)
 	substr[self->selection.len] = 0;
 	self->selected = UniStr_create(substr);
 	Window *win = Window_fromWidget(self);
-	if (win) Window_offerSelection(win, self->selected);
+	if (win) XSelection_publish(Window_primary(win),
+		(XSelectionContent){self->selected, XST_TEXT});
     }
 }
 
@@ -369,12 +371,13 @@ cursoronly:
     }
 }
 
-static void receiveSelection(void *widget, const UniStr *data)
+static void receiveSelection(void *widget, XSelectionContent content)
 {
-    if (!data || !UniStr_len(data)) return;
+    if (content.type == XST_NONE) return;
     TextBox *self = Object_instance(widget);
-    UniStrBuilder_insertStr(self->text, self->cursor, UniStr_str(data));
-    self->cursor += UniStr_len(data);
+    UniStrBuilder_insertStr(self->text, self->cursor,
+	    UniStr_str(content.data));
+    self->cursor += UniStr_len(content.data);
     TextRenderer_setText(self->renderer, UniStrBuilder_stringView(self->text));
     Widget_invalidate(self);
 }
@@ -390,7 +393,8 @@ static void clicked(void *obj, const ClickEvent *event)
 	if (self->selected)
 	{
 	    Window *win = Window_fromWidget(self);
-	    if (win) Window_offerSelection(win, self->selected);
+	    if (win) XSelection_publish(Window_primary(win),
+		    (XSelectionContent){self->selected, XST_TEXT});
 	    return;
 	}
     }
@@ -423,7 +427,8 @@ static void clicked(void *obj, const ClickEvent *event)
     if (event->button == MB_MIDDLE)
     {
 	Window *win = Window_fromWidget(self);
-	if (win) Window_requestSelection(win, self, receiveSelection);
+	if (win) XSelection_request(Window_primary(win), XST_TEXT,
+		self, receiveSelection);
     }
     else if (oldSelection.len != self->selection.len
 	    || oldSelection.start != self->selection.start)

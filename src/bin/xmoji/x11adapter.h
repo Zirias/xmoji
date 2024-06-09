@@ -17,6 +17,7 @@ typedef enum XGlitch
 } XGlitch;
 
 #define X_ATOMS(X) \
+    X(CLIPBOARD) \
     X(TARGETS) \
     X(TEXT) \
     X(UTF8_STRING) \

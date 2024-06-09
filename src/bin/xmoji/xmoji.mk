@@ -14,7 +14,8 @@ xmoji_MODULES=		colorset \
 			window \
 			x11adapter \
 			xmoji \
-			xrdb
+			xrdb \
+			xselection
 xmoji_LIBS+=		m
 xmoji_PKGDEPS=		fontconfig \
 			freetype2 \
