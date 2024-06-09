@@ -16,7 +16,7 @@ static int hide(void *obj);
 static Size minSize(const void *obj);
 
 static MetaWidget mo = MetaWidget_init(0, 0, show, hide,
-	0, 0, 0, 0, 0, 0, 0, minSize, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0, minSize, 0, 0, 0,
 	"Widget", destroy);
 
 struct Widget
@@ -651,6 +651,41 @@ void Widget_showWindow(void *self)
 void Widget_hideWindow(void *self)
 {
     dohide(Object_instance(self), 1);
+}
+
+static void selectionReceived(void *obj, XSelectionContent content)
+{
+    if (content.type == XST_NONE) return;
+    Object_vcallv(Widget, paste, obj, content);
+}
+
+void Widget_requestPaste(void *self, XSelectionName name, XSelectionType type)
+{
+    Window *win = Window_fromWidget(self);
+    if (!win) return;
+    XSelection *selection;
+    switch (name)
+    {
+	case XSN_PRIMARY:   selection = Window_primary(win); break;
+	case XSN_CLIPBOARD: selection = Window_clipboard(win); break;
+	default:	    return;
+    }
+    XSelection_request(selection, type, self, selectionReceived);
+}
+
+void Widget_setSelection(void *self, XSelectionName name,
+	XSelectionContent content)
+{
+    Window *win = Window_fromWidget(self);
+    if (!win) return;
+    XSelection *selection;
+    switch (name)
+    {
+	case XSN_PRIMARY:   selection = Window_primary(win); break;
+	case XSN_CLIPBOARD: selection = Window_clipboard(win); break;
+	default:	    return;
+    }
+    XSelection_publish(selection, content);
 }
 
 const Rect *Widget_damages(const void *self, int *num)

@@ -5,6 +5,7 @@
 #include "object.h"
 #include "valuetypes.h"
 #include "x11adapter.h"
+#include "xselection.h"
 
 #include <poser/decl.h>
 #include <xcb/render.h>
@@ -53,6 +54,7 @@ typedef struct MetaWidget
     void (*leave)(void *widget);
     void (*focus)(void *widget);
     void (*unfocus)(void *widget);
+    void (*paste)(void *widget, XSelectionContent content);
     void *(*childAt)(void *widget, Pos pos);
     Size (*minSize)(const void *widget);
     void (*keyPressed)(void *widget, const KeyEvent *event);
@@ -61,7 +63,7 @@ typedef struct MetaWidget
 } MetaWidget;
 
 #define MetaWidget_init(mexpose, mdraw, mshow, mhide, \
-	mactivate, mdeactivate, menter, mleave, mfocus, munfocus, \
+	mactivate, mdeactivate, menter, mleave, mfocus, munfocus, mpaste, \
 	mchildAt, mminSize, mkeyPressed, mclicked, mdragged, \
 	...) { \
     .base = MetaObject_init(__VA_ARGS__), \
@@ -75,6 +77,7 @@ typedef struct MetaWidget
     .leave = mleave, \
     .focus = mfocus, \
     .unfocus = munfocus, \
+    .paste = mpaste, \
     .childAt = mchildAt, \
     .minSize = mminSize, \
     .keyPressed = mkeyPressed, \
@@ -153,6 +156,10 @@ void Widget_disableDrawing(void *self) CMETHOD;
 void Widget_setWindowSize(void *self, Size size) CMETHOD;
 void Widget_showWindow(void *self) CMETHOD;
 void Widget_hideWindow(void *self) CMETHOD;
+void Widget_requestPaste(void *self, XSelectionName name,
+	XSelectionType type) CMETHOD;
+void Widget_setSelection(void *self, XSelectionName name,
+	XSelectionContent content) CMETHOD;
 const Rect *Widget_damages(const void *self, int *num) CMETHOD;
 
 #endif

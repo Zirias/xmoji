@@ -4,8 +4,6 @@
 #include "textrenderer.h"
 #include "unistr.h"
 #include "unistrbuilder.h"
-#include "window.h"
-#include "xselection.h"
 
 #include <poser/core.h>
 #include <stdlib.h>
@@ -17,6 +15,7 @@ static int activate(void *obj);
 static int deactivate(void *obj);
 static void enter(void *obj);
 static void leave(void *obj);
+static void paste(void *obj, XSelectionContent content);
 static Size minSize(const void *obj);
 static void keyPressed(void *obj, const KeyEvent *event);
 static void clicked(void *obj, const ClickEvent *event);
@@ -24,7 +23,7 @@ static void dragged(void *obj, const DragEvent *event);
 
 static MetaTextBox mo = MetaTextBox_init(
 	0, draw, 0, 0,
-	activate, deactivate, enter, leave, 0, 0, 0,
+	activate, deactivate, enter, leave, 0, 0, paste, 0,
 	minSize, keyPressed, clicked, dragged,
 	"TextBox", destroy);
 
@@ -58,8 +57,7 @@ static void updateSelected(TextBox *self)
 		self->selection.len * sizeof *substr);
 	substr[self->selection.len] = 0;
 	self->selected = UniStr_create(substr);
-	Window *win = Window_fromWidget(self);
-	if (win) XSelection_publish(Window_primary(win),
+	Widget_setSelection(self, XSN_PRIMARY,
 		(XSelectionContent){self->selected, XST_TEXT});
     }
 }
@@ -371,10 +369,10 @@ cursoronly:
     }
 }
 
-static void receiveSelection(void *widget, XSelectionContent content)
+static void paste(void *obj, XSelectionContent content)
 {
     if (content.type == XST_NONE) return;
-    TextBox *self = Object_instance(widget);
+    TextBox *self = Object_instance(obj);
     UniStrBuilder_insertStr(self->text, self->cursor,
 	    UniStr_str(content.data));
     self->cursor += UniStr_len(content.data);
@@ -392,8 +390,7 @@ static void clicked(void *obj, const ClickEvent *event)
 	Widget_focus(self);
 	if (self->selected)
 	{
-	    Window *win = Window_fromWidget(self);
-	    if (win) XSelection_publish(Window_primary(win),
+	    Widget_setSelection(self, XSN_PRIMARY,
 		    (XSelectionContent){self->selected, XST_TEXT});
 	    return;
 	}
@@ -424,12 +421,8 @@ static void clicked(void *obj, const ClickEvent *event)
     self->selection.len = selectlen;
     self->selection.start = 0;
     self->dragAnchor = -1;
-    if (event->button == MB_MIDDLE)
-    {
-	Window *win = Window_fromWidget(self);
-	if (win) XSelection_request(Window_primary(win), XST_TEXT,
-		self, receiveSelection);
-    }
+    if (event->button == MB_MIDDLE) Widget_requestPaste(
+	    self, XSN_PRIMARY, XST_TEXT);
     else if (oldSelection.len != self->selection.len
 	    || oldSelection.start != self->selection.start)
     {

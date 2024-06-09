@@ -20,7 +20,7 @@ static int show(void *obj);
 static int hide(void *obj);
 
 static MetaWindow mo = MetaWindow_init(expose, draw, show, hide,
-	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 	"Window", destroy);
 
 struct Window
@@ -794,5 +794,12 @@ XSelection *Window_primary(void *self)
     Window *w = Object_instance(self);
     if (!w->primary) w->primary = XSelection_create(w, XSN_PRIMARY);
     return w->primary;
+}
+
+XSelection *Window_clipboard(void *self)
+{
+    Window *w = Object_instance(self);
+    if (!w->clipboard) w->clipboard = XSelection_create(w, XSN_CLIPBOARD);
+    return w->clipboard;
 }
 

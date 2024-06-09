@@ -55,5 +55,7 @@ void Window_setFocusWidget(void *self, void *widget)
 
 XSelection *Window_primary(void *self)
     CMETHOD;
+XSelection *Window_clipboard(void *self)
+    CMETHOD;
 
 #endif
