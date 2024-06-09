@@ -653,10 +653,10 @@ void Widget_hideWindow(void *self)
     dohide(Object_instance(self), 1);
 }
 
-static void selectionReceived(void *obj, XSelectionContent content)
+static void selectionReceived(Widget *self, XSelectionContent content)
 {
     if (content.type == XST_NONE) return;
-    Object_vcallv(Widget, paste, obj, content);
+    Object_vcallv(Widget, paste, self, content);
 }
 
 void Widget_requestPaste(void *self, XSelectionName name, XSelectionType type)
@@ -670,7 +670,8 @@ void Widget_requestPaste(void *self, XSelectionName name, XSelectionType type)
 	case XSN_CLIPBOARD: selection = Window_clipboard(win); break;
 	default:	    return;
     }
-    XSelection_request(selection, type, self, selectionReceived);
+    XSelection_request(selection, type,
+	    Object_instance(self), selectionReceived);
 }
 
 void Widget_setSelection(void *self, XSelectionName name,
@@ -685,7 +686,7 @@ void Widget_setSelection(void *self, XSelectionName name,
 	case XSN_CLIPBOARD: selection = Window_clipboard(win); break;
 	default:	    return;
     }
-    XSelection_publish(selection, content);
+    XSelection_publish(selection, Object_instance(self), content);
 }
 
 const Rect *Widget_damages(const void *self, int *num)

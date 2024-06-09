@@ -571,6 +571,7 @@ Window *Window_createBase(void *derived, const char *name, void *parent)
 	    | XCB_EVENT_MASK_KEY_PRESS
 	    | XCB_EVENT_MASK_LEAVE_WINDOW
 	    | XCB_EVENT_MASK_POINTER_MOTION
+	    | XCB_EVENT_MASK_PROPERTY_CHANGE
 	    | XCB_EVENT_MASK_STRUCTURE_NOTIFY
     };
     CHECK(xcb_create_window(c, XCB_COPY_FROM_PARENT, self->w, s->root,

@@ -12,10 +12,14 @@
 struct XSelection
 {
     Window *w;
-    Object *requestor;
+    Widget *requestor;
+    Widget *owner;
+    Widget *newOwner;
     XSelectionCallback received;
     XSelectionContent content;
+    XSelectionContent newContent;
     XSelectionType requestType;
+    xcb_timestamp_t ownedTime;
     xcb_atom_t name;
 };
 
@@ -30,6 +34,22 @@ static void received(XSelection *self, XSelectionContent content)
 static void nothingReceived(XSelection *self)
 {
     received(self, (XSelectionContent){0, XST_NONE});
+}
+
+static void clearSelection(XSelection *self)
+{
+    switch (self->content.type)
+    {
+	case XST_TEXT:
+	    UniStr_destroy(self->content.data);
+	    break;
+
+	default:
+	    break;
+    }
+    self->owner = 0;
+    self->content = (XSelectionContent){0, XST_NONE};
+    self->ownedTime = 0;
 }
 
 static void onSelectionConverted(void *obj, unsigned sequence,
@@ -115,6 +135,16 @@ static void onSelectionReceived(void *obj, unsigned sequence,
 	    (unsigned)Window_id(self->w));
 }
 
+static void selectionClear(void *receiver, void *sender, void *args)
+{
+    (void)sender;
+
+    XSelection *self = receiver;
+    xcb_selection_clear_event_t *ev = args;
+    if (ev->selection != self->name) return;
+    clearSelection(self);
+}
+
 static void selectionNotify(void *receiver, void *sender, void *args)
 {
     (void)sender;
@@ -161,6 +191,13 @@ static void selectionRequest(void *receiver, void *sender, void *args)
 		"Cannot set property for selection request to 0x%x",
 		(unsigned)Window_id(self->w));
     }
+    else if (ev->target == A(TIMESTAMP))
+    {
+	CHECK(xcb_change_property(c, XCB_PROP_MODE_REPLACE, ev->requestor,
+		    ev->property, XCB_ATOM_INTEGER, 32, 1, &self->ownedTime),
+		"Cannot set property for selection request to 0x%x",
+		(unsigned)Window_id(self->w));
+    }
     else if (ev->target == XCB_ATOM_STRING)
     {
 	char *str = UniStr_toLatin1(self->content.data);
@@ -190,6 +227,48 @@ static void selectionRequest(void *receiver, void *sender, void *args)
 	    (unsigned)Window_id(self->w));
 }
 
+static void onSelectionOwnerSet(void *obj, unsigned sequence,
+	void *reply, xcb_generic_error_t *error)
+{
+    (void)sequence;
+    (void)reply;
+
+    if (error)
+    {
+	XSelection *self = obj;
+	PSC_Log_fmt(PSC_L_ERROR, "Cannot obtain selection ownership for 0x%x",
+		Window_id(self->w));
+	clearSelection(self);
+    }
+}
+
+static void ownPropertyNotify(void *receiver, void *sender, void *args)
+{
+    (void)sender;
+
+    XSelection *self = receiver;
+    xcb_property_notify_event_t *ev = args;
+    if (ev->atom != A(WM_CLASS)) return;
+    if (!self->newOwner || self->newContent.type == XST_NONE) return;
+    switch (self->content.type)
+    {
+	case XST_TEXT:
+	    UniStr_destroy(self->content.data);
+	    break;
+
+	default:
+	    break;
+    }
+    self->owner = self->newOwner;
+    self->content = self->newContent;
+    self->ownedTime = ev->time;
+    self->newOwner = 0;
+    self->newContent = (XSelectionContent){0, XST_NONE};
+    AWAIT(xcb_set_selection_owner(X11Adapter_connection(),
+		Window_id(self->w), self->name, self->ownedTime),
+	    self, onSelectionOwnerSet);
+}
+
 XSelection *XSelection_create(Window *w, XSelectionName name)
 {
     XSelection *self = PSC_malloc(sizeof *self);
@@ -203,6 +282,10 @@ XSelection *XSelection_create(Window *w, XSelectionName name)
     memset(self, 0, sizeof *self);
     self->w = w;
     self->name = nameatom;
+    PSC_Event_register(X11Adapter_propertyNotify(), self,
+	    ownPropertyNotify, Window_id(w));
+    PSC_Event_register(X11Adapter_selectionClear(), self,
+	    selectionClear, Window_id(w));
     PSC_Event_register(X11Adapter_selectionNotify(), self,
 	    selectionNotify, Window_id(w));
     PSC_Event_register(X11Adapter_selectionRequest(), self,
@@ -211,10 +294,16 @@ XSelection *XSelection_create(Window *w, XSelectionName name)
 }
 
 void XSelection_request(XSelection *self, XSelectionType type,
-	void *obj, XSelectionCallback received)
+	Widget *widget, XSelectionCallback received)
 {
+    if (self->content.type != XST_NONE)
+    {
+	if (self->content.type & type) received(widget, self->content);
+	else received(widget, (XSelectionContent){0, XST_NONE});
+	return;
+    }
     if (self->requestor) nothingReceived(self);
-    self->requestor = Object_ref(obj);
+    self->requestor = Object_ref(widget);
     self->received = received;
     self->requestType = type;
     AWAIT(xcb_convert_selection(X11Adapter_connection(), Window_id(self->w),
@@ -222,12 +311,13 @@ void XSelection_request(XSelection *self, XSelectionType type,
 	    self, onSelectionConverted);
 }
 
-void XSelection_publish(XSelection *self, XSelectionContent content)
+void XSelection_publish(XSelection *self, Widget *owner,
+	XSelectionContent content)
 {
-    switch (self->content.type)
+    switch (self->newContent.type)
     {
 	case XST_TEXT:
-	    UniStr_destroy(self->content.data);
+	    UniStr_destroy(self->newContent.data);
 	    break;
 
 	default:
@@ -236,21 +326,24 @@ void XSelection_publish(XSelection *self, XSelectionContent content)
     switch (content.type)
     {
 	case XST_TEXT:
-	    self->content.data = UniStr_ref(content.data);
+	    self->newContent.data = UniStr_ref(content.data);
 	    break;
 
 	default:
-	    self->content.data = 0;
+	    self->newContent.data = 0;
 	    break;
     }
-    if (self->content.type == XST_NONE && content.type != XST_NONE)
+    self->newOwner = owner;
+    if (!self->owner || owner != self->owner
+	    || content.type != self->content.type)
     {
-	CHECK(xcb_set_selection_owner(X11Adapter_connection(),
-		    Window_id(self->w), self->name, XCB_CURRENT_TIME),
-		"Cannot obtain selection ownership for 0x%x",
+	CHECK(xcb_change_property(X11Adapter_connection(),
+		    XCB_PROP_MODE_APPEND, Window_id(self->w), A(WM_CLASS),
+		    XCB_ATOM_STRING, 8, 0, 0),
+		"Cannot change property on 0x%x",
 		(unsigned)Window_id(self->w));
+	self->newContent.type = content.type;
     }
-    self->content.type = content.type;
 }
 
 void XSelection_destroy(XSelection *self)
@@ -261,6 +354,10 @@ void XSelection_destroy(XSelection *self)
 	    selectionRequest, Window_id(self->w));
     PSC_Event_unregister(X11Adapter_selectionNotify(), self,
 	    selectionNotify, Window_id(self->w));
+    PSC_Event_unregister(X11Adapter_selectionClear(), self,
+	    selectionClear, Window_id(self->w));
+    PSC_Event_unregister(X11Adapter_propertyNotify(), self,
+	    ownPropertyNotify, Window_id(self->w));
     free(self);
 }
 

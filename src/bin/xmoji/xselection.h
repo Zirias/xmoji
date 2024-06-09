@@ -3,6 +3,7 @@
 
 #include <poser/decl.h>
 
+C_CLASS_DECL(Widget);
 C_CLASS_DECL(Window);
 C_CLASS_DECL(XSelection);
 
@@ -24,14 +25,15 @@ typedef struct XSelectionContent
     XSelectionType type;
 } XSelectionContent;
 
-typedef void (*XSelectionCallback)(void *obj, XSelectionContent content);
+typedef void (*XSelectionCallback)(Widget *widget, XSelectionContent content);
 
 XSelection *XSelection_create(Window *w, XSelectionName name)
     ATTR_NONNULL((1));
 void XSelection_request(XSelection *self, XSelectionType type,
-	void *obj, XSelectionCallback received)
+	Widget *widget, XSelectionCallback received)
     CMETHOD ATTR_NONNULL((4));
-void XSelection_publish(XSelection *self, XSelectionContent content)
+void XSelection_publish(XSelection *self, Widget *owner,
+	XSelectionContent content)
     CMETHOD;
 void XSelection_destroy(XSelection *self);
 

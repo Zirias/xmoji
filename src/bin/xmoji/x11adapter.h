@@ -18,6 +18,7 @@ typedef enum XGlitch
 
 #define X_ATOMS(X) \
     X(CLIPBOARD) \
+    X(TIMESTAMP) \
     X(TARGETS) \
     X(TEXT) \
     X(UTF8_STRING) \
@@ -188,6 +189,8 @@ PSC_Event *X11Adapter_keypress(void) ATTR_RETNONNULL;
 PSC_Event *X11Adapter_leave(void) ATTR_RETNONNULL;
 PSC_Event *X11Adapter_mapNotify(void) ATTR_RETNONNULL;
 PSC_Event *X11Adapter_motionNotify(void) ATTR_RETNONNULL;
+PSC_Event *X11Adapter_propertyNotify(void) ATTR_RETNONNULL;
+PSC_Event *X11Adapter_selectionClear(void) ATTR_RETNONNULL;
 PSC_Event *X11Adapter_selectionNotify(void) ATTR_RETNONNULL;
 PSC_Event *X11Adapter_selectionRequest(void) ATTR_RETNONNULL;
 PSC_Event *X11Adapter_unmapNotify(void) ATTR_RETNONNULL;
