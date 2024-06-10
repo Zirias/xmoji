@@ -364,6 +364,9 @@ static void XSelectionRequest_propertyChanged(
 	    || ev->atom != self->property
 	    || ev->state != XCB_PROPERTY_DELETE) return;
     uint32_t chunksz = self->selection->maxproplen;
+    uint32_t offset = self->datapos;
+    if (self->propformat == 16) { chunksz >>= 1; offset <<= 1; }
+    if (self->propformat == 32) { chunksz >>= 2; offset <<= 2; }
     if (self->datalen - self->datapos < chunksz)
     {
 	chunksz = self->datalen - self->datapos;
@@ -371,7 +374,7 @@ static void XSelectionRequest_propertyChanged(
     AWAIT(xcb_change_property(X11Adapter_connection(), XCB_PROP_MODE_APPEND,
 		self->requestor, self->property, self->proptype,
 		self->propformat, chunksz,
-		(const char *)self->data + self->datapos),
+		(const char *)self->data + offset),
 	    self, XSelectionRequest_checkError);
     PSC_Log_fmt(PSC_L_DEBUG, "Incremental transfer to 0x%x, sending %u bytes",
 	    (unsigned)self->requestor, (unsigned)chunksz);
@@ -401,7 +404,7 @@ static void XSelectionRequest_startMulti(void *obj, unsigned sequence,
 
     XSelectionRequest *self = obj;
     xcb_get_property_reply_t *prop = reply;
-    if (prop) self->datalen = xcb_get_property_value_length(prop) << 2;
+    if (prop) self->datalen = xcb_get_property_value_length(prop);
     if (error || !self->datalen)
     {
 	PSC_Log_fmt(PSC_L_WARNING,
@@ -410,8 +413,8 @@ static void XSelectionRequest_startMulti(void *obj, unsigned sequence,
 	XSelectionRequest_abort(self);
     }
 
-    self->data = PSC_malloc(self->datalen);
-    memcpy(self->data, xcb_get_property_value(prop), self->datalen);
+    self->data = PSC_malloc(self->datalen << 2);
+    memcpy(self->data, xcb_get_property_value(prop), self->datalen << 2);
     XSelectionRequest *lastreq = 0;
     xcb_atom_t (*subspec)[2] = self->data;
     xcb_selection_request_event_t subev = {
@@ -425,7 +428,7 @@ static void XSelectionRequest_startMulti(void *obj, unsigned sequence,
 	.target = 0,
 	.property = 0
     };
-    size_t nreqs = self->datalen >> 3;
+    size_t nreqs = self->datalen >> 1;
     for (size_t i = 0; i < nreqs; ++i)
     {
 	subev.target = subspec[i][0];
@@ -477,7 +480,7 @@ static void XSelectionRequest_start(XSelectionRequest *self)
 		XSelectionRequest_timedout, 0);
 	Timer_start(self->timeout, REQUESTTIMEOUT);
 	AWAIT(xcb_change_property(c, XCB_PROP_MODE_REPLACE, self->requestor,
-		    self->property, A(INCR), 32, sizeof incr, &incr),
+		    self->property, A(INCR), 32, 1, &incr),
 		self, XSelectionRequest_checkError);
 	PSC_Log_fmt(PSC_L_DEBUG,
 		"Starting incremental selection transfer to 0x%x",
@@ -523,12 +526,29 @@ static XSelectionRequest *XSelectionRequest_create(XSelection *selection,
 	}
 	else if (ev->target == A(TARGETS))
 	{
-	    xcb_atom_t *targets = PSC_malloc(3 * sizeof *targets);
-	    targets[0] = A(UTF8_STRING);
-	    targets[1] = A(TEXT);
-	    targets[2] = XCB_ATOM_STRING;
-	    self->data = targets;
-	    self->datalen = 3 * sizeof *targets;
+	    xcb_atom_t *targets;
+	    switch (selection->content.type)
+	    {
+		case XST_TEXT:
+		    self->datalen = 6;
+		    targets = PSC_malloc(self->datalen * sizeof *targets);
+		    targets[3] = A(UTF8_STRING);
+		    targets[4] = A(TEXT);
+		    targets[5] = XCB_ATOM_STRING;
+		    break;
+
+		default:
+		    self->datalen = 0;
+		    break;
+	    }
+	    if (self->datalen)
+	    {
+		targets[0] = A(MULTIPLE);
+		targets[1] = A(TARGETS);
+		targets[2] = A(TIMESTAMP);
+		self->data = targets;
+	    }
+	    else self->data = 0;
 	    self->proptype = XCB_ATOM_ATOM;
 	    self->propformat = 32;
 	}
