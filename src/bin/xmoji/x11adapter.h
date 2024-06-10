@@ -17,8 +17,10 @@ typedef enum XGlitch
 } XGlitch;
 
 #define X_ATOMS(X) \
+    X(ATOM_PAIR) \
     X(CLIPBOARD) \
     X(INCR) \
+    X(MULTIPLE) \
     X(TIMESTAMP) \
     X(TARGETS) \
     X(TEXT) \

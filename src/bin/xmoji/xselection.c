@@ -19,6 +19,8 @@ struct XSelectionRequest
 {
     XSelection *selection;
     XSelectionRequest *next;
+    XSelectionRequest *parent;
+    XSelectionRequest *subreqs;
     Timer *timeout;
     void *data;
     size_t datalen;
@@ -28,6 +30,7 @@ struct XSelectionRequest
     xcb_atom_t target;
     xcb_window_t requestor;
     xcb_timestamp_t time;
+    uint16_t subidx;
     uint8_t propformat;
     uint8_t sendincr;
 };
@@ -42,9 +45,13 @@ static void XSelectionRequest_checkError(void *obj, unsigned sequence,
 	void *reply, xcb_generic_error_t *error);
 static void XSelectionRequest_propertyChanged(
 	void *receiver, void *sender, void *args);
+static void XSelectionRequest_subReject(XSelectionRequest *self, uint16_t idx);
+static void XSelectionRequest_nextMulti(XSelectionRequest *self);
+static void XSelectionRequest_startMulti(void *obj, unsigned sequence,
+	void *reply, xcb_generic_error_t *error);
 static void XSelectionRequest_start(XSelectionRequest *self);
 static XSelectionRequest *XSelectionRequest_create(XSelection *selection,
-	xcb_selection_request_event_t *ev);
+	xcb_selection_request_event_t *ev, XSelectionRequest *parent);
 
 struct XSelection
 {
@@ -233,6 +240,14 @@ static void XSelectionRequest_done(XSelectionRequest *self)
 	PSC_Event_unregister(X11Adapter_propertyNotify(), self,
 		XSelectionRequest_propertyChanged, self->requestor);
     }
+    if (self->parent)
+    {
+	XSelectionRequest *parent = self->parent;
+	parent->subreqs = self->next;
+	free(self);
+	XSelectionRequest_nextMulti(parent);
+	return;
+    }
     XSelection *selection = self->selection;
     unsigned idx = 0;
     for (; idx < MAXREQUESTORS; ++idx)
@@ -256,8 +271,13 @@ static void XSelectionRequest_done(XSelectionRequest *self)
 
 static void XSelectionRequest_abort(XSelectionRequest *self)
 {
-    if (!self->datapos) XSelectionRequest_reject(self->selection,
-	    self->requestor, self->target, self->time);
+    if (!self->datapos)
+    {
+	if (self->parent) XSelectionRequest_subReject(
+		self->parent, self->subidx);
+	else XSelectionRequest_reject(self->selection,
+		self->requestor, self->target, self->time);
+    }
     XSelectionRequest_done(self);
 }
 
@@ -286,8 +306,9 @@ static void XSelectionRequest_checkError(void *obj, unsigned sequence,
 		"Writing property to selection requestor 0x%x failed",
 		(unsigned)self->requestor);
 	XSelectionRequest_abort(self);
+	return;
     }
-    else if (!self->datapos)
+    if (!self->datapos && !self->subreqs)
     {
 	xcb_selection_notify_event_t ev = {
 	    .response_type = XCB_SELECTION_NOTIFY,
@@ -303,7 +324,21 @@ static void XSelectionRequest_checkError(void *obj, unsigned sequence,
 		    0, (const char *)&ev),
 		"Cannot send selection notification for 0x%x",
 		(unsigned)Window_id(self->selection->w));
-	if (!self->sendincr) XSelectionRequest_done(self);
+	if (!self->sendincr)
+	{
+	    XSelectionRequest_done(self);
+	    return;
+	}
+    }
+    if (self->parent)
+    {
+	// incremental send in progress, detach from subrequests
+	self->parent->subreqs = self->next;
+	XSelectionRequest *parent = self->parent;
+	XSelectionRequest *last = parent;
+	while (last->next) last = last->next;
+	last->next = self;
+	XSelectionRequest_nextMulti(parent);
     }
 }
 
@@ -331,9 +366,87 @@ static void XSelectionRequest_propertyChanged(
     if (!chunksz) XSelectionRequest_done(self);
 }
 
+static void XSelectionRequest_subReject(XSelectionRequest *self, uint16_t idx)
+{
+    xcb_atom_t (*subspec)[2] = self->data;
+    subspec[idx][1] = 0;
+}
+
+static void XSelectionRequest_nextMulti(XSelectionRequest *self)
+{
+    if (self->subreqs) XSelectionRequest_start(self->subreqs);
+    else AWAIT(xcb_change_property(X11Adapter_connection(),
+		XCB_PROP_MODE_REPLACE, self->requestor, self->property,
+		self->proptype, self->propformat, self->datalen, self->data),
+	    self, XSelectionRequest_checkError);
+}
+
+static void XSelectionRequest_startMulti(void *obj, unsigned sequence,
+	void *reply, xcb_generic_error_t *error)
+{
+    (void)sequence;
+
+    XSelectionRequest *self = obj;
+    xcb_get_property_reply_t *prop = reply;
+    if (prop) self->datalen = xcb_get_property_value_length(prop) << 2;
+    if (error || !self->datalen)
+    {
+	PSC_Log_fmt(PSC_L_WARNING,
+		"Reading MULTIPLE request from 0x%x failed",
+		(unsigned)self->requestor);
+	XSelectionRequest_abort(self);
+    }
+
+    self->data = PSC_malloc(self->datalen);
+    memcpy(self->data, xcb_get_property_value(prop), self->datalen);
+    XSelectionRequest *lastreq = 0;
+    xcb_atom_t (*subspec)[2] = self->data;
+    xcb_selection_request_event_t subev = {
+	.response_type = 0,
+	.pad0 = 0,
+	.sequence = 0,
+	.time = self->time,
+	.owner = 0,
+	.requestor = self->requestor,
+	.selection = self->selection->name,
+	.target = 0,
+	.property = 0
+    };
+    size_t nreqs = self->datalen >> 3;
+    for (size_t i = 0; i < nreqs; ++i)
+    {
+	subev.target = subspec[i][0];
+	subev.property = subspec[i][1];
+	XSelectionRequest *req = XSelectionRequest_create(
+		self->selection, &subev, self);
+	if (req)
+	{
+	    req->subidx = i;
+	    if (!self->subreqs) self->subreqs = req;
+	    else lastreq->next = req;
+	    lastreq = req;
+	}
+	else subspec[i][1] = 0;
+    }
+    if (!self->subreqs)
+    {
+	XSelectionRequest_abort(self);
+	return;
+    }
+
+    XSelectionRequest_start(self->subreqs);
+}
+
 static void XSelectionRequest_start(XSelectionRequest *self)
 {
     xcb_connection_t *c = X11Adapter_connection();
+    if (self->target == A(MULTIPLE))
+    {
+	AWAIT(xcb_get_property(c, 0, self->requestor, self->property,
+		    A(ATOM_PAIR), 0, self->selection->maxproplen >> 2),
+		self, XSelectionRequest_startMulti);
+	return;
+    }
     if (self->datalen > self->selection->maxproplen)
     {
 	self->sendincr = 1;
@@ -347,6 +460,8 @@ static void XSelectionRequest_start(XSelectionRequest *self)
 	PSC_Event_register(X11Adapter_propertyNotify(), self,
 		XSelectionRequest_propertyChanged, self->requestor);
 	self->timeout = Timer_create();
+	PSC_Event_register(Timer_expired(self->timeout), self,
+		XSelectionRequest_timedout, 0);
 	Timer_start(self->timeout, REQUESTTIMEOUT);
 	AWAIT(xcb_change_property(c, XCB_PROP_MODE_REPLACE, self->requestor,
 		    self->property, A(INCR), 32, sizeof incr, &incr),
@@ -368,9 +483,10 @@ static void XSelectionRequest_start(XSelectionRequest *self)
 }
 
 static XSelectionRequest *XSelectionRequest_create(XSelection *selection,
-	xcb_selection_request_event_t *ev)
+	xcb_selection_request_event_t *ev, XSelectionRequest *parent)
 {
-    if (ev->target == A(TARGETS)
+    if ((ev->target == A(MULTIPLE) && !parent)
+	    || ev->target == A(TARGETS)
 	    || ev->target == A(TIMESTAMP)
 	    || (ev->target == XCB_ATOM_STRING
 		&& selection->content.type == XST_TEXT)
@@ -382,8 +498,17 @@ static XSelectionRequest *XSelectionRequest_create(XSelection *selection,
 	XSelectionRequest *self = PSC_malloc(sizeof *self);
 	self->selection = selection;
 	self->next = 0;
+	self->parent = parent;
+	self->subreqs = 0;
 	self->timeout = 0;
-	if (ev->target == A(TARGETS))
+	if (ev->target == A(MULTIPLE))
+	{
+	    self->data = 0;
+	    self->datalen = 0;
+	    self->proptype = A(ATOM_PAIR);
+	    self->propformat = 32;
+	}
+	else if (ev->target == A(TARGETS))
 	{
 	    xcb_atom_t *targets = PSC_malloc(3 * sizeof *targets);
 	    targets[0] = A(UTF8_STRING);
@@ -422,13 +547,13 @@ static XSelectionRequest *XSelectionRequest_create(XSelection *selection,
 	self->target = ev->target;
 	self->requestor = ev->requestor;
 	self->time = ev->time;
-	PSC_Event_register(Timer_expired(self->timeout), self,
-		XSelectionRequest_timedout, 0);
+	self->subidx = 0;
 	PSC_Log_fmt(PSC_L_DEBUG, "Selection request created for 0x%x",
 		self->requestor);
 	return self;
     }
-    XSelectionRequest_reject(selection, ev->requestor, ev->target, ev->time);
+    if (!parent) XSelectionRequest_reject(selection,
+	    ev->requestor, ev->target, ev->time);
     return 0;
 }
 
@@ -462,7 +587,7 @@ static void selectionRequest(void *receiver, void *sender, void *args)
 	return;
     }
 
-    XSelectionRequest *req = XSelectionRequest_create(self, ev);
+    XSelectionRequest *req = XSelectionRequest_create(self, ev, 0);
     if (!req) return;
 
     if (prev) prev->next = req;
