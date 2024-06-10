@@ -498,7 +498,7 @@ static void XSelectionRequest_start(XSelectionRequest *self)
 static XSelectionRequest *XSelectionRequest_create(XSelection *selection,
 	xcb_selection_request_event_t *ev, XSelectionRequest *parent)
 {
-    if ((ev->target == A(MULTIPLE) && !parent)
+    if ((ev->target == A(MULTIPLE) && ev->property && !parent)
 	    || ev->target == A(TARGETS)
 	    || ev->target == A(TIMESTAMP)
 	    || (ev->target == XCB_ATOM_STRING
@@ -556,7 +556,7 @@ static XSelectionRequest *XSelectionRequest_create(XSelection *selection,
 	    self->propformat = 8;
 	}
 	self->datapos = 0;
-	self->property = ev->property;
+	self->property = ev->property ? ev->property : ev->target;
 	self->target = ev->target;
 	self->requestor = ev->requestor;
 	self->time = ev->time;
