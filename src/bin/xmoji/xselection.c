@@ -233,11 +233,6 @@ static void XSelectionRequest_done(XSelectionRequest *self, int destroy)
     free(self->data);
     if (self->sendincr)
     {
-	uint32_t propnotifymask = 0;
-	CHECK(xcb_change_window_attributes(X11Adapter_connection(),
-		    self->requestor, XCB_CW_EVENT_MASK, &propnotifymask),
-		"Cannot unlisten for requestor events on 0x%x",
-		(unsigned)Window_id(self->selection->w));
 	PSC_Event_unregister(X11Adapter_propertyNotify(), self,
 		XSelectionRequest_propertyChanged, self->requestor);
     }
@@ -267,6 +262,14 @@ static void XSelectionRequest_done(XSelectionRequest *self, int destroy)
 	PSC_Service_panic("BUG: Unknown selection request completed!");
     }
     selection->requests[idx] = self->next;
+    if (!self->next)
+    {
+	uint32_t propnotifymask = 0;
+	CHECK(xcb_change_window_attributes(X11Adapter_connection(),
+		    self->requestor, XCB_CW_EVENT_MASK, &propnotifymask),
+		"Cannot unlisten for requestor events on 0x%x",
+		(unsigned)Window_id(self->selection->w));
+    }
     PSC_Log_fmt(PSC_L_DEBUG, "Selection request destroyed for 0x%x",
 	    self->requestor);
     free(self);
@@ -357,7 +360,9 @@ static void XSelectionRequest_propertyChanged(
 
     XSelectionRequest *self = receiver;
     xcb_property_notify_event_t *ev = args;
-    if (ev->atom != self->property || ev->state != XCB_PROPERTY_DELETE) return;
+    if (!self->sendincr
+	    || ev->atom != self->property
+	    || ev->state != XCB_PROPERTY_DELETE) return;
     uint32_t chunksz = self->selection->maxproplen;
     if (self->datalen - self->datapos < chunksz)
     {
