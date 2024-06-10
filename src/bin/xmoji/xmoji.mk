@@ -17,7 +17,8 @@ xmoji_MODULES=		colorset \
 			xmoji \
 			xrdb \
 			xselection
-xmoji_LIBS+=		m
+xmoji_LIBS+=		m \
+			rt
 xmoji_PKGDEPS=		fontconfig \
 			freetype2 \
 			harfbuzz \

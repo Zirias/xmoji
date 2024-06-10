@@ -59,6 +59,11 @@ error:
     return 0;
 }
 
+PSC_Event *Timer_expired(Timer *self)
+{
+    return self->expired;
+}
+
 void Timer_start(Timer *self, unsigned interval_ms)
 {
     struct itimerspec itv = {
