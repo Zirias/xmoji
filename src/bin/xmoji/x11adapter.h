@@ -18,6 +18,7 @@ typedef enum XGlitch
 
 #define X_ATOMS(X) \
     X(CLIPBOARD) \
+    X(INCR) \
     X(TIMESTAMP) \
     X(TARGETS) \
     X(TEXT) \

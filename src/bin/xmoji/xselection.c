@@ -1,6 +1,7 @@
 #include "xselection.h"
 
 #include "object.h"
+#include "timer.h"
 #include "unistr.h"
 #include "window.h"
 #include "x11adapter.h"
@@ -9,18 +10,57 @@
 #include <stdlib.h>
 #include <string.h>
 
+#define MAXREQUESTORS 16
+#define REQUESTTIMEOUT 5000
+
+C_CLASS_DECL(XSelectionRequest);
+
+struct XSelectionRequest
+{
+    XSelection *selection;
+    XSelectionRequest *next;
+    Timer *timeout;
+    void *data;
+    size_t datalen;
+    size_t datapos;
+    xcb_atom_t property;
+    xcb_atom_t proptype;
+    xcb_atom_t target;
+    xcb_window_t requestor;
+    xcb_timestamp_t time;
+    uint8_t propformat;
+    uint8_t sendincr;
+};
+
+static void XSelectionRequest_reject(XSelection *selection,
+	xcb_window_t requestor, xcb_atom_t target, xcb_timestamp_t time);
+static void XSelectionRequest_done(XSelectionRequest *self);
+static void XSelectionRequest_abort(XSelectionRequest *self);
+static void XSelectionRequest_timedout(
+	void *receiver, void *sender, void *args);
+static void XSelectionRequest_checkError(void *obj, unsigned sequence,
+	void *reply, xcb_generic_error_t *error);
+static void XSelectionRequest_propertyChanged(
+	void *receiver, void *sender, void *args);
+static void XSelectionRequest_start(XSelectionRequest *self);
+static XSelectionRequest *XSelectionRequest_create(XSelection *selection,
+	xcb_selection_request_event_t *ev);
+
 struct XSelection
 {
     Window *w;
     Widget *requestor;
     Widget *owner;
     Widget *newOwner;
+    XSelectionRequest *requests[MAXREQUESTORS];
+    size_t maxproplen;
     XSelectionCallback received;
     XSelectionContent content;
     XSelectionContent newContent;
     XSelectionType requestType;
     xcb_timestamp_t ownedTime;
     xcb_atom_t name;
+    unsigned requestsnum;
 };
 
 static void received(XSelection *self, XSelectionContent content)
@@ -160,6 +200,237 @@ static void selectionNotify(void *receiver, void *sender, void *args)
 	    self, onSelectionReceived);
 }
 
+static void XSelectionRequest_reject(XSelection *selection,
+	xcb_window_t requestor, xcb_atom_t target, xcb_timestamp_t time)
+{
+    xcb_selection_notify_event_t ev = {
+	.response_type = XCB_SELECTION_NOTIFY,
+	.pad0 = 0,
+	.sequence = 0,
+	.time = time,
+	.requestor = requestor,
+	.selection = selection->name,
+	.target = target,
+	.property = 0
+    };
+    CHECK(xcb_send_event(X11Adapter_connection(), 0, requestor,
+		0, (const char *)&ev),
+	    "Cannot send rejection notification for 0x%x",
+	    (unsigned)Window_id(selection->w));
+}
+
+static void XSelectionRequest_done(XSelectionRequest *self)
+{
+    Timer_destroy(self->timeout);
+    free(self->data);
+    if (self->sendincr)
+    {
+	uint32_t propnotifymask = 0;
+	CHECK(xcb_change_window_attributes(X11Adapter_connection(),
+		    self->requestor, XCB_CW_EVENT_MASK, &propnotifymask),
+		"Cannot unlisten for requestor events on 0x%x",
+		(unsigned)Window_id(self->selection->w));
+	PSC_Event_unregister(X11Adapter_propertyNotify(), self,
+		XSelectionRequest_propertyChanged, self->requestor);
+    }
+    XSelection *selection = self->selection;
+    unsigned idx = 0;
+    for (; idx < MAXREQUESTORS; ++idx)
+    {
+	if (selection->requests[idx] == self) break;
+    }
+    if (idx == MAXREQUESTORS)
+    {
+	PSC_Service_panic("BUG: Unknown selection request completed!");
+    }
+    selection->requests[idx] = self->next;
+    PSC_Log_fmt(PSC_L_DEBUG, "Selection request destroyed for 0x%x",
+	    self->requestor);
+    free(self);
+    if (selection->requests[idx])
+    {
+	XSelectionRequest_start(selection->requests[idx]);
+    }
+    else --selection->requestsnum;
+}
+
+static void XSelectionRequest_abort(XSelectionRequest *self)
+{
+    if (!self->datapos) XSelectionRequest_reject(self->selection,
+	    self->requestor, self->target, self->time);
+    XSelectionRequest_done(self);
+}
+
+static void XSelectionRequest_timedout(
+	void *receiver, void *sender, void *args)
+{
+    (void)sender;
+    (void)args;
+
+    XSelectionRequest *self = receiver;
+    PSC_Log_fmt(PSC_L_INFO, "Selection request from 0x%x timed out",
+	    self->requestor);
+    XSelectionRequest_abort(self);
+}
+
+static void XSelectionRequest_checkError(void *obj, unsigned sequence,
+	void *reply, xcb_generic_error_t *error)
+{
+    (void)sequence;
+    (void)reply;
+
+    XSelectionRequest *self = obj;
+    if (error)
+    {
+	PSC_Log_fmt(PSC_L_WARNING,
+		"Writing property to selection requestor 0x%x failed",
+		(unsigned)self->requestor);
+	XSelectionRequest_abort(self);
+    }
+    else if (!self->datapos)
+    {
+	xcb_selection_notify_event_t ev = {
+	    .response_type = XCB_SELECTION_NOTIFY,
+	    .pad0 = 0,
+	    .sequence = 0,
+	    .time = self->time,
+	    .requestor = self->requestor,
+	    .selection = self->selection->name,
+	    .target = self->target,
+	    .property = self->property
+	};
+	CHECK(xcb_send_event(X11Adapter_connection(), 0, self->requestor,
+		    0, (const char *)&ev),
+		"Cannot send selection notification for 0x%x",
+		(unsigned)Window_id(self->selection->w));
+	if (!self->sendincr) XSelectionRequest_done(self);
+    }
+}
+
+static void XSelectionRequest_propertyChanged(
+	void *receiver, void *sender, void *args)
+{
+    (void)sender;
+
+    XSelectionRequest *self = receiver;
+    xcb_property_notify_event_t *ev = args;
+    if (ev->atom != self->property || ev->state != XCB_PROPERTY_DELETE) return;
+    uint32_t chunksz = self->selection->maxproplen;
+    if (self->datalen - self->datapos < chunksz)
+    {
+	chunksz = self->datalen - self->datapos;
+    }
+    AWAIT(xcb_change_property(X11Adapter_connection(), XCB_PROP_MODE_APPEND,
+		self->requestor, self->property, self->proptype,
+		self->propformat, chunksz,
+		(const char *)self->data + self->datapos),
+	    self, XSelectionRequest_checkError);
+    PSC_Log_fmt(PSC_L_DEBUG, "Incremental transfer to 0x%x, sending %u bytes",
+	    (unsigned)self->requestor, (unsigned)chunksz);
+    self->datapos += chunksz;
+    if (!chunksz) XSelectionRequest_done(self);
+}
+
+static void XSelectionRequest_start(XSelectionRequest *self)
+{
+    Timer_start(self->timeout, REQUESTTIMEOUT);
+    xcb_connection_t *c = X11Adapter_connection();
+    if (self->datalen > self->selection->maxproplen)
+    {
+	self->sendincr = 1;
+	uint32_t incr = (uint32_t)-1;
+	if (self->datalen < incr) incr = self->datalen;
+	uint32_t propnotifymask = XCB_EVENT_MASK_PROPERTY_CHANGE;
+	CHECK(xcb_change_window_attributes(c, self->requestor,
+		    XCB_CW_EVENT_MASK, &propnotifymask),
+		"Cannot listen for requestor events on 0x%x",
+		(unsigned)Window_id(self->selection->w));
+	PSC_Event_register(X11Adapter_propertyNotify(), self,
+		XSelectionRequest_propertyChanged, self->requestor);
+	AWAIT(xcb_change_property(c, XCB_PROP_MODE_REPLACE, self->requestor,
+		    self->property, A(INCR), 32, sizeof incr, &incr),
+		self, XSelectionRequest_checkError);
+	PSC_Log_fmt(PSC_L_DEBUG,
+		"Starting incremental selection transfer to 0x%x",
+		(unsigned)self->requestor);
+    }
+    else
+    {
+	self->sendincr = 0;
+	AWAIT(xcb_change_property(c, XCB_PROP_MODE_REPLACE,
+		    self->requestor, self->property, self->proptype,
+		    self->propformat, self->datalen, self->data),
+		self, XSelectionRequest_checkError);
+	PSC_Log_fmt(PSC_L_DEBUG,
+		"Transferring selection to 0x%x", (unsigned)self->requestor);
+    }
+}
+
+static XSelectionRequest *XSelectionRequest_create(XSelection *selection,
+	xcb_selection_request_event_t *ev)
+{
+    if (ev->target == A(TARGETS)
+	    || ev->target == A(TIMESTAMP)
+	    || (ev->target == XCB_ATOM_STRING
+		&& selection->content.type == XST_TEXT)
+	    || (ev->target == A(TEXT)
+		&& selection->content.type == XST_TEXT)
+	    || (ev->target == A(UTF8_STRING)
+		&& selection->content.type == XST_TEXT))
+    {
+	XSelectionRequest *self = PSC_malloc(sizeof *self);
+	self->selection = selection;
+	self->next = 0;
+	self->timeout = Timer_create();
+	if (ev->target == A(TARGETS))
+	{
+	    xcb_atom_t *targets = PSC_malloc(3 * sizeof *targets);
+	    targets[0] = A(UTF8_STRING);
+	    targets[1] = A(TEXT);
+	    targets[2] = XCB_ATOM_STRING;
+	    self->data = targets;
+	    self->datalen = 3 * sizeof *targets;
+	    self->proptype = XCB_ATOM_ATOM;
+	    self->propformat = 32;
+	}
+	else if (ev->target == A(TIMESTAMP))
+	{
+	    self->data = PSC_malloc(sizeof selection->ownedTime);
+	    memcpy(self->data, &selection->ownedTime,
+		    sizeof selection->ownedTime);
+	    self->datalen = sizeof selection->ownedTime;
+	    self->proptype = XCB_ATOM_INTEGER;
+	    self->propformat = 32;
+	}
+	else if (ev->target == XCB_ATOM_STRING)
+	{
+	    self->data = UniStr_toLatin1(selection->content.data);
+	    self->datalen = UniStr_len(selection->content.data);
+	    self->proptype = XCB_ATOM_STRING;
+	    self->propformat = 8;
+	}
+	else if (ev->target == A(TEXT) || ev->target == A(UTF8_STRING))
+	{
+	    self->data = UniStr_toUtf8(selection->content.data,
+		    &self->datalen);
+	    self->proptype = A(UTF8_STRING);
+	    self->propformat = 8;
+	}
+	self->datapos = 0;
+	self->property = ev->property;
+	self->target = ev->target;
+	self->requestor = ev->requestor;
+	self->time = ev->time;
+	PSC_Event_register(Timer_expired(self->timeout), self,
+		XSelectionRequest_timedout, 0);
+	PSC_Log_fmt(PSC_L_DEBUG, "Selection request created for 0x%x",
+		self->requestor);
+	return self;
+    }
+    XSelectionRequest_reject(selection, ev->requestor, ev->target, ev->time);
+    return 0;
+}
+
 static void selectionRequest(void *receiver, void *sender, void *args)
 {
     (void)sender;
@@ -167,64 +438,43 @@ static void selectionRequest(void *receiver, void *sender, void *args)
     XSelection *self = receiver;
     xcb_selection_request_event_t *ev = args;
     if (ev->selection != self->name) return;
-    xcb_selection_notify_event_t not = {
-	.response_type = XCB_SELECTION_NOTIFY,
-	.pad0 = 0,
-	.sequence = 0,
-	.time = ev->time,
-	.requestor = ev->requestor,
-	.selection = ev->selection,
-	.target = ev->target,
-	.property = ev->property
-    };
-    xcb_connection_t *c = X11Adapter_connection();
+
     if (self->content.type == XST_NONE)
     {
-	not.property = XCB_ATOM_NONE;
+	XSelectionRequest_reject(self, ev->requestor, ev->target, ev->time);
+	return;
     }
-    else if (ev->target == A(TARGETS))
+
+    XSelectionRequest *prev = 0;
+    for (unsigned i = 0; i < MAXREQUESTORS; ++i)
     {
-	xcb_atom_t targets[] = { A(UTF8_STRING), A(TEXT), XCB_ATOM_STRING };
-	CHECK(xcb_change_property(c, XCB_PROP_MODE_REPLACE, ev->requestor,
-		    ev->property, XCB_ATOM_ATOM, 32,
-		    sizeof targets / sizeof *targets, targets),
-		"Cannot set property for selection request to 0x%x",
-		(unsigned)Window_id(self->w));
+	if (self->requests[i] && self->requests[i]->requestor == ev->requestor)
+	{
+	    prev = self->requests[i];
+	    while (prev->next) prev = prev->next;
+	    break;
+	}
     }
-    else if (ev->target == A(TIMESTAMP))
+    if (!prev && self->requestsnum == MAXREQUESTORS)
     {
-	CHECK(xcb_change_property(c, XCB_PROP_MODE_REPLACE, ev->requestor,
-		    ev->property, XCB_ATOM_INTEGER, 32, 1, &self->ownedTime),
-		"Cannot set property for selection request to 0x%x",
-		(unsigned)Window_id(self->w));
+	XSelectionRequest_reject(self, ev->requestor, ev->target, ev->time);
+	return;
     }
-    else if (ev->target == XCB_ATOM_STRING)
+
+    XSelectionRequest *req = XSelectionRequest_create(self, ev);
+    if (!req) return;
+
+    if (prev) prev->next = req;
+    else for (unsigned i = 0; i < MAXREQUESTORS; ++i)
     {
-	char *str = UniStr_toLatin1(self->content.data);
-	CHECK(xcb_change_property(c, XCB_PROP_MODE_REPLACE, ev->requestor,
-		    ev->property, XCB_ATOM_STRING, 8,
-		    UniStr_len(self->content.data), str),
-		"Cannot set property for selection request to 0x%x",
-		(unsigned)Window_id(self->w));
-	free(str);
+	if (!self->requests[i])
+	{
+	    self->requests[i] = req;
+	    ++self->requestsnum;
+	    XSelectionRequest_start(req);
+	    break;
+	}
     }
-    else if (ev->target == A(TEXT) || ev->target == A(UTF8_STRING))
-    {
-	size_t len;
-	char *str = UniStr_toUtf8(self->content.data, &len);
-	CHECK(xcb_change_property(c, XCB_PROP_MODE_REPLACE, ev->requestor,
-		    ev->property, A(UTF8_STRING), 8, len, str),
-		"Cannot set property for selection request to 0x%x",
-		(unsigned)Window_id(self->w));
-	free(str);
-    }
-    else
-    {
-	not.property = XCB_ATOM_NONE;
-    }
-    CHECK(xcb_send_event(c, 0, ev->requestor, 0, (const char *)&not),
-	    "Cannot send selection notification for 0x%x",
-	    (unsigned)Window_id(self->w));
 }
 
 static void onSelectionOwnerSet(void *obj, unsigned sequence,
@@ -282,6 +532,8 @@ XSelection *XSelection_create(Window *w, XSelectionName name)
     memset(self, 0, sizeof *self);
     self->w = w;
     self->name = nameatom;
+    self->maxproplen = X11Adapter_maxRequestSize()
+	- sizeof(xcb_change_property_request_t);
     PSC_Event_register(X11Adapter_propertyNotify(), self,
 	    ownPropertyNotify, Window_id(w));
     PSC_Event_register(X11Adapter_selectionClear(), self,
