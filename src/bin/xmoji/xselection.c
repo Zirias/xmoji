@@ -37,7 +37,7 @@ struct XSelectionRequest
 
 static void XSelectionRequest_reject(XSelection *selection,
 	xcb_window_t requestor, xcb_atom_t target, xcb_timestamp_t time);
-static void XSelectionRequest_done(XSelectionRequest *self);
+static void XSelectionRequest_done(XSelectionRequest *self, int destroy);
 static void XSelectionRequest_abort(XSelectionRequest *self);
 static void XSelectionRequest_timedout(
 	void *receiver, void *sender, void *args);
@@ -226,8 +226,9 @@ static void XSelectionRequest_reject(XSelection *selection,
 	    (unsigned)Window_id(selection->w));
 }
 
-static void XSelectionRequest_done(XSelectionRequest *self)
+static void XSelectionRequest_done(XSelectionRequest *self, int destroy)
 {
+    if (destroy && !self) return;
     Timer_destroy(self->timeout);
     free(self->data);
     if (self->sendincr)
@@ -239,6 +240,13 @@ static void XSelectionRequest_done(XSelectionRequest *self)
 		(unsigned)Window_id(self->selection->w));
 	PSC_Event_unregister(X11Adapter_propertyNotify(), self,
 		XSelectionRequest_propertyChanged, self->requestor);
+    }
+    if (destroy)
+    {
+	XSelectionRequest_done(self->subreqs, 1);
+	XSelectionRequest_done(self->next, 1);
+	free(self);
+	return;
     }
     if (self->parent)
     {
@@ -278,7 +286,7 @@ static void XSelectionRequest_abort(XSelectionRequest *self)
 	else XSelectionRequest_reject(self->selection,
 		self->requestor, self->target, self->time);
     }
-    XSelectionRequest_done(self);
+    XSelectionRequest_done(self, 0);
 }
 
 static void XSelectionRequest_timedout(
@@ -326,7 +334,7 @@ static void XSelectionRequest_checkError(void *obj, unsigned sequence,
 		(unsigned)Window_id(self->selection->w));
 	if (!self->sendincr)
 	{
-	    XSelectionRequest_done(self);
+	    XSelectionRequest_done(self, 0);
 	    return;
 	}
     }
@@ -363,7 +371,7 @@ static void XSelectionRequest_propertyChanged(
     PSC_Log_fmt(PSC_L_DEBUG, "Incremental transfer to 0x%x, sending %u bytes",
 	    (unsigned)self->requestor, (unsigned)chunksz);
     self->datapos += chunksz;
-    if (!chunksz) XSelectionRequest_done(self);
+    if (!chunksz) XSelectionRequest_done(self, 0);
 }
 
 static void XSelectionRequest_subReject(XSelectionRequest *self, uint16_t idx)
@@ -727,6 +735,10 @@ void XSelection_publish(XSelection *self, Widget *owner,
 void XSelection_destroy(XSelection *self)
 {
     if (!self) return;
+    if (self->requestsnum) for (unsigned i = 0; i < MAXREQUESTORS; ++i)
+    {
+	XSelectionRequest_done(self->requests[i], 1);
+    }
     if (self->requestor) nothingReceived(self);
     PSC_Event_unregister(X11Adapter_selectionRequest(), self,
 	    selectionRequest, Window_id(self->w));
