@@ -28,6 +28,7 @@ struct Window
     Object base;
     PSC_Event *closed;
     PSC_Event *errored;
+    PSC_Event *propertyChanged;
     XSelection *primary;
     XSelection *clipboard;
     struct xkb_compose_state *kbcompose;
@@ -313,6 +314,15 @@ static void motionNotify(void *receiver, void *sender, void *args)
     }
 }
 
+static void propertyNotify(void *receiver, void *sender, void *args)
+{
+    (void)sender;
+
+    Window *self = receiver;
+    xcb_property_notify_event_t *ev = args;
+    PSC_Event_raise(self->propertyChanged, ev->atom, ev);
+}
+
 static void clientmsg(void *receiver, void *sender, void *args)
 {
     (void)sender;
@@ -524,6 +534,7 @@ static void destroy(void *window)
     xkb_compose_state_unref(self->kbcompose);
     XSelection_destroy(self->clipboard);
     XSelection_destroy(self->primary);
+    PSC_Event_destroy(self->propertyChanged);
     PSC_Event_destroy(self->errored);
     PSC_Event_destroy(self->closed);
     xcb_connection_t *c = X11Adapter_connection();
@@ -550,6 +561,7 @@ Window *Window_createBase(void *derived, const char *name, void *parent)
     self->base.base = Widget_createBase(derived, name, parent);
     self->closed = PSC_Event_create(self);
     self->errored = PSC_Event_create(self);
+    self->propertyChanged = PSC_Event_create(self);
     self->kbcompose = xkb_compose_state_new(
 	    X11Adapter_kbdcompose(), XKB_COMPOSE_STATE_NO_FLAGS);
     self->mouseUpdate = (Pos){-1, -1};
@@ -645,6 +657,8 @@ Window *Window_createBase(void *derived, const char *name, void *parent)
 	    mapped, self->w);
     PSC_Event_register(X11Adapter_motionNotify(), self,
 	    motionNotify, self->w);
+    PSC_Event_register(X11Adapter_propertyNotify(), self,
+	    propertyNotify, self->w);
     PSC_Event_register(X11Adapter_unmapNotify(), self,
 	    unmapped, self->w);
     PSC_Event_register(X11Adapter_eventsDone(), self,
@@ -683,6 +697,12 @@ PSC_Event *Window_errored(void *self)
 {
     Window *w = Object_instance(self);
     return w->errored;
+}
+
+PSC_Event *Window_propertyChanged(void *self)
+{
+    Window *w = Object_instance(self);
+    return w->propertyChanged;
 }
 
 const char *Window_title(const void *self)

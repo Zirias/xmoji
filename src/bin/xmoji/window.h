@@ -35,6 +35,9 @@ PSC_Event *Window_closed(void *self)
 PSC_Event *Window_errored(void *self)
     CMETHOD ATTR_RETNONNULL;
 
+PSC_Event *Window_propertyChanged(void *self)
+    CMETHOD ATTR_RETNONNULL;
+
 const char *Window_title(const void *self)
     CMETHOD;
 void Window_setTitle(void *self, const char *title)

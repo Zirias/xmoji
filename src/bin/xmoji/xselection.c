@@ -631,13 +631,12 @@ static void onSelectionOwnerSet(void *obj, unsigned sequence,
     }
 }
 
-static void ownPropertyNotify(void *receiver, void *sender, void *args)
+static void doOwnSelection(void *receiver, void *sender, void *args)
 {
     (void)sender;
 
     XSelection *self = receiver;
     xcb_property_notify_event_t *ev = args;
-    if (ev->atom != A(WM_CLASS)) return;
     if (!self->newOwner || self->newContent.type == XST_NONE) return;
     switch (self->content.type)
     {
@@ -673,8 +672,8 @@ XSelection *XSelection_create(Window *w, XSelectionName name)
     self->name = nameatom;
     self->maxproplen = X11Adapter_maxRequestSize()
 	- sizeof(xcb_change_property_request_t);
-    PSC_Event_register(X11Adapter_propertyNotify(), self,
-	    ownPropertyNotify, Window_id(w));
+    PSC_Event_register(Window_propertyChanged(w), self,
+	    doOwnSelection, A(WM_CLASS));
     PSC_Event_register(X11Adapter_selectionClear(), self,
 	    selectionClear, Window_id(w));
     PSC_Event_register(X11Adapter_selectionNotify(), self,
@@ -751,8 +750,8 @@ void XSelection_destroy(XSelection *self)
 	    selectionNotify, Window_id(self->w));
     PSC_Event_unregister(X11Adapter_selectionClear(), self,
 	    selectionClear, Window_id(self->w));
-    PSC_Event_unregister(X11Adapter_propertyNotify(), self,
-	    ownPropertyNotify, Window_id(self->w));
+    PSC_Event_unregister(Window_propertyChanged(self->w), self,
+	    doOwnSelection, A(WM_CLASS));
     free(self);
 }
 
