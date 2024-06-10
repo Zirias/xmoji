@@ -660,7 +660,6 @@ static void ownPropertyNotify(void *receiver, void *sender, void *args)
 
 XSelection *XSelection_create(Window *w, XSelectionName name)
 {
-    XSelection *self = PSC_malloc(sizeof *self);
     xcb_atom_t nameatom;
     switch (name)
     {
@@ -668,6 +667,7 @@ XSelection *XSelection_create(Window *w, XSelectionName name)
 	case XSN_CLIPBOARD: nameatom = A(CLIPBOARD); break;
 	default:	    return 0;
     }
+    XSelection *self = PSC_malloc(sizeof *self);
     memset(self, 0, sizeof *self);
     self->w = w;
     self->name = nameatom;
