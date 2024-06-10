@@ -78,6 +78,7 @@ static void destroy(void *obj)
     PSC_Event_unregister(PSC_Service_tick(), self, blink, 0);
     TextRenderer_destroy(self->placeholder);
     UniStr_destroy(self->phtext);
+    UniStr_destroy(self->selected);
     TextRenderer_destroy(self->renderer);
     UniStrBuilder_destroy(self->text);
     free(self);
