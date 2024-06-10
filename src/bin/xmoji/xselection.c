@@ -333,7 +333,6 @@ static void XSelectionRequest_propertyChanged(
 
 static void XSelectionRequest_start(XSelectionRequest *self)
 {
-    Timer_start(self->timeout, REQUESTTIMEOUT);
     xcb_connection_t *c = X11Adapter_connection();
     if (self->datalen > self->selection->maxproplen)
     {
@@ -347,6 +346,8 @@ static void XSelectionRequest_start(XSelectionRequest *self)
 		(unsigned)Window_id(self->selection->w));
 	PSC_Event_register(X11Adapter_propertyNotify(), self,
 		XSelectionRequest_propertyChanged, self->requestor);
+	self->timeout = Timer_create();
+	Timer_start(self->timeout, REQUESTTIMEOUT);
 	AWAIT(xcb_change_property(c, XCB_PROP_MODE_REPLACE, self->requestor,
 		    self->property, A(INCR), 32, sizeof incr, &incr),
 		self, XSelectionRequest_checkError);
@@ -381,7 +382,7 @@ static XSelectionRequest *XSelectionRequest_create(XSelection *selection,
 	XSelectionRequest *self = PSC_malloc(sizeof *self);
 	self->selection = selection;
 	self->next = 0;
-	self->timeout = Timer_create();
+	self->timeout = 0;
 	if (ev->target == A(TARGETS))
 	{
 	    xcb_atom_t *targets = PSC_malloc(3 * sizeof *targets);
