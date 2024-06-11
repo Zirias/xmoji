@@ -3,6 +3,7 @@ xmoji_MODULES=		colorset \
 			main \
 			nanosvg \
 			object \
+			scrollbox \
 			svghooks \
 			textbox \
 			textlabel \
