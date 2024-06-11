@@ -193,7 +193,7 @@ void layout(VBox *self, int updateMinSize)
     PSC_ListIterator_destroy(i);
 }
 
-void sizeChanged(void *receiver, void *sender, void *args)
+static void sizeChanged(void *receiver, void *sender, void *args)
 {
     (void)sender;
     (void)args;
@@ -202,7 +202,7 @@ void sizeChanged(void *receiver, void *sender, void *args)
     layout(self, 0);
 }
 
-void sizeRequested(void *receiver, void *sender, void *args)
+static void sizeRequested(void *receiver, void *sender, void *args)
 {
     (void)args;
 
