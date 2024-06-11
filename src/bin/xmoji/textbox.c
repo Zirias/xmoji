@@ -19,7 +19,7 @@ static void paste(void *obj, XSelectionContent content);
 static void unselect(void *obj);
 static Size minSize(const void *obj);
 static void keyPressed(void *obj, const KeyEvent *event);
-static void clicked(void *obj, const ClickEvent *event);
+static int clicked(void *obj, const ClickEvent *event);
 static void dragged(void *obj, const DragEvent *event);
 
 static MetaTextBox mo = MetaTextBox_init(
@@ -392,11 +392,11 @@ static void unselect(void *obj)
     if (Widget_active(self)) Widget_invalidate(self);
 }
 
-static void clicked(void *obj, const ClickEvent *event)
+static int clicked(void *obj, const ClickEvent *event)
 {
     TextBox *self = Object_instance(obj);
     if (event->button != MB_LEFT &&
-	    !(event->button == MB_MIDDLE && Widget_active(self))) return;
+	    !(event->button == MB_MIDDLE && Widget_active(self))) return 0;
     if (event->button == MB_LEFT && !Widget_active(self))
     {
 	Widget_focus(self);
@@ -404,7 +404,7 @@ static void clicked(void *obj, const ClickEvent *event)
 	{
 	    Widget_setSelection(self, XSN_PRIMARY,
 		    (XSelectionContent){self->selected, XST_TEXT});
-	    return;
+	    return 1;
 	}
     }
     unsigned len = UniStr_len(UniStrBuilder_stringView(self->text));
@@ -440,6 +440,7 @@ static void clicked(void *obj, const ClickEvent *event)
     {
 	updateSelected(self);
     }
+    return 1;
 }
 
 static void dragged(void *obj, const DragEvent *event)

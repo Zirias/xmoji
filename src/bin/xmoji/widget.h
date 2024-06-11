@@ -59,7 +59,7 @@ typedef struct MetaWidget
     void *(*childAt)(void *widget, Pos pos);
     Size (*minSize)(const void *widget);
     void (*keyPressed)(void *widget, const KeyEvent *event);
-    void (*clicked)(void *widget, const ClickEvent *event);
+    int (*clicked)(void *widget, const ClickEvent *event);
     void (*dragged)(void *widget, const DragEvent *event);
 } MetaWidget;
 
@@ -148,7 +148,7 @@ void Widget_setBackground(void *self, int enabled, ColorRole role) CMETHOD;
 xcb_drawable_t Widget_drawable(const void *self) CMETHOD;
 int Widget_visible(const void *self) CMETHOD;
 void Widget_keyPressed(void *self, const KeyEvent *event) CMETHOD;
-void Widget_clicked(void *self, const ClickEvent *event) CMETHOD;
+int Widget_clicked(void *self, const ClickEvent *event) CMETHOD;
 void Widget_dragged(void *self, const DragEvent *event) CMETHOD;
 
 // "protected" API meant only for derived classes

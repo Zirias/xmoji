@@ -11,7 +11,7 @@ static Size minSize(const void *obj);
 static void leave(void *obj);
 static void unselect(void *obj);
 static void *childAt(void *obj, Pos pos);
-static void clicked(void *obj, const ClickEvent *event);
+static int clicked(void *obj, const ClickEvent *event);
 
 static MetaVBox mo = MetaVBox_init(
 	expose, draw, 0, 0,
@@ -126,11 +126,12 @@ static void *childAt(void *obj, Pos pos)
     return child;
 }
 
-static void clicked(void *obj, const ClickEvent *event)
+static int clicked(void *obj, const ClickEvent *event)
 {
     const VBox *self = Object_instance(obj);
     PSC_ListIterator *i = PSC_List_iterator(self->items);
-    while (PSC_ListIterator_moveNext(i))
+    int handled = 0;
+    while (!handled && PSC_ListIterator_moveNext(i))
     {
 	VBoxItem *item = PSC_ListIterator_current(i);
 	Rect rect = Widget_geometry(item->widget);
@@ -139,10 +140,11 @@ static void clicked(void *obj, const ClickEvent *event)
 		&& event->pos.y >= rect.pos.y
 		&& event->pos.y < rect.pos.y + rect.size.height)
 	{
-	    Widget_clicked(item->widget, event);
+	    handled = Widget_clicked(item->widget, event);
 	}
     }
     PSC_ListIterator_destroy(i);
+    return handled;
 }
 
 void layout(VBox *self, int updateMinSize)

@@ -600,9 +600,11 @@ void Widget_keyPressed(void *self, const KeyEvent *event)
     Object_vcallv(Widget, keyPressed, self, event);
 }
 
-void Widget_clicked(void *self, const ClickEvent *event)
+int Widget_clicked(void *self, const ClickEvent *event)
 {
-    Object_vcallv(Widget, clicked, self, event);
+    int handled = 0;
+    Object_vcall(handled, Widget, clicked, self, event);
+    return handled;
 }
 
 void Widget_dragged(void *self, const DragEvent *event)
