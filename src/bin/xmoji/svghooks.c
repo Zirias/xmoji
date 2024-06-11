@@ -140,7 +140,7 @@ static FT_Error preset_slot(FT_GlyphSlot slot,
     slot->bitmap_left = slot->metrics.horiAdvance > width ?
 	(slot->metrics.horiAdvance - width) >> 7 : 0;
     slot->bitmap_top = (doc->metrics.height +
-	    doc->metrics.descender + 0x3f) >> 6;
+	    doc->metrics.descender + 0x7f) >> 6;
     if (slot->bitmap_top > (int)slot->bitmap.rows)
     {
 	slot->bitmap_top = slot->bitmap.rows;
