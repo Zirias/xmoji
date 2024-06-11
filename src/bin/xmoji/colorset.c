@@ -15,6 +15,10 @@ struct ColorSet
 static const char *reskeys[COLOR_NUMROLES][2] = {
     { "Foreground", "foreground" },
     { "Background", "background" },
+    { "Foreground", "aboveForeground" },
+    { "Background", "aboveBackground" },
+    { "Foreground", "belowForeground" },
+    { "Background", "belowBackground" },
     { "Foreground", "activeForeground" },
     { "Background", "activeBackground" },
     { "Foreground", "disabledForeground" },
@@ -28,6 +32,10 @@ static const ColorSet defcolors = {
     .colors = {
 	0x000000ff,
 	0xbbbbbbff,
+	0x000000ff,
+	0xccccccff,
+	0x000000ff,
+	0xaaaaaaff,
 	0x004444ff,
 	0xffffffff,
 	0x666666ff,

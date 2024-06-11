@@ -9,6 +9,10 @@ typedef enum ColorRole
 {
     COLOR_NORMAL,
     COLOR_BG_NORMAL,
+    COLOR_ABOVE,
+    COLOR_BG_ABOVE,
+    COLOR_BELOW,
+    COLOR_BG_BELOW,
     COLOR_ACTIVE,
     COLOR_BG_ACTIVE,
     COLOR_DISABLED,

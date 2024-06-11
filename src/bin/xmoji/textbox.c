@@ -90,7 +90,7 @@ static int draw(void *obj, xcb_render_picture_t picture)
     if (!picture) return 0;
     TextBox *self = Object_instance(obj);
     xcb_connection_t *c = X11Adapter_connection();
-    Color color = Widget_color(self, COLOR_NORMAL);
+    Color color = Widget_color(self, COLOR_BELOW);
     Rect contentArea = Rect_pad(Widget_geometry(self), Widget_padding(self));
     int rc = 0;
     unsigned cursorpos = 0;
@@ -171,7 +171,7 @@ static int deactivate(void *obj)
     {
 	self->cursorvisible = 0;
     }
-    Widget_setBackground(self, 1, COLOR_BG_NORMAL);
+    Widget_setBackground(self, 1, COLOR_BG_BELOW);
     Widget_invalidate(self);
     return 1;
 }
@@ -186,7 +186,7 @@ static void leave(void *obj)
 {
     if (!Widget_active(obj))
     {
-	Widget_setBackground(obj, 1, COLOR_BG_NORMAL);
+	Widget_setBackground(obj, 1, COLOR_BG_BELOW);
 	Widget_invalidate(obj);
     }
 }
@@ -520,7 +520,7 @@ TextBox *TextBox_createBase(void *derived, const char *name,
     self->cursorvisible = 0;
 
     Widget_setMaxSize(self, (Size){ -1, self->minSize.height });
-    Widget_setBackground(self, 1, COLOR_BG_NORMAL);
+    Widget_setBackground(self, 1, COLOR_BG_BELOW);
     Widget_setCursor(self, XC_XTERM);
     Widget_acceptFocus(self, 1);
 
