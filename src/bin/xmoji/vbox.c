@@ -9,12 +9,13 @@ static void expose(void *obj, Rect region);
 static int draw(void *obj, xcb_render_picture_t picture);
 static Size minSize(const void *obj);
 static void leave(void *obj);
+static void unselect(void *obj);
 static void *childAt(void *obj, Pos pos);
 static void clicked(void *obj, const ClickEvent *event);
 
 static MetaVBox mo = MetaVBox_init(
 	expose, draw, 0, 0,
-	0, 0, 0, leave, 0, 0, 0, childAt,
+	0, 0, 0, leave, 0, 0, 0, unselect, childAt,
 	minSize, 0, clicked, 0,
 	"VBox", destroy);
 
@@ -85,6 +86,18 @@ static void leave(void *obj)
     {
 	VBoxItem *item = PSC_ListIterator_current(i);
 	Widget_leave(item->widget);
+    }
+    PSC_ListIterator_destroy(i);
+}
+
+static void unselect(void *obj)
+{
+    VBox *self = Object_instance(obj);
+    PSC_ListIterator *i = PSC_List_iterator(self->items);
+    while (PSC_ListIterator_moveNext(i))
+    {
+	VBoxItem *item = PSC_ListIterator_current(i);
+	Widget_unselect(item->widget);
     }
     PSC_ListIterator_destroy(i);
 }

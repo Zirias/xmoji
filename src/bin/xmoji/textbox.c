@@ -16,6 +16,7 @@ static int deactivate(void *obj);
 static void enter(void *obj);
 static void leave(void *obj);
 static void paste(void *obj, XSelectionContent content);
+static void unselect(void *obj);
 static Size minSize(const void *obj);
 static void keyPressed(void *obj, const KeyEvent *event);
 static void clicked(void *obj, const ClickEvent *event);
@@ -23,7 +24,7 @@ static void dragged(void *obj, const DragEvent *event);
 
 static MetaTextBox mo = MetaTextBox_init(
 	0, draw, 0, 0,
-	activate, deactivate, enter, leave, 0, 0, paste, 0,
+	activate, deactivate, enter, leave, 0, 0, paste, unselect, 0,
 	minSize, keyPressed, clicked, dragged,
 	"TextBox", destroy);
 
@@ -378,6 +379,16 @@ static void paste(void *obj, XSelectionContent content)
 	    UniStr_str(content.data));
     self->cursor += UniStr_len(content.data);
     TextRenderer_setText(self->renderer, UniStrBuilder_stringView(self->text));
+    Widget_invalidate(self);
+}
+
+static void unselect(void *obj)
+{
+    TextBox *self = Object_instance(obj);
+    if (!self->selection.len) return;
+    self->selection.len = 0;
+    UniStr_destroy(self->selected);
+    self->selected = 0;
     Widget_invalidate(self);
 }
 

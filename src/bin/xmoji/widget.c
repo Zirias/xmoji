@@ -16,7 +16,7 @@ static int hide(void *obj);
 static Size minSize(const void *obj);
 
 static MetaWidget mo = MetaWidget_init(0, 0, show, hide,
-	0, 0, 0, 0, 0, 0, 0, 0, minSize, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0, 0, minSize, 0, 0, 0,
 	"Widget", destroy);
 
 struct Widget
@@ -389,6 +389,11 @@ int Widget_focused(const void *self)
 {
     const Widget *w = Object_instance(self);
     return w->focused;
+}
+
+void Widget_unselect(void *self)
+{
+    Object_vcallv(Widget, unselect, self);
 }
 
 static void setSize(Widget *self, int external, Size size)

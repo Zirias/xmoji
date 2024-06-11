@@ -18,9 +18,11 @@ static void expose(void *obj, Rect region);
 static int draw(void *obj, xcb_render_picture_t picture);
 static int show(void *obj);
 static int hide(void *obj);
+static void unselect(void *obj);
 
 static MetaWindow mo = MetaWindow_init(expose, draw, show, hide,
-	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0,
+	unselect, 0, 0, 0, 0, 0,
 	"Window", destroy);
 
 struct Window
@@ -125,6 +127,13 @@ static int hide(void *obj)
 	    "Cannot unmap window 0x%x", (unsigned)self->w);
     PSC_Log_fmt(PSC_L_DEBUG, "Unmapping window 0x%x", (unsigned)self->w);
     return 0;
+}
+
+static void unselect(void *obj)
+{
+    Window *self = Object_instance(obj);
+    if (!self->mainWidget) return;
+    Widget_unselect(self->mainWidget);
 }
 
 static void buttonpress(void *receiver, void *sender, void *args)

@@ -126,6 +126,7 @@ static void selectionClear(void *receiver, void *sender, void *args)
     xcb_selection_clear_event_t *ev = args;
     if (ev->selection != self->name) return;
     clearSelection(self);
+    if (self->name == XCB_ATOM_PRIMARY) Widget_unselect(self->w);
 }
 
 static void selectionNotify(void *receiver, void *sender, void *args)

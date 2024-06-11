@@ -55,6 +55,7 @@ typedef struct MetaWidget
     void (*focus)(void *widget);
     void (*unfocus)(void *widget);
     void (*paste)(void *widget, XSelectionContent content);
+    void (*unselect)(void *widget);
     void *(*childAt)(void *widget, Pos pos);
     Size (*minSize)(const void *widget);
     void (*keyPressed)(void *widget, const KeyEvent *event);
@@ -63,8 +64,9 @@ typedef struct MetaWidget
 } MetaWidget;
 
 #define MetaWidget_init(mexpose, mdraw, mshow, mhide, \
-	mactivate, mdeactivate, menter, mleave, mfocus, munfocus, mpaste, \
-	mchildAt, mminSize, mkeyPressed, mclicked, mdragged, \
+	mactivate, mdeactivate, menter, mleave, mfocus, munfocus, \
+	mpaste, munselect, mchildAt, mminSize, mkeyPressed, \
+	mclicked, mdragged, \
 	...) { \
     .base = MetaObject_init(__VA_ARGS__), \
     .expose = mexpose, \
@@ -78,6 +80,7 @@ typedef struct MetaWidget
     .focus = mfocus, \
     .unfocus = munfocus, \
     .paste = mpaste, \
+    .unselect = munselect, \
     .childAt = mchildAt, \
     .minSize = mminSize, \
     .keyPressed = mkeyPressed, \
@@ -123,6 +126,7 @@ void Widget_acceptFocus(void *self, int accept) CMETHOD;
 void Widget_focus(void *self) CMETHOD;
 void Widget_unfocus(void *self) CMETHOD;
 int Widget_focused(const void *self) CMETHOD;
+void Widget_unselect(void *self) CMETHOD;
 void Widget_setSize(void *self, Size size) CMETHOD;
 void Widget_setMaxSize(void *self, Size maxSize) CMETHOD;
 Size Widget_minSize(const void *self) CMETHOD;
