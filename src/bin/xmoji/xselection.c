@@ -587,7 +587,6 @@ static void doOwnSelection(void *receiver, void *sender, void *args)
     (void)sender;
 
     XSelection *self = receiver;
-    xcb_property_notify_event_t *ev = args;
     if (!self->newOwner || self->newContent.type == XST_NONE) return;
     switch (self->content.type)
     {
@@ -600,12 +599,16 @@ static void doOwnSelection(void *receiver, void *sender, void *args)
     }
     self->owner = self->newOwner;
     self->content = self->newContent;
-    self->ownedTime = ev->time;
     self->newOwner = 0;
     self->newContent = (XSelectionContent){0, XST_NONE};
-    AWAIT(xcb_set_selection_owner(X11Adapter_connection(),
-		Window_id(self->w), self->name, self->ownedTime),
-	    self, onSelectionOwnerSet);
+    if (args)
+    {
+	xcb_property_notify_event_t *ev = args;
+	self->ownedTime = ev->time;
+	AWAIT(xcb_set_selection_owner(X11Adapter_connection(),
+		    Window_id(self->w), self->name, self->ownedTime),
+		self, onSelectionOwnerSet);
+    }
 }
 
 static void XSelectionConvert_done(XSelectionConvert *self, int destroy)
@@ -932,15 +935,29 @@ void XSelection_publish(XSelection *self, Widget *owner,
 	    break;
     }
     self->newOwner = owner;
+    self->newContent.type = content.type;
     if (!self->owner || owner != self->owner
 	    || content.type != self->content.type)
     {
+	/* ICCCM: "If the selection value completely changes, [...] should
+	 * reacquire the selection ownership"
+	 * We assume a "complete change" when we have a different owner widget
+	 * or the data type changes.
+	 */
 	CHECK(xcb_change_property(X11Adapter_connection(),
 		    XCB_PROP_MODE_APPEND, Window_id(self->w), A(WM_CLASS),
 		    XCB_ATOM_STRING, 8, 0, 0),
 		"Cannot change property on 0x%x",
 		(unsigned)Window_id(self->w));
-	self->newContent.type = content.type;
+    }
+    else
+    {
+	/* Otherwise, we assume the selection value can be "reasonably viewed
+	 * [...] as the same object" [ICCCM] and silently change the owned
+	 * data. This e.g. avoids lots of unnecessary traffic when the user
+	 * marks some text with the mouse.
+	 */
+	doOwnSelection(self, 0, 0);
     }
 }
 
