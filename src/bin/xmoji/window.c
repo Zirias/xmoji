@@ -53,6 +53,7 @@ struct Window
     int mapped;
     int wantmap;
     int ndamages;
+    uint16_t tmpProperties;
 };
 
 static void map(Window *self)
@@ -808,6 +809,27 @@ void Window_setFocusWidget(void *self, void *widget)
 	Widget_unfocus(prev);
     }
     w->focusWidget = widget;
+}
+
+xcb_atom_t Window_takeProperty(void *self)
+{
+    Window *w = Object_instance(self);
+    for (int i = 0; i < 16; ++i)
+    {
+	if (!(w->tmpProperties & (1 << i)))
+	{
+	    w->tmpProperties |= (1 << i);
+	    return i+1;
+	}
+    }
+    return 0;
+}
+
+void Window_returnProperty(void *self, xcb_atom_t property)
+{
+    if (property < 1 || property > 16) return;
+    Window *w = Object_instance(self);
+    w->tmpProperties &= ~(1 << (property-1));
 }
 
 XSelection *Window_primary(void *self)

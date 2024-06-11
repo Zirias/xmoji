@@ -56,6 +56,11 @@ void Window_setMainWidget(void *self, void *widget)
 void Window_setFocusWidget(void *self, void *widget)
     CMETHOD;
 
+xcb_atom_t Window_takeProperty(void *self)
+    CMETHOD;
+void Window_returnProperty(void *self, xcb_atom_t property)
+    CMETHOD;
+
 XSelection *Window_primary(void *self)
     CMETHOD;
 XSelection *Window_clipboard(void *self)
