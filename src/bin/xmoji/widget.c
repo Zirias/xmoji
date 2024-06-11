@@ -32,13 +32,11 @@ struct Widget
     Widget *container;
     ColorSet *colorSet;
     Rect geometry;
-    Rect clip;
     Rect damages[MAXDAMAGES];
     Box padding;
     Size maxSize;
     xcb_drawable_t drawable;
     xcb_render_picture_t picture;
-    xcb_render_picture_t bgpicture;
     ColorRole backgroundRole;
     Align align;
     XCursor cursor;
@@ -190,10 +188,8 @@ void Widget_setContainer(void *self, void *container)
 	if (w->drawable)
 	{
 	    xcb_connection_t *c = X11Adapter_connection();
-	    xcb_render_free_picture(c, w->bgpicture);
 	    xcb_render_free_picture(c, w->picture);
 	}
-	w->bgpicture = 0;
 	w->picture = 0;
 	w->drawable = 0;
 	w->container = cont;
@@ -257,23 +253,19 @@ int Widget_draw(void *self)
     xcb_connection_t *c = X11Adapter_connection();
     if (w->drawBackground)
     {
-	if (memcmp(&w->geometry, &w->clip, sizeof w->geometry))
-	{
-	    w->clip = w->geometry;
-	    xcb_rectangle_t clip = {0, 0,
-		w->clip.size.width, w->clip.size.height};
-	    CHECK(xcb_render_set_picture_clip_rectangles(c,
-			w->bgpicture, w->clip.pos.x, w->clip.pos.y, 1, &clip),
-		    "Cannot set clipping region on 0x%x",
-		    (unsigned)w->drawable);
-	}
+	xcb_rectangle_t clip = {w->geometry.pos.x, w->geometry.pos.y,
+	    w->geometry.size.width, w->geometry.size.height};
+	CHECK(xcb_render_set_picture_clip_rectangles(c,
+		    w->picture, 0, 0, 1, &clip),
+		"Cannot set clipping region on 0x%x",
+		(unsigned)w->drawable);
 	Color color = Widget_color(w, w->backgroundRole);
 	if (w->ndamages < 0)
 	{
 	    xcb_rectangle_t rect = {w->geometry.pos.x, w->geometry.pos.y,
 		w->geometry.size.width, w->geometry.size.height};
 	    CHECK(xcb_render_fill_rectangles(c, XCB_RENDER_PICT_OP_OVER,
-			w->bgpicture, Color_xcb(color), 1, &rect),
+			w->picture, Color_xcb(color), 1, &rect),
 		    "Cannot draw widget background on 0x%x",
 		    (unsigned)w->picture);
 	}
@@ -282,7 +274,7 @@ int Widget_draw(void *self)
 	    xcb_rectangle_t rect = {w->damages[d].pos.x, w->damages[d].pos.y,
 		w->damages[d].size.width, w->damages[d].size.height};
 	    CHECK(xcb_render_fill_rectangles(c, XCB_RENDER_PICT_OP_OVER,
-			w->bgpicture, Color_xcb(color), 1, &rect),
+			w->picture, Color_xcb(color), 1, &rect),
 		    "Cannot draw widget background on 0x%x",
 		    (unsigned)w->picture);
 	}
@@ -563,7 +555,6 @@ void Widget_setDrawable(void *self, xcb_drawable_t drawable)
     xcb_connection_t *c = X11Adapter_connection();
     if (w->drawable)
     {
-	xcb_render_free_picture(c, w->bgpicture);
 	xcb_render_free_picture(c, w->picture);
     }
     if (drawable)
@@ -573,17 +564,12 @@ void Widget_setDrawable(void *self, xcb_drawable_t drawable)
 	CHECK(xcb_render_create_picture(c, w->picture, drawable,
 		    X11Adapter_rootformat(), 0, 0),
 		"Cannot create XRender picture for 0x%x", (unsigned)drawable);
-	w->bgpicture = xcb_generate_id(c);
-	CHECK(xcb_render_create_picture(c, w->bgpicture, drawable,
-		    X11Adapter_rootformat(), 0, 0),
-		"Cannot create XRender picture for 0x%x", (unsigned)drawable);
 	w->ndamages = -1;
     }
     else
     {
 	w->drawable = 0;
 	w->picture = 0;
-	w->bgpicture = 0;
     }
 }
 
