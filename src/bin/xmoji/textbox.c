@@ -385,11 +385,11 @@ static void paste(void *obj, XSelectionContent content)
 static void unselect(void *obj)
 {
     TextBox *self = Object_instance(obj);
-    if (!self->selection.len) return;
+    if (!self->selected) return;
     self->selection.len = 0;
     UniStr_destroy(self->selected);
     self->selected = 0;
-    Widget_invalidate(self);
+    if (Widget_active(self)) Widget_invalidate(self);
 }
 
 static void clicked(void *obj, const ClickEvent *event)
