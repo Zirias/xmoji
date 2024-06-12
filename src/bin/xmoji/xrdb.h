@@ -20,6 +20,9 @@ int XRdb_bool(const XRdb *self, XRdbKey key, int def)
     CMETHOD;
 long XRdb_int(const XRdb *self, XRdbKey key, long def, long min, long max)
     CMETHOD;
+double XRdb_float(const XRdb *self, XRdbKey key,
+	double def, double min, double max)
+    CMETHOD;
 void XRdb_destroy(XRdb *self);
 
 #endif

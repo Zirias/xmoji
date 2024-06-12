@@ -52,9 +52,8 @@ static void onprestartup(void *receiver, void *sender, void *args)
 		res, XRdbKey("emojifont"));
     }
     if (!emojifontname) emojifontname = "emoji";
-    if (Font_init(.15) < 0) goto error;
-    font = Font_create(3, fontname);
-    emojifont = Font_create(0, emojifontname);
+    font = Font_create(fontname, 0);
+    emojifont = Font_create(emojifontname, 0);
     if (!(win = Window_create("mainWindow", 0))) goto error;
     Window_setTitle(win, "Xmoji 😀 äöüß");
 
@@ -123,13 +122,12 @@ static void onshutdown(void *receiver, void *sender, void *args)
     (void)sender;
     (void)args;
 
+    Object_destroy(win);
+    win = 0;
     Font_destroy(emojifont);
     emojifont = 0;
     Font_destroy(font);
     font = 0;
-    Object_destroy(win);
-    win = 0;
-    Font_done();
     X11Adapter_done();
     PSC_Log_setAsync(0);
 }

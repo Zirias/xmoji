@@ -25,10 +25,14 @@ typedef enum FontGlyphType
     FGT_BITMAP_BGRA
 } FontGlyphType;
 
-int Font_init(double maxUnscaledDeviation);
-void Font_done(void);
+typedef struct FontOptions
+{
+    float maxUnscaledDeviation;
+    uint8_t pixelFractionBits;
+} FontOptions;
 
-Font *Font_create(uint8_t subpixelbits, const char *pattern);
+Font *Font_create(const char *pattern, const FontOptions *options);
+Font *Font_ref(Font *font);
 FT_Face Font_face(const Font *self) CMETHOD ATTR_RETNONNULL;
 FontGlyphType Font_glyphtype(const Font *self) CMETHOD;
 double Font_pixelsize(const Font *self) CMETHOD;

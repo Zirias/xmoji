@@ -332,6 +332,20 @@ long XRdb_int(const XRdb *self, XRdbKey key, long def, long min, long max)
     return intval;
 }
 
+double XRdb_float(const XRdb *self, XRdbKey key,
+	double def, double min, double max)
+{
+    const char *val = XRdb_value(self, key);
+    if (!val) return def;
+    char *endptr;
+    errno = 0;
+    double floatval = strtod(val, &endptr);
+    if (errno || endptr == val || *endptr) return def;
+    if (floatval < min) floatval = min;
+    if (floatval > max) floatval = max;
+    return floatval;
+}
+
 void XRdb_destroy(XRdb *self)
 {
     if (!self) return;

@@ -2,6 +2,7 @@
 
 #include "svghooks.h"
 #include "x11adapter.h"
+#include "xrdb.h"
 
 #include <fontconfig/fontconfig.h>
 #include FT_MODULE_H
@@ -11,18 +12,23 @@
 #include <stdlib.h>
 #include <string.h>
 
-FT_Library ftlib;
-int refcnt;
-FcPattern *defaultpat;
-double defaultpixelsize;
-double maxunscaleddeviation;
+static FT_Library ftlib;
+static int refcnt;
+static FcPattern *defaultpat;
+static PSC_HashTable *byPattern;
+static PSC_HashTable *byId;
+static double defaultpixelsize;
+
+static FontOptions defaultOptions;
 
 struct Font
 {
+    char *id;
     FT_Face face;
     FontGlyphType glyphtype;
     double pixelsize;
     double fixedpixelsize;
+    int refcnt;
     int haserror;
     uint16_t uploading;
     uint8_t glyphidbits;
@@ -37,7 +43,10 @@ struct Font
     uint32_t uploaded[];
 };
 
-int Font_init(double maxUnscaledDeviation)
+static int Font_init(void);
+static void Font_done(void);
+
+static int Font_init(void)
 {
     if (refcnt++) return 0;
 
@@ -62,7 +71,25 @@ int Font_init(double maxUnscaledDeviation)
 	PSC_Log_msg(PSC_L_WARNING, "Could not add SVG rendering hooks");
     }
 
-    maxunscaleddeviation = maxUnscaledDeviation;
+    byPattern = PSC_HashTable_create(5);
+    byId = PSC_HashTable_create(5);
+
+    XRdb *rdb = X11Adapter_resources();
+    if (rdb)
+    {
+	XRdb_register(rdb, "FontOptions", "defaultFontOptions");
+	defaultOptions.maxUnscaledDeviation = XRdb_float(rdb,
+		XRdbKey("defaultFontOptions", "maxUnscaledDeviation"),
+		5., .1, 100.);
+	defaultOptions.pixelFractionBits = XRdb_int(rdb,
+		XRdbKey("defaultFontOptions", "pixelFractionBits"),
+		3, 0, 6);
+    }
+    else
+    {
+	defaultOptions.maxUnscaledDeviation = 5.f;
+	defaultOptions.pixelFractionBits = 3;
+    }
     return 0;
 
 error:
@@ -70,9 +97,11 @@ error:
     return -1;
 }
 
-void Font_done(void)
+static void Font_done(void)
 {
     if (--refcnt) return;
+    PSC_HashTable_destroy(byId);
+    PSC_HashTable_destroy(byPattern);
     FT_Done_FreeType(ftlib);
     FcPatternDestroy(defaultpat);
     FcFini();
@@ -89,8 +118,17 @@ static void requestError(void *receiver, void *sender, void *args)
     self->haserror = 1;
 }
 
-Font *Font_create(uint8_t subpixelbits, const char *pattern)
+Font *Font_create(const char *pattern, const FontOptions *options)
 {
+    if (Font_init() < 0) return 0;
+    Font *cached = PSC_HashTable_get(byPattern,
+	    pattern ? pattern : "<default>");
+    if (cached)
+    {
+	Font_done();
+	++cached->refcnt;
+	return cached;
+    }
     PSC_List *patterns = 0;
     PSC_ListIterator *pi = 0;
     if (pattern)
@@ -102,6 +140,7 @@ Font *Font_create(uint8_t subpixelbits, const char *pattern)
     int ismatch = 0;
     FcPattern *fcfont;
     FT_Face face;
+    char *id = 0;
     double pixelsize = defaultpixelsize;
     double fixedpixelsize = 0;
     int defstep = 1;
@@ -150,19 +189,35 @@ Font *Font_create(uint8_t subpixelbits, const char *pattern)
 	if (fcpat != defaultpat) FcPatternDestroy(fcpat);
 	fcpat = 0;
 	FcChar8 *fontfile = 0;
+	int fontindex = 0;
 	if (ismatch)
 	{
 	    FcPatternGetString(fcfont, FC_FILE, 0, &fontfile);
+	    FcPatternGetInteger(fcfont, FC_INDEX, 0, &fontindex);
 	    if (!fontfile)
 	    {
 		PSC_Log_msg(PSC_L_WARNING, "Found font without a file");
 		ismatch = 0;
 	    }
 	}
-	int fontindex = 0;
 	if (ismatch)
 	{
-	    FcPatternGetInteger(fcfont, FC_INDEX, 0, &fontindex);
+	    int fi = fontindex;
+	    int fic = 0;
+	    while (fi) { ++fic; fi /= 10; }
+	    if (!fic) ++fic;
+	    size_t len = strlen((const char *)fontfile) + fic + 2;
+	    id = PSC_malloc(len);
+	    snprintf(id, len, "%s:%d", (const char *)fontfile, fontindex);
+	    cached = PSC_HashTable_get(byId, id);
+	    if (cached)
+	    {
+		FcPatternDestroy(fcfont);
+		break;
+	    }
+	}
+	if (ismatch)
+	{
 	    if (FT_New_Face(ftlib,
 			(const char *)fontfile, fontindex, &face) == 0)
 	    {
@@ -173,6 +228,10 @@ Font *Font_create(uint8_t subpixelbits, const char *pattern)
 		     * range allowed to be used unscaled. Otherwise prefer
 		     * the largest available size.
 		     */
+		    double maxunscaleddeviation =
+			(options && options->maxUnscaledDeviation >= .1f
+			 ? options->maxUnscaledDeviation
+			 : defaultOptions.maxUnscaledDeviation) / 100.;
 		    double bestdeviation = HUGE_VAL;
 		    int bestidx = -1;
 		    for (int i = 0; i < face->num_fixed_sizes; ++i)
@@ -231,19 +290,37 @@ Font *Font_create(uint8_t subpixelbits, const char *pattern)
 			(const char *)fontfile);
 	    }
 	}
+	else
+	{
+	    free(id);
+	    id = 0;
+	}
 	FcPatternDestroy(fcfont);
 	fcfont = 0;
     }
     PSC_ListIterator_destroy(pi);
     PSC_List_destroy(patterns);
 
+    if (cached)
+    {
+	Font_done();
+	++cached->refcnt;
+	return cached;
+    }
+
     if (!ismatch)
     {
 	PSC_Log_fmt(PSC_L_WARNING, "No matching font found for `%s'", pattern);
     }
 
+    uint8_t subpixelbits;
     if (fixedpixelsize) subpixelbits = 0;
-    else if (subpixelbits > 6) subpixelbits = 6;
+    else
+    {
+	subpixelbits = options && options->pixelFractionBits != (uint8_t)-1
+	    ? options->pixelFractionBits : defaultOptions.pixelFractionBits;
+	if (subpixelbits > 6) subpixelbits = 6;
+    }
     uint8_t glyphidbits = 1;
     uint32_t glyphidmask = 1;
     while ((face->num_glyphs & glyphidmask) != face->num_glyphs)
@@ -258,6 +335,8 @@ Font *Font_create(uint8_t subpixelbits, const char *pattern)
 		    * sizeof *self->uploaded)));
     memset(self, 0, fsz);
 
+    if (id) PSC_Log_fmt(PSC_L_DEBUG, "Font id: %s", id);
+    self->id = id;
     self->face = face;
     double scale = 0;
     if (fixedpixelsize)
@@ -274,6 +353,7 @@ Font *Font_create(uint8_t subpixelbits, const char *pattern)
 	FGT_BITMAP_BGRA : FGT_OUTLINE;
     self->pixelsize = pixelsize;
     self->fixedpixelsize = fixedpixelsize;
+    self->refcnt = 1;
     xcb_connection_t *c = X11Adapter_connection();
     self->glyphset = xcb_generate_id(c);
     PSC_Event_register(X11Adapter_requestError(), self,
@@ -317,7 +397,15 @@ Font *Font_create(uint8_t subpixelbits, const char *pattern)
     }
     else self->baseline = FT_MulFix(face->bbox.yMax,
 	    face->size->metrics.y_scale);
+    PSC_HashTable_set(byPattern, pattern ? pattern : "<default>", self, 0);
+    if (id) PSC_HashTable_set(byId, id, self, 0);
     return self;
+}
+
+Font *Font_ref(Font *font)
+{
+    ++font->refcnt;
+    return font;
 }
 
 FT_Face Font_face(const Font *self)
@@ -637,6 +725,7 @@ xcb_render_glyphset_t Font_maskGlyphset(const Font *self)
 void Font_destroy(Font *self)
 {
     if (!self) return;
+    if (--self->refcnt) return;
     PSC_Event_unregister(X11Adapter_requestError(), self,
 	    requestError, self->glyphset);
     xcb_connection_t *c = X11Adapter_connection();
@@ -646,5 +735,20 @@ void Font_destroy(Font *self)
     }
     xcb_render_free_glyph_set(c, self->glyphset);
     FT_Done_Face(self->face);
+    if (self->id) PSC_HashTable_delete(byId, self->id);
+    const char *pat = 0;
+    PSC_HashTableIterator *i = PSC_HashTable_iterator(byPattern);
+    while (PSC_HashTableIterator_moveNext(i))
+    {
+	if (PSC_HashTableIterator_current(i) == self)
+	{
+	    pat = PSC_HashTableIterator_key(i);
+	    break;
+	}
+    }
+    PSC_HashTableIterator_destroy(i);
+    if (pat) PSC_HashTable_delete(byPattern, pat);
+    free(self->id);
     free(self);
+    Font_done();
 }
