@@ -257,9 +257,9 @@ static void sizeChanged(void *receiver, void *sender, void *args)
     ScrollBox *self = receiver;
     if (!self->widget) return;
     Size sz = ea->newSize;
+    updateScrollbar(self, sz);
     if (self->scrollSize.height > sz.height)
     {
-	updateScrollbar(self, sz);
 	sz.width -= self->scrollBar.size.width + 2;
     }
     sz.height = self->scrollSize.height;
