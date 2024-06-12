@@ -11,11 +11,12 @@ static void leave(void *obj);
 static void unselect(void *obj);
 static void *childAt(void *obj, Pos pos);
 static int clicked(void *obj, const ClickEvent *event);
+static void dragged(void *obj, const DragEvent *event);
 
 static MetaScrollBox mo = MetaScrollBox_init(
 	expose, draw, 0, 0,
 	0, 0, 0, leave, 0, 0, 0, unselect, childAt,
-	minSize, 0, clicked, 0,
+	minSize, 0, clicked, dragged,
 	"ScrollBox", destroy);
 
 struct ScrollBox
@@ -27,6 +28,7 @@ struct ScrollBox
     Rect scrollBar;
     int hoverBar;
     uint16_t scrollPos;
+    int16_t dragAnchor;
 };
 
 static void updateScrollbar(ScrollBox *self, Size size)
@@ -66,6 +68,7 @@ static Rect scrollBarGeom(ScrollBox *self)
 
 static void updateHover(ScrollBox *self, Pos pos)
 {
+    if (self->dragAnchor >= 0) return;
     int hover;
     Rect barGeom = scrollBarGeom(self);
     if (pos.x >= barGeom.pos.x
@@ -142,6 +145,7 @@ static void leave(void *obj)
 {
     ScrollBox *self = Object_instance(obj);
     if (!self->widget) return;
+    self->dragAnchor = -1;
     updateHover(self, (Pos){-1, -1});
     Widget_leave(self->widget);
 }
@@ -157,22 +161,25 @@ static void *childAt(void *obj, Pos pos)
 {
     ScrollBox *self = Object_instance(obj);
     if (!self->widget) return self;
-    updateHover(self, pos);
+    void *child = self;
     Rect childGeom = Widget_geometry(self->widget);
     if (pos.x >= childGeom.pos.x
 	    && pos.x < childGeom.pos.x + childGeom.size.width
 	    && pos.y >= childGeom.pos.y
 	    && pos.y < childGeom.pos.y + childGeom.size.height)
     {
-	return Widget_enterAt(self->widget, pos);
+	self->dragAnchor = -1;
+	child = Widget_enterAt(self->widget, pos);
     }
-    return self;
+    updateHover(self, pos);
+    return child;
 }
 
 static int clicked(void *obj, const ClickEvent *event)
 {
     ScrollBox *self = Object_instance(obj);
     if (!self->widget) return 0;
+    self->dragAnchor = -1;
     Rect geom = Widget_geometry(self);
     if (event->pos.x < geom.pos.x + geom.size.width
 	    - self->scrollBar.size.width - 2)
@@ -221,6 +228,27 @@ static int clicked(void *obj, const ClickEvent *event)
     return 0;
 }
 
+static void dragged(void *obj, const DragEvent *event)
+{
+    ScrollBox *self = Object_instance(obj);
+    if (!self->hoverBar || event->button != MB_LEFT) return;
+    if (self->dragAnchor < 0) self->dragAnchor = self->scrollBar.pos.y;
+    Rect geom = Widget_geometry(self);
+    uint16_t ymax = geom.size.height - self->scrollBar.size.height - 2;
+    int16_t yoff = event->to.y - event->from.y;
+    int16_t ypos = self->dragAnchor + yoff;
+    if (ypos < 0) ypos = 0;
+    if (ypos > ymax) ypos = ymax;
+    self->scrollBar.pos.y = ypos;
+    uint32_t scrollHeight = (self->scrollSize.height - geom.size.height) << 6;
+    uint32_t scrollPos = ((uint16_t)ypos << 6) * scrollHeight / (ymax << 6);
+    self->scrollPos = (scrollPos + 0x20) >> 6;
+    Pos origin = geom.pos;
+    origin.y -= self->scrollPos;
+    Widget_setOrigin(self->widget, origin);
+    Widget_invalidate(self);
+}
+
 static void sizeChanged(void *receiver, void *sender, void *args)
 {
     (void)sender;
@@ -264,6 +292,7 @@ ScrollBox *ScrollBox_createBase(void *derived, void *parent)
     self->scrollBar = (Rect){{0, 0}, {10, 0}};
     self->hoverBar = 0;
     self->scrollPos = 0;
+    self->dragAnchor = -1;
 
     Widget_setPadding(self, (Box){0, 0, 0, 0});
     PSC_Event_register(Widget_sizeChanged(self), self, sizeChanged, 0);
