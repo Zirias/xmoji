@@ -1,6 +1,7 @@
 #include "xrdb.h"
 
 #include <ctype.h>
+#include <errno.h>
 #include <poser/core.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -209,8 +210,6 @@ const char *XRdb_value(const XRdb *self, XRdbKey key)
 	instid[keylen] = id - 1;
 	id = (uintptr_t)PSC_HashTable_get(self->instances, key[arglen]);
 	classid[keylen] = id - 1;
-	if (instid[keylen] == (unsigned)-1
-		&& classid[keylen] == (unsigned)-1) return 0;
 	++keylen;
 	++arglen;
     }
@@ -318,6 +317,19 @@ int XRdb_bool(const XRdb *self, XRdbKey key, int def)
 	    || strequalslc(val, "on")
 	    || strequalslc(val, "enabled")) return 1;
     return def;
+}
+
+long XRdb_int(const XRdb *self, XRdbKey key, long def, long min, long max)
+{
+    const char *val = XRdb_value(self, key);
+    if (!val) return def;
+    char *endptr;
+    errno = 0;
+    long intval = strtol(val, &endptr, 10);
+    if (errno || endptr == val || *endptr) return def;
+    if (intval < min) intval = min;
+    if (intval > max) intval = max;
+    return intval;
 }
 
 void XRdb_destroy(XRdb *self)

@@ -58,7 +58,7 @@ static void onprestartup(void *receiver, void *sender, void *args)
     if (!(win = Window_create("mainWindow", 0))) goto error;
     Window_setTitle(win, "Xmoji 😀 äöüß");
 
-    ScrollBox *scroll = ScrollBox_create(win);
+    ScrollBox *scroll = ScrollBox_create("mainScrollBox", win);
     VBox *box = VBox_create(scroll);
 
     TextLabel *label = TextLabel_create("helloLabel", box, font);

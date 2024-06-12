@@ -18,6 +18,8 @@ const char *XRdb_value(const XRdb *self, XRdbKey key)
     CMETHOD;
 int XRdb_bool(const XRdb *self, XRdbKey key, int def)
     CMETHOD;
+long XRdb_int(const XRdb *self, XRdbKey key, long def, long min, long max)
+    CMETHOD;
 void XRdb_destroy(XRdb *self);
 
 #endif

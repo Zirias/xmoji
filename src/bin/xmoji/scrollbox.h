@@ -14,7 +14,7 @@ typedef struct MetaScrollBox
 
 C_CLASS_DECL(ScrollBox);
 
-ScrollBox *ScrollBox_createBase(void *derived, void *parent);
+ScrollBox *ScrollBox_createBase(void *derived, const char *name, void *parent);
 #define ScrollBox_create(...) ScrollBox_createBase(0, __VA_ARGS__)
 void ScrollBox_setWidget(void *self, void *widget) CMETHOD;
 

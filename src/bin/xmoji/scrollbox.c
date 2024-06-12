@@ -1,5 +1,7 @@
 #include "scrollbox.h"
 
+#include "xrdb.h"
+
 #include <poser/core.h>
 #include <stdlib.h>
 
@@ -29,11 +31,12 @@ struct ScrollBox
     int hoverBar;
     uint16_t scrollPos;
     int16_t dragAnchor;
+    uint16_t minBarHeight;
 };
 
 static void updateScrollbar(ScrollBox *self, Size size)
 {
-    Pos origin = Widget_origin(self);
+    Rect geom = Widget_geometry(self);
     if (self->scrollSize.height <= size.height)
     {
 	self->scrollPos = 0;
@@ -46,14 +49,16 @@ static void updateScrollbar(ScrollBox *self, Size size)
     uint32_t barHeight = ((size.height - 2) << 6) * (size.height << 6)
 	/ (self->scrollSize.height << 6);
     self->scrollBar.size.height = (barHeight + 0x20) >> 6;
-    if (self->scrollBar.size.height < 16) self->scrollBar.size.height = 16;
+    uint16_t hmin = self->minBarHeight;
+    if (hmin > geom.size.height / 2) hmin = geom.size.height / 2;
+    if (self->scrollBar.size.height < hmin) self->scrollBar.size.height = hmin;
     uint32_t scrollHeight = (self->scrollSize.height - size.height) << 6;
     uint32_t scrollTop = ((size.height - self->scrollBar.size.height - 2) << 6)
 	* (self->scrollPos << 6) / scrollHeight;
     self->scrollBar.pos.y = (scrollTop + 0x20) >> 6;
 done:
-    origin.y -= self->scrollPos;
-    Widget_setOrigin(self->widget, origin);
+    geom.pos.y -= self->scrollPos;
+    Widget_setOrigin(self->widget, geom.pos);
 }
 
 static Rect scrollBarGeom(ScrollBox *self)
@@ -278,21 +283,26 @@ static void sizeRequested(void *receiver, void *sender, void *args)
     Widget_requestSize(self);
 }
 
-ScrollBox *ScrollBox_createBase(void *derived, void *parent)
+ScrollBox *ScrollBox_createBase(void *derived, const char *name, void *parent)
 {
     REGTYPE(0);
 
     ScrollBox *self = PSC_malloc(sizeof *self);
     if (!derived) derived = self;
     self->base.type = OBJTYPE;
-    self->base.base = Widget_createBase(derived, 0, parent);
+    self->base.base = Widget_createBase(derived, name, parent);
+    XRdb *rdb = X11Adapter_resources();
+    const char *resname = Widget_resname(self);
     self->widget = 0;
     self->minSize = (Size){0, 100};
     self->scrollSize = (Size){0, 0};
-    self->scrollBar = (Rect){{0, 0}, {10, 0}};
+    self->scrollBar = (Rect){{0, 0},
+	{XRdb_int(rdb, XRdbKey(resname, "scrollBarWidth"), 10, 2, 128), 0}};
     self->hoverBar = 0;
     self->scrollPos = 0;
     self->dragAnchor = -1;
+    self->minBarHeight = XRdb_int(rdb,
+	    XRdbKey(resname, "scrollBarMinHeight"), 16, 2, 256);
 
     Widget_setPadding(self, (Box){0, 0, 0, 0});
     PSC_Event_register(Widget_sizeChanged(self), self, sizeChanged, 0);
