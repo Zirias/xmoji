@@ -261,8 +261,8 @@ static void sizeChanged(void *receiver, void *sender, void *args)
     if (self->scrollSize.height > sz.height)
     {
 	sz.width -= self->scrollBar.size.width + 2;
+	sz.height = self->scrollSize.height;
     }
-    sz.height = self->scrollSize.height;
     Widget_setSize(self->widget, sz);
     Widget_invalidate(self);
 }
