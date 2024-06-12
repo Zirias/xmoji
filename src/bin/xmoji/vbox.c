@@ -193,7 +193,7 @@ void layout(VBox *self, int updateMinSize)
     PSC_ListIterator_destroy(i);
 }
 
-static void sizeChanged(void *receiver, void *sender, void *args)
+static void layoutChanged(void *receiver, void *sender, void *args)
 {
     (void)sender;
     (void)args;
@@ -243,7 +243,8 @@ VBox *VBox_createBase(void *derived, void *parent)
     self->items = PSC_List_create();
     self->minSize = (Size){0, 0};
 
-    PSC_Event_register(Widget_sizeChanged(self), self, sizeChanged, 0);
+    PSC_Event_register(Widget_sizeChanged(self), self, layoutChanged, 0);
+    PSC_Event_register(Widget_originChanged(self), self, layoutChanged, 0);
 
     return self;
 }

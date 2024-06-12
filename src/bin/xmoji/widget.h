@@ -103,6 +103,12 @@ typedef struct SizeChangedEventArgs
     Size newSize;
 } SizeChangedEventArgs;
 
+typedef struct OriginChangedEventArgs
+{
+    Pos oldOrigin;
+    Pos newOrigin;
+} OriginChangedEventArgs;
+
 Widget *Widget_createBase(void *derived, const char *name, void *parent);
 #define Widget_create(...) Widget_createBase(0, __VA_ARGS__)
 const char *Widget_name(const void *self) CMETHOD;
@@ -112,6 +118,7 @@ PSC_Event *Widget_hidden(void *self) CMETHOD ATTR_RETNONNULL;
 PSC_Event *Widget_activated(void *self) CMETHOD ATTR_RETNONNULL;
 PSC_Event *Widget_sizeRequested(void *self) CMETHOD ATTR_RETNONNULL;
 PSC_Event *Widget_sizeChanged(void *self) CMETHOD ATTR_RETNONNULL;
+PSC_Event *Widget_originChanged(void *self) CMETHOD ATTR_RETNONNULL;
 Widget *Widget_container(const void *self) CMETHOD;
 void Widget_setContainer(void *self, void *container) CMETHOD;
 int Widget_draw(void *self) CMETHOD;

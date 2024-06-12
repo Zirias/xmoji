@@ -52,9 +52,9 @@ typedef struct Rect
 
 #define Rect_overlaps(r1,r2) (( \
 	(r2.pos.x >= r1.pos.x && r2.pos.x < r1.pos.x + r1.size.width) || \
-	(r2.pos.x < r1.pos.x && r2.pos.x + r2.size.width > r1.pos.x)) && ( \
+	(r2.pos.x < r1.pos.x && r2.pos.x + r2.size.width >= r1.pos.x)) && ( \
 	(r2.pos.y >= r1.pos.y && r2.pos.y < r1.pos.y + r1.size.height) || \
-	(r2.pos.y < r1.pos.y && r2.pos.y + r2.size.height > r1.pos.y)))
+	(r2.pos.y < r1.pos.y && r2.pos.y + r2.size.height >= r1.pos.y)))
 
 #define Rect_contains(r1,r2) (r2.pos.x >= r1.pos.x && r2.pos.y >= r1.pos.y \
 	&& r2.size.width + (r2.pos.x - r1.pos.x) <= r1.size.width \

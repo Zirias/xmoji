@@ -25,15 +25,32 @@ struct ScrollBox
     Size minSize;
     Size scrollSize;
     Rect scrollBar;
+    uint16_t scrollPos;
 };
 
 static void updateScrollbar(ScrollBox *self, Size size)
 {
-    if (self->scrollSize.height <= size.height) return;
-    uint32_t barHeight = ((size.height + 2) << 6) * (size.height << 6)
+    Pos origin = Widget_origin(self);
+    if (self->scrollSize.height <= size.height)
+    {
+	self->scrollPos = 0;
+	goto done;
+    }
+    if (self->scrollSize.height <= size.height + self->scrollPos)
+    {
+	self->scrollPos = self->scrollSize.height - size.height - 1;
+    }
+    uint32_t barHeight = ((size.height - 2) << 6) * (size.height << 6)
 	/ (self->scrollSize.height << 6);
     self->scrollBar.size.height = (barHeight + 0x20) >> 6;
     if (self->scrollBar.size.height < 16) self->scrollBar.size.height = 16;
+    uint32_t scrollHeight = (self->scrollSize.height - size.height) << 6;
+    uint32_t scrollTop = ((size.height - self->scrollBar.size.height - 2) << 6)
+	* (self->scrollPos << 6) / scrollHeight;
+    self->scrollBar.pos.y = (scrollTop + 0x20) >> 6;
+done:
+    origin.y -= self->scrollPos;
+    Widget_setOrigin(self->widget, origin);
 }
 
 static void destroy(void *obj)
@@ -68,7 +85,7 @@ static int draw(void *obj, xcb_render_picture_t picture)
 	Color barcol = Widget_color(self, COLOR_BG_ABOVE);
 	rect = (xcb_rectangle_t){
 	    origin.x + size.width - self->scrollBar.size.width - 1,
-	    origin.y + 1,
+	    origin.y + self->scrollBar.pos.y + 1,
 	    self->scrollBar.size.width,
 	    self->scrollBar.size.height
 	};
@@ -108,9 +125,30 @@ static void *childAt(void *obj, Pos pos)
 
 static int clicked(void *obj, const ClickEvent *event)
 {
-    const ScrollBox *self = Object_instance(obj);
+    ScrollBox *self = Object_instance(obj);
     if (!self->widget) return 0;
-    return Widget_clicked(self->widget, event);
+    Rect geom = Widget_geometry(self);
+    if (event->pos.x < geom.pos.x + geom.size.width
+	    - self->scrollBar.size.width - 2)
+    {
+	if (Widget_clicked(self->widget, event)) return 1;
+    }
+    if (event->button == MB_WHEEL_UP)
+    {
+	if (self->scrollPos < 24) self->scrollPos = 0;
+	else self->scrollPos -= 24;
+	updateScrollbar(self, geom.size);
+	Widget_invalidate(self);
+	return 1;
+    }
+    if (event->button == MB_WHEEL_DOWN)
+    {
+	self->scrollPos += 24;
+	updateScrollbar(self, geom.size);
+	Widget_invalidate(self);
+	return 1;
+    }
+    return 0;
 }
 
 static void sizeChanged(void *receiver, void *sender, void *args)
@@ -126,6 +164,7 @@ static void sizeChanged(void *receiver, void *sender, void *args)
 	updateScrollbar(self, sz);
 	sz.width -= self->scrollBar.size.width + 2;
     }
+    sz.height = self->scrollSize.height;
     Widget_setSize(self->widget, sz);
     Widget_invalidate(self);
 }
@@ -153,6 +192,7 @@ ScrollBox *ScrollBox_createBase(void *derived, void *parent)
     self->minSize = (Size){0, 100};
     self->scrollSize = (Size){0, 0};
     self->scrollBar = (Rect){{0, 0}, {10, 0}};
+    self->scrollPos = 0;
 
     Widget_setPadding(self, (Box){0, 0, 0, 0});
     PSC_Event_register(Widget_sizeChanged(self), self, sizeChanged, 0);

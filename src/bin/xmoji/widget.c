@@ -29,6 +29,7 @@ struct Widget
     PSC_Event *activated;
     PSC_Event *sizeRequested;
     PSC_Event *sizeChanged;
+    PSC_Event *originChanged;
     Widget *container;
     ColorSet *colorSet;
     Rect geometry;
@@ -53,6 +54,7 @@ static void destroy(void *obj)
 {
     Widget *self = obj;
     ColorSet_destroy(self->colorSet);
+    PSC_Event_destroy(self->originChanged);
     PSC_Event_destroy(self->sizeChanged);
     PSC_Event_destroy(self->sizeRequested);
     PSC_Event_destroy(self->activated);
@@ -122,6 +124,7 @@ Widget *Widget_createBase(void *derived, const char *name, void *parent)
     self->activated = PSC_Event_create(self);
     self->sizeRequested = PSC_Event_create(self);
     self->sizeChanged = PSC_Event_create(self);
+    self->originChanged = PSC_Event_create(self);
     self->colorSet = ColorSet_createFor(self->resname);
     self->padding = (Box){ 3, 3, 3, 3 };
     self->maxSize = (Size){ -1, -1 };
@@ -171,6 +174,12 @@ PSC_Event *Widget_sizeChanged(void *self)
 {
     Widget *w = Object_instance(self);
     return w->sizeChanged;
+}
+
+PSC_Event *Widget_originChanged(void *self)
+{
+    Widget *w = Object_instance(self);
+    return w->originChanged;
 }
 
 Widget *Widget_container(const void *self)
@@ -480,7 +489,15 @@ XCursor Widget_cursor(const void *self)
 void Widget_setOrigin(void *self, Pos pos)
 {
     Widget *w = Object_instance(self);
-    w->geometry.pos = pos;
+    if (w->geometry.pos.x != pos.x || w->geometry.pos.y != pos.y)
+    {
+	OriginChangedEventArgs ea = {
+	    .oldOrigin = w->geometry.pos,
+	    .newOrigin = pos
+	};
+	w->geometry.pos = pos;
+	PSC_Event_raise(w->originChanged, 0, &ea);
+    }
 }
 
 Rect Widget_geometry(const void *self)

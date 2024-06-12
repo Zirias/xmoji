@@ -1,6 +1,7 @@
 #include "xmoji.h"
 
 #include "font.h"
+#include "scrollbox.h"
 #include "textbox.h"
 #include "textlabel.h"
 #include "unistr.h"
@@ -57,7 +58,8 @@ static void onprestartup(void *receiver, void *sender, void *args)
     if (!(win = Window_create("mainWindow", 0))) goto error;
     Window_setTitle(win, "Xmoji 😀 äöüß");
 
-    VBox *box = VBox_create(win);
+    ScrollBox *scroll = ScrollBox_create(win);
+    VBox *box = VBox_create(scroll);
 
     TextLabel *label = TextLabel_create("helloLabel", box, font);
     UniStr(hello, "Hello, World!\n\n"
@@ -90,7 +92,10 @@ static void onprestartup(void *receiver, void *sender, void *args)
     VBox_addWidget(box, input);
 
     Widget_show(box);
-    Window_setMainWidget(win, box);
+    ScrollBox_setWidget(scroll, box);
+
+    Widget_show(scroll);
+    Window_setMainWidget(win, scroll);
 
     PSC_Event_register(Window_closed(win), 0, onclose, 0);
     PSC_Event_register(Window_errored(win), 0, onclose, 0);
