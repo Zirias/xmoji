@@ -17,8 +17,8 @@ ENDSUPPRESS
 #include <xkbcommon/xkbcommon-compose.h>
 #include <xkbcommon/xkbcommon-x11.h>
 
-#define MAXWAITING 128
-#define SYNCTHRESH 112
+#define MAXWAITING 256
+#define SYNCTHRESH 192
 
 #define RQ_AWAIT_REPLY 1
 #define RQ_AWAIT_NOREPLY 0
