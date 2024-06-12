@@ -621,12 +621,34 @@ void Widget_requestSize(void *self)
     PSC_Event_raise(w->sizeRequested, 0, 0);
 }
 
+static int hasDamage(Widget *self, Rect region)
+{
+    if (!self->ndamages) return 0;
+    if (self->ndamages < 0) return 1;
+    for (int i = 0; i < self->ndamages; ++i)
+    {
+	if (Rect_contains(self->damages[i], region)) return 1;
+    }
+    return 0;
+}
+
 void Widget_invalidateRegion(void *self, Rect region)
 {
     if (!Widget_visible(self)) return;
     Widget *w = Object_instance(self);
     if (w->ndamages < 0) return;
     if (!Rect_overlaps(region, w->geometry)) return;
+    if (hasDamage(w, region)) return;
+    if (w->container && !hasDamage(w->container, region))
+    {
+	Widget *a = w->container;
+	while (a->container && !hasDamage(a->container, region))
+	{
+	    a = a->container;
+	}
+	Widget_invalidateRegion(a, region);
+	return;
+    }
     if (w->ndamages == MAXDAMAGES || Rect_contains(region, w->geometry))
     {
 	w->ndamages = -1;
@@ -642,10 +664,7 @@ void Widget_invalidate(void *self)
 {
     if (!Widget_visible(self)) return;
     Widget *w = Object_instance(self);
-    if (w->ndamages < 0) return;
-    Rect region = w->geometry;
-    while (w->container) w = w->container;
-    Widget_invalidateRegion(w, region);
+    Widget_invalidateRegion(w, w->geometry);
 }
 
 void Widget_setWindowSize(void *self, Size size)

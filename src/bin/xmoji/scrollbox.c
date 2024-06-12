@@ -25,6 +25,7 @@ struct ScrollBox
     Size minSize;
     Size scrollSize;
     Rect scrollBar;
+    int hoverBar;
     uint16_t scrollPos;
 };
 
@@ -51,6 +52,39 @@ static void updateScrollbar(ScrollBox *self, Size size)
 done:
     origin.y -= self->scrollPos;
     Widget_setOrigin(self->widget, origin);
+}
+
+static Rect scrollBarGeom(ScrollBox *self)
+{
+    Pos origin = Widget_origin(self);
+    Size childSize = Widget_size(self->widget);
+    Rect barGeom = self->scrollBar;
+    barGeom.pos.x += origin.x + childSize.width + 1;
+    barGeom.pos.y += origin.y + 1;
+    return barGeom;
+}
+
+static void updateHover(ScrollBox *self, Pos pos)
+{
+    int hover;
+    Rect barGeom = scrollBarGeom(self);
+    if (pos.x >= barGeom.pos.x
+	    && pos.x < barGeom.pos.x + barGeom.size.width
+	    && pos.y >= barGeom.pos.y
+	    && pos.y < barGeom.pos.y + barGeom.size.height)
+    {
+	hover = 1;
+    }
+    else
+    {
+	hover = 0;
+    }
+    if (self->hoverBar != hover)
+    {
+	self->hoverBar = hover;
+	Widget_invalidateRegion(self, barGeom);
+    }
+    Widget_invalidateRegion(self, barGeom);
 }
 
 static void destroy(void *obj)
@@ -82,7 +116,9 @@ static int draw(void *obj, xcb_render_picture_t picture)
 	CHECK(xcb_render_fill_rectangles(c, XCB_RENDER_PICT_OP_OVER, picture,
 		    Color_xcb(bgcol), 1, &rect),
 		"Cannot draw scrollbar background on 0x%x", (unsigned)picture);
-	Color barcol = Widget_color(self, COLOR_BG_ABOVE);
+	Color barcol = self->hoverBar
+	    ? Widget_color(self, COLOR_BG_ACTIVE)
+	    : Widget_color(self, COLOR_BG_ABOVE);
 	rect = (xcb_rectangle_t){
 	    origin.x + size.width - self->scrollBar.size.width - 1,
 	    origin.y + self->scrollBar.pos.y + 1,
@@ -106,6 +142,7 @@ static void leave(void *obj)
 {
     ScrollBox *self = Object_instance(obj);
     if (!self->widget) return;
+    updateHover(self, (Pos){-1, -1});
     Widget_leave(self->widget);
 }
 
@@ -120,7 +157,16 @@ static void *childAt(void *obj, Pos pos)
 {
     ScrollBox *self = Object_instance(obj);
     if (!self->widget) return self;
-    return Widget_enterAt(self->widget, pos);
+    updateHover(self, pos);
+    Rect childGeom = Widget_geometry(self->widget);
+    if (pos.x >= childGeom.pos.x
+	    && pos.x < childGeom.pos.x + childGeom.size.width
+	    && pos.y >= childGeom.pos.y
+	    && pos.y < childGeom.pos.y + childGeom.size.height)
+    {
+	return Widget_enterAt(self->widget, pos);
+    }
+    return self;
 }
 
 static int clicked(void *obj, const ClickEvent *event)
@@ -138,6 +184,7 @@ static int clicked(void *obj, const ClickEvent *event)
 	if (self->scrollPos < 24) self->scrollPos = 0;
 	else self->scrollPos -= 24;
 	updateScrollbar(self, geom.size);
+	updateHover(self, event->pos);
 	Widget_invalidate(self);
 	return 1;
     }
@@ -145,7 +192,30 @@ static int clicked(void *obj, const ClickEvent *event)
     {
 	self->scrollPos += 24;
 	updateScrollbar(self, geom.size);
+	updateHover(self, event->pos);
 	Widget_invalidate(self);
+	return 1;
+    }
+    if (event->button == MB_LEFT)
+    {
+	if (event->pos.x < geom.pos.x + geom.size.width
+		- self->scrollBar.size.width - 2) return 0;
+	Rect barGeom = scrollBarGeom(self);
+	if (event->pos.y < barGeom.pos.y)
+	{
+	    if (self->scrollPos < 24) self->scrollPos = 0;
+	    else self->scrollPos -= 24;
+	    updateScrollbar(self, geom.size);
+	    updateHover(self, event->pos);
+	    Widget_invalidate(self);
+	}
+	else if (event->pos.y >= barGeom.pos.y + barGeom.size.height)
+	{
+	    self->scrollPos += 24;
+	    updateScrollbar(self, geom.size);
+	    updateHover(self, event->pos);
+	    Widget_invalidate(self);
+	}
 	return 1;
     }
     return 0;
@@ -192,6 +262,7 @@ ScrollBox *ScrollBox_createBase(void *derived, void *parent)
     self->minSize = (Size){0, 100};
     self->scrollSize = (Size){0, 0};
     self->scrollBar = (Rect){{0, 0}, {10, 0}};
+    self->hoverBar = 0;
     self->scrollPos = 0;
 
     Widget_setPadding(self, (Box){0, 0, 0, 0});
