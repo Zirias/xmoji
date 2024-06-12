@@ -22,10 +22,19 @@ struct ScrollBox
 {
     Object base;
     Widget *widget;
-    uint16_t barwidth;
     Size minSize;
     Size scrollSize;
+    Rect scrollBar;
 };
+
+static void updateScrollbar(ScrollBox *self, Size size)
+{
+    if (self->scrollSize.height <= size.height) return;
+    uint32_t barHeight = ((size.height + 2) << 6) * (size.height << 6)
+	/ (self->scrollSize.height << 6);
+    self->scrollBar.size.height = (barHeight + 0x20) >> 6;
+    if (self->scrollBar.size.height < 16) self->scrollBar.size.height = 16;
+}
 
 static void destroy(void *obj)
 {
@@ -51,11 +60,21 @@ static int draw(void *obj, xcb_render_picture_t picture)
 	Pos origin = Widget_origin(self);
 	Color bgcol = Widget_color(self, COLOR_BG_BELOW);
 	xcb_rectangle_t rect = {
-	    origin.x + size.width - self->barwidth, origin.y,
-	    self->barwidth, size.height };
+	    origin.x + size.width - self->scrollBar.size.width - 2, origin.y,
+	    self->scrollBar.size.width + 2, size.height };
 	CHECK(xcb_render_fill_rectangles(c, XCB_RENDER_PICT_OP_OVER, picture,
 		    Color_xcb(bgcol), 1, &rect),
 		"Cannot draw scrollbar background on 0x%x", (unsigned)picture);
+	Color barcol = Widget_color(self, COLOR_BG_ABOVE);
+	rect = (xcb_rectangle_t){
+	    origin.x + size.width - self->scrollBar.size.width - 1,
+	    origin.y + 1,
+	    self->scrollBar.size.width,
+	    self->scrollBar.size.height
+	};
+	CHECK(xcb_render_fill_rectangles(c, XCB_RENDER_PICT_OP_OVER, picture,
+		    Color_xcb(barcol), 1, &rect),
+		"Cannot draw scrollbar on 0x%x", (unsigned)picture);
     }
     return Widget_draw(self->widget);
 }
@@ -102,7 +121,11 @@ static void sizeChanged(void *receiver, void *sender, void *args)
     ScrollBox *self = receiver;
     if (!self->widget) return;
     Size sz = ea->newSize;
-    if (self->scrollSize.height > sz.height) sz.width -= self->barwidth;
+    if (self->scrollSize.height > sz.height)
+    {
+	updateScrollbar(self, sz);
+	sz.width -= self->scrollBar.size.width + 2;
+    }
     Widget_setSize(self->widget, sz);
     Widget_invalidate(self);
 }
@@ -113,7 +136,8 @@ static void sizeRequested(void *receiver, void *sender, void *args)
 
     ScrollBox *self = receiver;
     self->scrollSize = Widget_minSize(sender);
-    self->minSize.width = self->scrollSize.width + self->barwidth;
+    self->minSize.width = self->scrollSize.width
+	+ self->scrollBar.size.width + 2;
     Widget_requestSize(self);
 }
 
@@ -126,9 +150,9 @@ ScrollBox *ScrollBox_createBase(void *derived, void *parent)
     self->base.type = OBJTYPE;
     self->base.base = Widget_createBase(derived, 0, parent);
     self->widget = 0;
-    self->barwidth = 10;
     self->minSize = (Size){0, 100};
     self->scrollSize = (Size){0, 0};
+    self->scrollBar = (Rect){{0, 0}, {10, 0}};
 
     Widget_setPadding(self, (Box){0, 0, 0, 0});
     PSC_Event_register(Widget_sizeChanged(self), self, sizeChanged, 0);
