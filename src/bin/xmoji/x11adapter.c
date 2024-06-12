@@ -737,8 +737,10 @@ int X11Adapter_init(int argc, char **argv, const char *classname)
 	goto error;
     }
 
+    uint32_t maxproplen = (maxRequestSize
+	    - sizeof(xcb_get_property_reply_t)) >> 2;
     xcb_get_property_cookie_t rescookie = xcb_get_property(c, 0, s->root,
-	    XCB_ATOM_RESOURCE_MANAGER, XCB_ATOM_STRING, 0, 64 * 1024);
+	    XCB_ATOM_RESOURCE_MANAGER, XCB_ATOM_STRING, 0, maxproplen);
 
     char *lc = setlocale(LC_ALL, "");
     if (!lc) lc = "C";
@@ -818,11 +820,41 @@ int X11Adapter_init(int argc, char **argv, const char *classname)
     if (rqerr) free(rqerr);
     if (resreply)
     {
-	rdb = XRdb_create(xcb_get_property_value(resreply),
-		xcb_get_property_value_length(resreply),
-		classname, nm);
-	free(resreply);
-	if ((int)glitches < 0)
+	if (resreply->bytes_after)
+	{
+	    char *resstr = 0;
+	    size_t ressz = 0;
+	    while (resreply)
+	    {
+		size_t recvlen = xcb_get_property_value_length(resreply);
+		ressz &= ~3;
+		resstr = PSC_realloc(resstr, ressz + recvlen);
+		memcpy(resstr + ressz,
+			xcb_get_property_value(resreply), recvlen);
+		ressz += recvlen;
+		if (!resreply->bytes_after) break;
+		free(resreply);
+		rescookie = xcb_get_property(c, 0, s->root,
+			XCB_ATOM_RESOURCE_MANAGER, XCB_ATOM_STRING,
+			ressz >> 2, maxproplen);
+		resreply = xcb_get_property_reply(c, rescookie, &rqerr);
+		if (rqerr) free(rqerr);
+	    }
+	    if (resreply)
+	    {
+		rdb = XRdb_create(resstr, ressz, classname, nm);
+		free(resreply);
+	    }
+	    free(resstr);
+	}
+	else
+	{
+	    rdb = XRdb_create(xcb_get_property_value(resreply),
+		    xcb_get_property_value_length(resreply),
+		    classname, nm);
+	    free(resreply);
+	}
+	if (rdb && (int)glitches < 0)
 	{
 	    const char *glitchstr = XRdb_value(rdb, XRdbKey("glitches"));
 	    if (glitchstr) glitches = atoi(glitchstr);
