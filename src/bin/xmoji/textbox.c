@@ -17,6 +17,7 @@ static void enter(void *obj);
 static void leave(void *obj);
 static void paste(void *obj, XSelectionContent content);
 static void unselect(void *obj);
+static void setFont(void *obj, Font *font);
 static Size minSize(const void *obj);
 static void keyPressed(void *obj, const KeyEvent *event);
 static int clicked(void *obj, const ClickEvent *event);
@@ -24,14 +25,13 @@ static void dragged(void *obj, const DragEvent *event);
 
 static MetaTextBox mo = MetaTextBox_init(
 	0, draw, 0, 0,
-	activate, deactivate, enter, leave, 0, 0, paste, unselect, 0,
-	minSize, keyPressed, clicked, dragged,
+	activate, deactivate, enter, leave, 0, 0, paste, unselect, setFont,
+	0, minSize, keyPressed, clicked, dragged,
 	"TextBox", destroy);
 
 struct TextBox
 {
     Object base;
-    Font *font;
     UniStrBuilder *text;
     TextRenderer *renderer;
     UniStr *phtext;
@@ -392,6 +392,22 @@ static void unselect(void *obj)
     if (Widget_active(self)) Widget_invalidate(self);
 }
 
+static void setFont(void *obj, Font *font)
+{
+    TextBox *self = Object_instance(obj);
+    TextRenderer_setFont(self->renderer, font);
+    TextRenderer_setText(self->renderer, UniStrBuilder_stringView(self->text));
+    if (self->placeholder)
+    {
+	TextRenderer_setFont(self->placeholder, font);
+	TextRenderer_setText(self->placeholder, self->phtext);
+    }
+    self->minSize.height = (Font_maxHeight(font) + 0x3f) >> 6;
+    Widget_setMaxSize(self, (Size){ -1, self->minSize.height });
+    Widget_invalidate(self);
+    Widget_requestSize(self);
+}
+
 static int clicked(void *obj, const ClickEvent *event)
 {
     TextBox *self = Object_instance(obj);
@@ -498,8 +514,7 @@ static void dragged(void *obj, const DragEvent *event)
     }
 }
 
-TextBox *TextBox_createBase(void *derived, const char *name,
-	void *parent, Font *font)
+TextBox *TextBox_createBase(void *derived, const char *name, void *parent)
 {
     REGTYPE(0);
 
@@ -507,14 +522,13 @@ TextBox *TextBox_createBase(void *derived, const char *name,
     if (!derived) derived = self;
     self->base.type = OBJTYPE;
     self->base.base = Widget_createBase(derived, name, parent);
-    self->font = font;
     self->text = UniStrBuilder_create();
-    self->renderer = TextRenderer_create(font);
+    self->renderer = TextRenderer_create();
     TextRenderer_setNoLigatures(self->renderer, 1);
     self->phtext = 0;
     self->placeholder = 0;
     self->selected = 0;
-    self->minSize = (Size){ 120, (Font_maxHeight(self->font) + 0x3f) >> 6 };
+    self->minSize = (Size){ 120, 12 };
     self->selection = (Selection){ 0, 0 };
     self->cursor = 0;
     self->scrollpos = 0;
@@ -558,7 +572,12 @@ void TextBox_setPlaceholder(void *self, const UniStr *text)
     }
     else if (UniStr_equals(b->phtext, text)) return;
     if (b->placeholder) UniStr_destroy(b->phtext);
-    else b->placeholder = TextRenderer_create(b->font);
+    else
+    {
+	b->placeholder = TextRenderer_create();
+	Font *font = Widget_font(self);
+	if (font) TextRenderer_setFont(b->placeholder, font);
+    }
     b->phtext = UniStr_ref(text);
     TextRenderer_setText(b->placeholder, b->phtext);
     if (!UniStr_len(UniStrBuilder_stringView(b->text)))

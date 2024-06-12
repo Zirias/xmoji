@@ -1,5 +1,6 @@
 #include "widget.h"
 
+#include "font.h"
 #include "window.h"
 #include "x11adapter.h"
 #include "xrdb.h"
@@ -16,7 +17,7 @@ static int hide(void *obj);
 static Size minSize(const void *obj);
 
 static MetaWidget mo = MetaWidget_init(0, 0, show, hide,
-	0, 0, 0, 0, 0, 0, 0, 0, 0, minSize, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, minSize, 0, 0, 0,
 	"Widget", destroy);
 
 struct Widget
@@ -24,6 +25,8 @@ struct Widget
     Object base;
     const char *name;
     const char *resname;
+    Font *font;
+    Font *explicitFont;
     PSC_Event *shown;
     PSC_Event *hidden;
     PSC_Event *activated;
@@ -60,6 +63,7 @@ static void destroy(void *obj)
     PSC_Event_destroy(self->activated);
     PSC_Event_destroy(self->hidden);
     PSC_Event_destroy(self->shown);
+    Font_destroy(self->font);
     free(self);
 }
 
@@ -134,6 +138,11 @@ Widget *Widget_createBase(void *derived, const char *name, void *parent)
     return self;
 }
 
+Widget *Widget_cast(void *obj)
+{
+    return Object_instance(obj);
+}
+
 const char *Widget_name(const void *self)
 {
     const Widget *w = Object_instance(self);
@@ -180,6 +189,30 @@ PSC_Event *Widget_originChanged(void *self)
 {
     Widget *w = Object_instance(self);
     return w->originChanged;
+}
+
+Font *Widget_font(const void *self)
+{
+    const Widget *w = Object_instance(self);
+    return w->font;
+}
+
+void Widget_setFont(void *self, Font *font)
+{
+    Widget *w = Object_instance(self);
+    Font_destroy(w->font);
+    if (font)
+    {
+	w->explicitFont = Font_ref(font);
+	w->font = w->explicitFont;
+    }
+    else
+    {
+	w->explicitFont = 0;
+	w->font = w->container && w->container->font ?
+	    w->container->font : Font_create(0, 0);
+    }
+    Object_vcallv(Widget, setFont, self, w->font);
 }
 
 Widget *Widget_container(const void *self)
@@ -680,6 +713,15 @@ void Widget_showWindow(void *self)
 void Widget_hideWindow(void *self)
 {
     dohide(Object_instance(self), 1);
+}
+
+void Widget_offerFont(void *self, Font *font)
+{
+    Widget *w = Object_instance(self);
+    if (w->explicitFont) return;
+    Font_destroy(w->font);
+    w->font = Font_ref(font);
+    Object_vcallv(Widget, setFont, self, w->font);
 }
 
 static void selectionReceived(Widget *self, XSelectionContent content)

@@ -9,10 +9,11 @@
 
 static void destroy(void *obj);
 static int draw(void *obj, xcb_render_picture_t picture);
+static void setFont(void *obj, Font *font);
 static Size minSize(const void *obj);
 
 static MetaTextLabel mo = MetaTextLabel_init(
-	0, draw, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, minSize, 0, 0, 0,
+	0, draw, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, setFont, 0, minSize, 0, 0, 0,
 	"TextLabel", destroy);
 
 #define dummy ((void *)&mo)
@@ -20,11 +21,57 @@ static MetaTextLabel mo = MetaTextLabel_init(
 struct TextLabel
 {
     Object base;
-    Font *font;
     UniStr *text;
     PSC_List *renderers;
     Size minSize;
 };
+
+static void freerenderer(void *renderer)
+{
+    TextRenderer_destroy(renderer);
+}
+
+static void update(TextLabel *self, Font *font)
+{
+    PSC_List_destroy(self->renderers);
+    self->renderers = 0;
+    self->minSize = (Size){0, 0};
+    if (self->text)
+    {
+	self->renderers = PSC_List_create();
+	PSC_List *lines = UniStr_split(self->text, "\n");
+	PSC_ListIterator *i = PSC_List_iterator(lines);
+	while (PSC_ListIterator_moveNext(i))
+	{
+	    const UniStr *line = PSC_ListIterator_current(i);
+	    if (UniStr_len(line))
+	    {
+		TextRenderer *renderer = TextRenderer_create();
+		TextRenderer_setFont(renderer, font);
+		PSC_List_append(self->renderers, renderer, freerenderer);
+		TextRenderer_setText(renderer, line);
+		Size linesize = TextRenderer_size(renderer);
+		if (!self->minSize.height)
+		{
+		    self->minSize.height = linesize.height;
+		}
+		if (linesize.width > self->minSize.width)
+		{
+		    self->minSize.width = linesize.width;
+		}
+	    }
+	    else PSC_List_append(self->renderers, dummy, 0);
+	}
+	PSC_ListIterator_destroy(i);
+	PSC_List_destroy(lines);
+	size_t nlines = PSC_List_size(self->renderers);
+	if (nlines > 1)
+	{
+	    self->minSize.height += (nlines - 1) * Font_linespace(font);
+	}
+    }
+    Widget_requestSize(self);
+}
 
 static void destroy(void *obj)
 {
@@ -38,10 +85,12 @@ static int draw(void *obj, xcb_render_picture_t picture)
 {
     TextLabel *self = Object_instance(obj);
     if (!picture || !self->text) return 0;
+    Font *font = Widget_font(self);
+    if (!font) return 0;
     Color color = Widget_color(self, COLOR_NORMAL);
     Pos pos = Widget_contentOrigin(self, self->minSize);
     Align align = Widget_align(self);
-    uint16_t linespace = Font_linespace(self->font);
+    uint16_t linespace = Font_linespace(font);
     int rc = 0;
     for (size_t i = 0; rc >= 0 && i < PSC_List_size(self->renderers); ++i)
     {
@@ -63,19 +112,18 @@ static int draw(void *obj, xcb_render_picture_t picture)
     return rc;
 }
 
+static void setFont(void *obj, Font *font)
+{
+    update(Object_instance(obj), font);
+}
+
 static Size minSize(const void *obj)
 {
     const TextLabel *self = Object_instance(obj);
     return self->minSize;
 }
 
-static void freerenderer(void *renderer)
-{
-    TextRenderer_destroy(renderer);
-}
-
-TextLabel *TextLabel_createBase(void *derived, const char *name,
-	void *parent, Font *font)
+TextLabel *TextLabel_createBase(void *derived, const char *name, void *parent)
 {
     REGTYPE(0);
 
@@ -83,7 +131,6 @@ TextLabel *TextLabel_createBase(void *derived, const char *name,
     if (!derived) derived = self;
     self->base.type = OBJTYPE;
     self->base.base = Widget_createBase(derived, name, parent);
-    self->font = font;
     self->text = 0;
     self->renderers = PSC_List_create();
     self->minSize = (Size){0, 0};
@@ -100,45 +147,9 @@ const UniStr *TextLabel_text(const void *self)
 void TextLabel_setText(void *self, const UniStr *text)
 {
     TextLabel *l = Object_instance(self);
-    PSC_List_destroy(l->renderers);
     UniStr_destroy(l->text);
-    l->renderers = 0;
-    l->text = 0;
-    l->minSize = (Size){0, 0};
-    if (text)
-    {
-	l->text = UniStr_ref(text);
-	l->renderers = PSC_List_create();
-	PSC_List *lines = UniStr_split(text, "\n");
-	PSC_ListIterator *i = PSC_List_iterator(lines);
-	while (PSC_ListIterator_moveNext(i))
-	{
-	    const UniStr *line = PSC_ListIterator_current(i);
-	    if (UniStr_len(line))
-	    {
-		TextRenderer *renderer = TextRenderer_create(l->font);
-		PSC_List_append(l->renderers, renderer, freerenderer);
-		TextRenderer_setText(renderer, line);
-		Size linesize = TextRenderer_size(renderer);
-		if (!l->minSize.height)
-		{
-		    l->minSize.height = linesize.height;
-		}
-		if (linesize.width > l->minSize.width)
-		{
-		    l->minSize.width = linesize.width;
-		}
-	    }
-	    else PSC_List_append(l->renderers, dummy, 0);
-	}
-	PSC_ListIterator_destroy(i);
-	PSC_List_destroy(lines);
-	size_t nlines = PSC_List_size(l->renderers);
-	if (nlines > 1)
-	{
-	    l->minSize.height += (nlines - 1) * Font_linespace(l->font);
-	}
-    }
-    Widget_requestSize(self);
+    l->text = UniStr_ref(text);
+    Font *font = Widget_font(l);
+    if (font) update(l, font);
 }
 

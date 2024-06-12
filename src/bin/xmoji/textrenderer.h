@@ -11,12 +11,12 @@ C_CLASS_DECL(Font);
 C_CLASS_DECL(TextRenderer);
 C_CLASS_DECL(UniStr);
 
-TextRenderer *TextRenderer_create(Font *font)
-    ATTR_NONNULL((1));
+TextRenderer *TextRenderer_create(void);
 Size TextRenderer_size(const TextRenderer *self)
     CMETHOD;
 void TextRenderer_setNoLigatures(TextRenderer *self, int noLigatures)
     CMETHOD;
+void TextRenderer_setFont(TextRenderer *self, Font *font);
 int TextRenderer_setText(TextRenderer *self, const UniStr *text)
     CMETHOD;
 unsigned TextRenderer_glyphLen(const TextRenderer *self, unsigned index)

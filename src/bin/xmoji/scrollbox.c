@@ -11,13 +11,14 @@ static int draw(void *obj, xcb_render_picture_t picture);
 static Size minSize(const void *obj);
 static void leave(void *obj);
 static void unselect(void *obj);
+static void setFont(void *obj, Font *font);
 static void *childAt(void *obj, Pos pos);
 static int clicked(void *obj, const ClickEvent *event);
 static void dragged(void *obj, const DragEvent *event);
 
 static MetaScrollBox mo = MetaScrollBox_init(
 	expose, draw, 0, 0,
-	0, 0, 0, leave, 0, 0, 0, unselect, childAt,
+	0, 0, 0, leave, 0, 0, 0, unselect, setFont, childAt,
 	minSize, 0, clicked, dragged,
 	"ScrollBox", destroy);
 
@@ -162,6 +163,13 @@ static void unselect(void *obj)
     Widget_unselect(self->widget);
 }
 
+static void setFont(void *obj, Font *font)
+{
+    ScrollBox *self = Object_instance(obj);
+    if (!self->widget) return;
+    Widget_offerFont(self->widget, font);
+}
+
 static void *childAt(void *obj, Pos pos)
 {
     ScrollBox *self = Object_instance(obj);
@@ -278,6 +286,12 @@ static void sizeRequested(void *receiver, void *sender, void *args)
 
     ScrollBox *self = receiver;
     self->scrollSize = Widget_minSize(sender);
+    Size curSize = Widget_size(sender);
+    if (self->scrollSize.height > curSize.height)
+    {
+	curSize.height = self->scrollSize.height;
+	Widget_setSize(sender, curSize);
+    }
     self->minSize.width = self->scrollSize.width
 	+ self->scrollBar.size.width + 2;
     Widget_requestSize(self);

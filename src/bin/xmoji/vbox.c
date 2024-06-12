@@ -10,18 +10,19 @@ static int draw(void *obj, xcb_render_picture_t picture);
 static Size minSize(const void *obj);
 static void leave(void *obj);
 static void unselect(void *obj);
+static void setFont(void *obj, Font *font);
 static void *childAt(void *obj, Pos pos);
 static int clicked(void *obj, const ClickEvent *event);
 
 static MetaVBox mo = MetaVBox_init(
 	expose, draw, 0, 0,
-	0, 0, 0, leave, 0, 0, 0, unselect, childAt,
+	0, 0, 0, leave, 0, 0, 0, unselect, setFont, childAt,
 	minSize, 0, clicked, 0,
 	"VBox", destroy);
 
 typedef struct VBoxItem
 {
-    void *widget;
+    Widget *widget;
     Size minSize;
 } VBoxItem;
 
@@ -98,6 +99,18 @@ static void unselect(void *obj)
     {
 	VBoxItem *item = PSC_ListIterator_current(i);
 	Widget_unselect(item->widget);
+    }
+    PSC_ListIterator_destroy(i);
+}
+
+static void setFont(void *obj, Font *font)
+{
+    VBox *self = Object_instance(obj);
+    PSC_ListIterator *i = PSC_List_iterator(self->items);
+    while (PSC_ListIterator_moveNext(i))
+    {
+	VBoxItem *item = PSC_ListIterator_current(i);
+	Widget_offerFont(item->widget, font);
     }
     PSC_ListIterator_destroy(i);
 }
@@ -207,13 +220,14 @@ static void sizeRequested(void *receiver, void *sender, void *args)
     (void)args;
 
     VBox *self = receiver;
+    Widget *widget = sender;
     VBoxItem *item = 0;
 
     PSC_ListIterator *i = PSC_List_iterator(self->items);
     while (PSC_ListIterator_moveNext(i))
     {
 	VBoxItem *ci = PSC_ListIterator_current(i);
-	if (ci->widget == sender)
+	if (ci->widget == widget)
 	{
 	    item = ci;
 	    break;
@@ -253,11 +267,11 @@ void VBox_addWidget(void *self, void *widget)
 {
     VBox *b = Object_instance(self);
     VBoxItem *item = PSC_malloc(sizeof *item);
-    item->widget = widget;
-    item->minSize = (Size){0, 0};
+    item->widget = Widget_cast(widget);
+    item->minSize = Widget_minSize(widget);
     Widget_setContainer(widget, b);
     PSC_Event_register(Widget_sizeRequested(widget), b, sizeRequested, 0);
     PSC_List_append(b->items, item, free);
-    sizeRequested(b, widget, 0);
+    layout(self, 1);
 }
 

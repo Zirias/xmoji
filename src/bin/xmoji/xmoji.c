@@ -20,8 +20,6 @@ static const char *fontname;
 static const char *emojifontname;
 static PSC_LogLevel loglevel = PSC_L_WARNING;
 
-static Font *font;
-static Font *emojifont;
 static Window *win;
 
 static struct { int argc; char **argv; } startupargs;
@@ -52,15 +50,20 @@ static void onprestartup(void *receiver, void *sender, void *args)
 		res, XRdbKey("emojifont"));
     }
     if (!emojifontname) emojifontname = "emoji";
-    font = Font_create(fontname, 0);
-    emojifont = Font_create(emojifontname, 0);
+
     if (!(win = Window_create("mainWindow", 0))) goto error;
     Window_setTitle(win, "Xmoji 😀 äöüß");
+    if (fontname)
+    {
+	Font *font = Font_create(fontname, 0);
+	Widget_setFont(win, font);
+	Font_destroy(font);
+    }
 
     ScrollBox *scroll = ScrollBox_create("mainScrollBox", win);
     VBox *box = VBox_create(scroll);
 
-    TextLabel *label = TextLabel_create("helloLabel", box, font);
+    TextLabel *label = TextLabel_create("helloLabel", box);
     UniStr(hello, "Hello, World!\n\n"
 	    "This is just a quick little\n"
 	    "text rendering test.\n\n"
@@ -70,20 +73,23 @@ static void onprestartup(void *receiver, void *sender, void *args)
     Widget_show(label);
     VBox_addWidget(box, label);
 
-    TextBox *input = TextBox_create("upperBox", box, font);
+    TextBox *input = TextBox_create("upperBox", box);
     UniStr(clickhere, "Click here to type ...");
     TextBox_setPlaceholder(input, clickhere);
     Widget_show(input);
     VBox_addWidget(box, input);
 
-    label = TextLabel_create("emojiLabel", box, emojifont);
+    label = TextLabel_create("emojiLabel", box);
+    Font *emojifont = Font_create(emojifontname, 0);
+    Widget_setFont(label, emojifont);
+    Font_destroy(emojifont);
     UniStr(emojis, "😀🤡🇩🇪👺🧩🔮🐅🍻🧑🏾‍🤝‍🧑🏻");
     TextLabel_setText(label, emojis);
     Widget_setAlign(label, AH_CENTER|AV_MIDDLE);
     Widget_show(label);
     VBox_addWidget(box, label);
 
-    input = TextBox_create("lowerBox", box, font);
+    input = TextBox_create("lowerBox", box);
     TextBox_setPlaceholder(input, clickhere);
     UniStr(prefilled, "This textbox is prefilled!");
     TextBox_setText(input, prefilled);
@@ -124,10 +130,6 @@ static void onshutdown(void *receiver, void *sender, void *args)
 
     Object_destroy(win);
     win = 0;
-    Font_destroy(emojifont);
-    emojifont = 0;
-    Font_destroy(font);
-    font = 0;
     X11Adapter_done();
     PSC_Log_setAsync(0);
 }

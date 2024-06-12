@@ -35,7 +35,6 @@ struct TextRenderer
     Pos pos;
     Selection selection;
     unsigned hblen;
-    int haserror;
     int noligatures;
 };
 
@@ -47,14 +46,42 @@ static void requestError(void *receiver, void *sender, void *args)
     TextRenderer *self = receiver;
     PSC_Log_fmt(PSC_L_ERROR, "TextRenderer: Failed for pixmap 0x%x",
 	    (unsigned)self->pixmap);
-    self->haserror = 1;
 }
 
-TextRenderer *TextRenderer_create(Font *font)
+static void clearRenderer(TextRenderer *self)
+{
+    free(self->glyphs);
+    hb_buffer_destroy(self->hbbuffer);
+    hb_font_destroy(self->hbfont);
+    xcb_connection_t *c = X11Adapter_connection();
+    if (self->tpic) xcb_render_free_picture(c, self->tpic);
+    if (self->pen) xcb_render_free_picture(c, self->pen);
+    if (self->tmp) xcb_free_pixmap(c, self->tmp);
+    if (self->pixmap) xcb_free_pixmap(c, self->pixmap);
+    Font_destroy(self->font);
+}
+
+TextRenderer *TextRenderer_create(void)
 {
     TextRenderer *self = PSC_malloc(sizeof *self);
     memset(self, 0, sizeof *self);
-    self->font = font;
+    return self;
+}
+
+Size TextRenderer_size(const TextRenderer *self)
+{
+    return self->size;
+}
+
+void TextRenderer_setNoLigatures(TextRenderer *self, int noLigatures)
+{
+    self->noligatures = !!noLigatures;
+}
+
+void TextRenderer_setFont(TextRenderer *self, Font *font)
+{
+    clearRenderer(self);
+    self->font = Font_ref(font);
     self->hbfont = hb_ft_font_create_referenced(Font_face(font));
     xcb_connection_t *c = X11Adapter_connection();
     self->pixmap = xcb_generate_id(c);
@@ -79,17 +106,6 @@ TextRenderer *TextRenderer_create(Font *font)
 		"TextRenderer: Cannot colorize pen for 0x%x",
 		(unsigned)self->pixmap);
     }
-    return self;
-}
-
-Size TextRenderer_size(const TextRenderer *self)
-{
-    return self->size;
-}
-
-void TextRenderer_setNoLigatures(TextRenderer *self, int noLigatures)
-{
-    self->noligatures = !!noLigatures;
 }
 
 static void createTmpPicture(TextRenderer *self, xcb_connection_t *c)
@@ -112,7 +128,7 @@ static void createTmpPicture(TextRenderer *self, xcb_connection_t *c)
 
 int TextRenderer_setText(TextRenderer *self, const UniStr *text)
 {
-    if (self->haserror) return -1;
+    if (!self->font) return -1;
     hb_buffer_destroy(self->hbbuffer);
     unsigned len = UniStr_len(text);
     if (!len)
@@ -255,7 +271,7 @@ int TextRenderer_renderWithSelection(TextRenderer *self,
 	xcb_render_picture_t picture, Color color, Pos pos,
 	Selection selection, Color selectionColor)
 {
-    if (self->haserror || !self->hbbuffer) return -1;
+    if (!self->hbbuffer) return -1;
     uint16_t odx = self->glyphs[0].dx;
     uint16_t ody = self->glyphs[0].dy;
     self->glyphs[0].dx += pos.x;
@@ -334,13 +350,6 @@ int TextRenderer_render(TextRenderer *self,
 void TextRenderer_destroy(TextRenderer *self)
 {
     if (!self) return;
-    free(self->glyphs);
-    hb_buffer_destroy(self->hbbuffer);
-    hb_font_destroy(self->hbfont);
-    xcb_connection_t *c = X11Adapter_connection();
-    if (self->tpic) xcb_render_free_picture(c, self->tpic);
-    xcb_render_free_picture(c, self->pen);
-    if (self->tmp) xcb_free_pixmap(c, self->tmp);
-    xcb_free_pixmap(c, self->pixmap);
+    clearRenderer(self);
     free(self);
 }

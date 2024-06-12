@@ -1,5 +1,6 @@
 #include "window.h"
 
+#include "font.h"
 #include "unistr.h"
 #include "x11adapter.h"
 #include "xrdb.h"
@@ -19,10 +20,11 @@ static int draw(void *obj, xcb_render_picture_t picture);
 static int show(void *obj);
 static int hide(void *obj);
 static void unselect(void *obj);
+static void setFont(void *obj, Font *font);
 
 static MetaWindow mo = MetaWindow_init(expose, draw, show, hide,
 	0, 0, 0, 0, 0, 0, 0,
-	unselect, 0, 0, 0, 0, 0,
+	unselect, setFont, 0, 0, 0, 0, 0,
 	"Window", destroy);
 
 struct Window
@@ -134,6 +136,13 @@ static void unselect(void *obj)
     Window *self = Object_instance(obj);
     if (!self->mainWidget) return;
     Widget_unselect(self->mainWidget);
+}
+
+static void setFont(void *obj, Font *font)
+{
+    Window *self = Object_instance(obj);
+    if (!self->mainWidget) return;
+    Widget_offerFont(self->mainWidget, font);
 }
 
 static void buttonpress(void *receiver, void *sender, void *args)
@@ -639,6 +648,10 @@ Window *Window_createBase(void *derived, const char *name, void *parent)
 		(unsigned)self->w);
     }
 
+    Font *font = Font_create(0, 0);
+    Widget_setFont(self, font);
+    Font_destroy(font);
+
     Widget_setSize(self, (Size){1, 1});
     Widget_setDrawable(self, self->p ? self->p : self->w);
     Widget_setBackground(self, 1, COLOR_BG_NORMAL);
@@ -802,6 +815,7 @@ void Window_setMainWidget(void *self, void *widget)
     if (widget)
     {
 	Widget_setContainer(widget, w);
+	Widget_offerFont(widget, Widget_font(w));
 	PSC_Event_register(Widget_sizeRequested(widget), w, sizeRequested, 0);
 	sizeRequested(w, 0, 0);
     }

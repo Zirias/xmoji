@@ -10,6 +10,10 @@
 #include <poser/decl.h>
 #include <xcb/render.h>
 
+C_CLASS_DECL(Font);
+C_CLASS_DECL(PSC_Event);
+C_CLASS_DECL(Widget);
+
 typedef struct KeyEvent
 {
     uint32_t codepoint;
@@ -56,6 +60,7 @@ typedef struct MetaWidget
     void (*unfocus)(void *widget);
     void (*paste)(void *widget, XSelectionContent content);
     void (*unselect)(void *widget);
+    void (*setFont)(void *widget, Font *font);
     void *(*childAt)(void *widget, Pos pos);
     Size (*minSize)(const void *widget);
     void (*keyPressed)(void *widget, const KeyEvent *event);
@@ -65,7 +70,7 @@ typedef struct MetaWidget
 
 #define MetaWidget_init(mexpose, mdraw, mshow, mhide, \
 	mactivate, mdeactivate, menter, mleave, mfocus, munfocus, \
-	mpaste, munselect, mchildAt, mminSize, mkeyPressed, \
+	mpaste, munselect, msetFont, mchildAt, mminSize, mkeyPressed, \
 	mclicked, mdragged, \
 	...) { \
     .base = MetaObject_init(__VA_ARGS__), \
@@ -81,15 +86,13 @@ typedef struct MetaWidget
     .unfocus = munfocus, \
     .paste = mpaste, \
     .unselect = munselect, \
+    .setFont = msetFont, \
     .childAt = mchildAt, \
     .minSize = mminSize, \
     .keyPressed = mkeyPressed, \
     .clicked = mclicked, \
     .dragged = mdragged \
 }
-
-C_CLASS_DECL(PSC_Event);
-C_CLASS_DECL(Widget);
 
 typedef struct WidgetEventArgs
 {
@@ -111,6 +114,7 @@ typedef struct OriginChangedEventArgs
 
 Widget *Widget_createBase(void *derived, const char *name, void *parent);
 #define Widget_create(...) Widget_createBase(0, __VA_ARGS__)
+Widget *Widget_cast(void *obj);
 const char *Widget_name(const void *self) CMETHOD;
 const char *Widget_resname(const void *self) CMETHOD ATTR_RETNONNULL;
 PSC_Event *Widget_shown(void *self) CMETHOD ATTR_RETNONNULL;
@@ -119,6 +123,8 @@ PSC_Event *Widget_activated(void *self) CMETHOD ATTR_RETNONNULL;
 PSC_Event *Widget_sizeRequested(void *self) CMETHOD ATTR_RETNONNULL;
 PSC_Event *Widget_sizeChanged(void *self) CMETHOD ATTR_RETNONNULL;
 PSC_Event *Widget_originChanged(void *self) CMETHOD ATTR_RETNONNULL;
+Font *Widget_font(const void *self) CMETHOD;
+void Widget_setFont(void *self, Font *font) CMETHOD;
 Widget *Widget_container(const void *self) CMETHOD;
 void Widget_setContainer(void *self, void *container) CMETHOD;
 int Widget_draw(void *self) CMETHOD;
@@ -167,6 +173,7 @@ void Widget_disableDrawing(void *self) CMETHOD;
 void Widget_setWindowSize(void *self, Size size) CMETHOD;
 void Widget_showWindow(void *self) CMETHOD;
 void Widget_hideWindow(void *self) CMETHOD;
+void Widget_offerFont(void *self, Font *font) CMETHOD ATTR_NONNULL((2));
 void Widget_requestPaste(void *self, XSelectionName name,
 	XSelectionType type) CMETHOD;
 void Widget_setSelection(void *self, XSelectionName name,
