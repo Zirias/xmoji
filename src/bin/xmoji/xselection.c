@@ -969,6 +969,24 @@ void XSelection_destroy(XSelection *self)
 	XSelectionRequest_done(self->requests[i], 1);
     }
     XSelectionConvert_done(self->conversions, 1);
+    switch (self->content.type)
+    {
+	case XST_TEXT:
+	    UniStr_destroy(self->content.data);
+	    break;
+
+	default:
+	    break;
+    }
+    switch (self->newContent.type)
+    {
+	case XST_TEXT:
+	    UniStr_destroy(self->newContent.data);
+	    break;
+
+	default:
+	    break;
+    }
     PSC_Event_unregister(X11Adapter_selectionRequest(), self,
 	    selectionRequest, Window_id(self->w));
     PSC_Event_unregister(X11Adapter_selectionNotify(), self,
