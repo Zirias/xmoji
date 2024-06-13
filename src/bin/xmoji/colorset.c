@@ -216,19 +216,27 @@ void ColorSet_destroy(ColorSet *self)
 #define convert(b, shift, val) \
     ((((val)>>(shift))&(chanmask(b)))*0xffU/(chanmask(b)))
 #define combine(r,g,b,a) (((r)<<24)|((g)<<16)|(((b)<<8))|(a))
-#define colorconv(b,cv) combine(convert((b),(b)<<1,(cv)),\
+#define colorconv(b,cv) combine(convert((b),(b)*2,(cv)),\
 	convert((b),(b),(cv)), convert((b),0,(cv)), 0xffU)
+#define colorconva(b,cv) combine(convert((b),(b)*3,(cv)),\
+	convert((b),(b)*2,(cv)), convert((b),(b),(cv)), convert((b),0,(cv)))
 
 int Color_fromString(Color *color, const char *str)
 {
     if (!str) return -1;
     if (*str == '#')
     {
-	// Hex formats '#rgb', '#rrggbb', '#rrrgggbbb' and '#rrrrggggbbbb'
+	// Hex formats '#rgb', '#rrggbb', '#rrrgggbbb', '#rrrrggggbbbb',
+	// '#rgba', '#rrggbbaa', and '#rrrrggggbbbbaaaa'
 	char *endp = 0;
 	errno = 0;
 	unsigned long long cv = strtoull(str+1, &endp, 16);
 	if (errno != 0 || endp == str+1 || *endp) return -1;
+	if (endp - str == 17)
+	{
+	    *color = colorconva(16, cv);
+	    return 0;
+	}
 	if (endp - str == 13)
 	{
 	    *color = colorconv(16, cv);
@@ -239,9 +247,19 @@ int Color_fromString(Color *color, const char *str)
 	    *color = colorconv(12, cv);
 	    return 0;
 	}
+	if (endp - str == 9)
+	{
+	    *color = cv;
+	    return 0;
+	}
 	if (endp - str == 7)
 	{
 	    *color = (cv << 8) | 0xffU;
+	    return 0;
+	}
+	if (endp - str == 5)
+	{
+	    *color = colorconva(4, cv);
 	    return 0;
 	}
 	if (endp - str == 4)
