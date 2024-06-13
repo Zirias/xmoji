@@ -2,6 +2,7 @@
 #define XMOJI_WIDGET_H
 
 #include "colorset.h"
+#include "font.h"
 #include "object.h"
 #include "valuetypes.h"
 #include "x11adapter.h"
@@ -125,6 +126,8 @@ PSC_Event *Widget_sizeChanged(void *self) CMETHOD ATTR_RETNONNULL;
 PSC_Event *Widget_originChanged(void *self) CMETHOD ATTR_RETNONNULL;
 Font *Widget_font(const void *self) CMETHOD;
 void Widget_setFont(void *self, Font *font) CMETHOD;
+void Widget_setFontResName(void *self, const char *name,
+	const char *defpattern, const FontOptions *options) CMETHOD;
 Widget *Widget_container(const void *self) CMETHOD;
 void Widget_setContainer(void *self, void *container) CMETHOD;
 int Widget_draw(void *self) CMETHOD;

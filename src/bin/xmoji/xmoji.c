@@ -1,6 +1,5 @@
 #include "xmoji.h"
 
-#include "font.h"
 #include "scrollbox.h"
 #include "textbox.h"
 #include "textlabel.h"
@@ -9,9 +8,7 @@
 #include "vbox.h"
 #include "window.h"
 #include "x11adapter.h"
-#include "xrdb.h"
 
-#include <inttypes.h>
 #include <poser/core.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -40,17 +37,9 @@ static void onprestartup(void *receiver, void *sender, void *args)
 
     if (X11Adapter_init(
 		startupargs.argc, startupargs.argv, "Xmoji") < 0) goto error;
-    XRdb *res = X11Adapter_resources();
 
     if (!(win = Window_create("mainWindow", 0))) goto error;
     Window_setTitle(win, "Xmoji 😀 äöüß");
-    const char *fontname = XRdb_value(res, XRdbKey("font"), XRQF_OVERRIDES);
-    if (fontname)
-    {
-	Font *font = Font_create(fontname, 0);
-	Widget_setFont(win, font);
-	Font_destroy(font);
-    }
 
     ScrollBox *scroll = ScrollBox_create("mainScrollBox", win);
     VBox *box = VBox_create(scroll);
@@ -72,10 +61,7 @@ static void onprestartup(void *receiver, void *sender, void *args)
     VBox_addWidget(box, input);
 
     label = TextLabel_create("emojiLabel", box);
-    Font *emojifont = Font_create(XRdb_value(res, XRdbKey("emojifont"),
-		XRQF_OVERRIDES), 0);
-    Widget_setFont(label, emojifont);
-    Font_destroy(emojifont);
+    Widget_setFontResName(label, "emojifont", "emoji", 0);
     UniStr(emojis, "😀🤡🇩🇪👺🧩🔮🐅🍻🧑🏾‍🤝‍🧑🏻");
     TextLabel_setText(label, emojis);
     Widget_setAlign(label, AH_CENTER|AV_MIDDLE);

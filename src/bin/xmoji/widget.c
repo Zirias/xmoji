@@ -197,13 +197,13 @@ Font *Widget_font(const void *self)
     return w->font;
 }
 
-void Widget_setFont(void *self, Font *font)
+static void doSetFont(void *self, Font *font)
 {
     Widget *w = Object_instance(self);
     Font_destroy(w->font);
     if (font)
     {
-	w->explicitFont = Font_ref(font);
+	w->explicitFont = font;
 	w->font = w->explicitFont;
     }
     else
@@ -213,6 +213,23 @@ void Widget_setFont(void *self, Font *font)
 	    w->container->font : Font_create(0, 0);
     }
     Object_vcallv(Widget, setFont, self, w->font);
+}
+
+void Widget_setFont(void *self, Font *font)
+{
+    doSetFont(Object_instance(self), font ? Font_ref(font) : 0);
+}
+
+void Widget_setFontResName(void *self, const char *name,
+	const char *defpattern, const FontOptions *options)
+{
+    if (!name) name = "font";
+    XRdb *rdb = X11Adapter_resources();
+    XRdb_register(rdb, "Font", name);
+    const char *pattern = XRdb_value(rdb,
+	    XRdbKey(Widget_resname(self), name), XRQF_OVERRIDES);
+    if (!pattern) pattern = defpattern;
+    doSetFont(Object_instance(self), Font_create(pattern, options));
 }
 
 Widget *Widget_container(const void *self)

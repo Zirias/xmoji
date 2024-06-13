@@ -648,10 +648,6 @@ Window *Window_createBase(void *derived, const char *name, void *parent)
 		(unsigned)self->w);
     }
 
-    Font *font = Font_create(0, 0);
-    Widget_setFont(self, font);
-    Font_destroy(font);
-
     Widget_setSize(self, (Size){1, 1});
     Widget_setDrawable(self, self->p ? self->p : self->w);
     Widget_setBackground(self, 1, COLOR_BG_NORMAL);
@@ -815,7 +811,9 @@ void Window_setMainWidget(void *self, void *widget)
     if (widget)
     {
 	Widget_setContainer(widget, w);
-	Widget_offerFont(widget, Widget_font(w));
+	Font *font = Widget_font(w);
+	if (!font) Widget_setFontResName(w, 0, 0, 0);
+	else Widget_offerFont(widget, font);
 	PSC_Event_register(Widget_sizeRequested(widget), w, sizeRequested, 0);
 	sizeRequested(w, 0, 0);
     }
