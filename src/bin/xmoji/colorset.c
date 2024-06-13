@@ -93,12 +93,14 @@ static void colorReceived(void *obj, unsigned sequence,
 	self->targets[i].colorSet->colors[self->targets[i].role] = colorval;
     }
     if (!colorval) colorval = 1;
+    if (!colorCache) colorCache = PSC_HashTable_create(6);
     PSC_HashTable_set(colorCache, self->name, (void *)colorval, 0);
     PSC_HashTable_delete(lookups, self->name);
 }
 
 static void lookupColor(ColorSet *self, const char *name, ColorRole role)
 {
+    if (!lookups) lookups = PSC_HashTable_create(4);
     ColorLookup *lookup = PSC_HashTable_get(lookups, name);
     if (!lookup)
     {
@@ -132,8 +134,6 @@ static void ColorSet_init(void)
     {
 	XRdb_register(rdb, reskeys[i][0], reskeys[i][1]);
     }
-    colorCache = PSC_HashTable_create(6);
-    lookups = PSC_HashTable_create(4);
 }
 
 static void ColorSet_done(void)
@@ -141,6 +141,8 @@ static void ColorSet_done(void)
     if (--refcnt) return;
     PSC_HashTable_destroy(lookups);
     PSC_HashTable_destroy(colorCache);
+    lookups = 0;
+    colorCache = 0;
 }
 
 const ColorSet *ColorSet_default(void)
@@ -227,7 +229,8 @@ ColorSet *ColorSet_createFor(const char *name)
 	else
 	{
 	    // Named X11 color, ask the server
-	    uintptr_t cached = (uintptr_t)PSC_HashTable_get(
+	    uintptr_t cached = 0;
+	    if (colorCache) cached = (uintptr_t)PSC_HashTable_get(
 		    colorCache, colorstr);
 	    if (cached == 1) continue;
 	    else if (cached)
