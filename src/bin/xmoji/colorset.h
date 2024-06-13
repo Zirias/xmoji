@@ -28,6 +28,7 @@ const ColorSet *ColorSet_default(void);
 ColorSet *ColorSet_create(void);
 ColorSet *ColorSet_createFor(const char *name);
 ColorSet *ColorSet_clone(const ColorSet *self) CMETHOD;
+int ColorSet_valid(const ColorSet *self) CMETHOD;
 Color ColorSet_color(const ColorSet *self, ColorRole role) CMETHOD;
 void ColorSet_setColor(ColorSet *self, ColorRole role, Color color) CMETHOD;
 void ColorSet_destroy(ColorSet *self);

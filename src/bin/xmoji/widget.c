@@ -302,7 +302,7 @@ int Widget_draw(void *self)
 {
     if (!Widget_drawable(self)) return -1;
     Widget *w = Object_instance(self);
-    if (!Widget_visible(self)) return 0;
+    if (!ColorSet_valid(w->colorSet) || !Widget_visible(w)) return 0;
     int rc = -1;
     if (!w->ndamages)
     {
