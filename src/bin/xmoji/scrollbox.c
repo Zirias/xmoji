@@ -43,9 +43,9 @@ static void updateScrollbar(ScrollBox *self, Size size)
 	self->scrollPos = 0;
 	goto done;
     }
-    if (self->scrollSize.height <= size.height + self->scrollPos)
+    if (self->scrollSize.height < size.height + self->scrollPos)
     {
-	self->scrollPos = self->scrollSize.height - size.height - 1;
+	self->scrollPos = self->scrollSize.height - size.height;
     }
     uint32_t barHeight = ((size.height - 2) << 6) * (size.height << 6)
 	/ (self->scrollSize.height << 6);
