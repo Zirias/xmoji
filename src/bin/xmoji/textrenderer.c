@@ -52,13 +52,20 @@ static void clearRenderer(TextRenderer *self)
 {
     free(self->glyphs);
     hb_buffer_destroy(self->hbbuffer);
+    self->hbbuffer = 0;
     hb_font_destroy(self->hbfont);
+    self->hbfont = 0;
     xcb_connection_t *c = X11Adapter_connection();
     if (self->tpic) xcb_render_free_picture(c, self->tpic);
     if (self->pen) xcb_render_free_picture(c, self->pen);
     if (self->tmp) xcb_free_pixmap(c, self->tmp);
     if (self->pixmap) xcb_free_pixmap(c, self->pixmap);
+    self->tpic = 0;
+    self->pen = 0;
+    self->tmp = 0;
+    self->pixmap = 0;
     Font_destroy(self->font);
+    self->font = 0;
 }
 
 TextRenderer *TextRenderer_create(void)
