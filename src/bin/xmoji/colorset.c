@@ -166,6 +166,7 @@ ColorSet *ColorSet_createFor(const char *name)
     {
 	const char *colorstr = XRdb_value(rdb,
 		XRdbKey(name, reskeys[i][1]), XRQF_OVERRIDES);
+	if (!colorstr) continue;
 	if (Color_fromString(self->colors + i, colorstr) < 0)
 	{
 	    // Ask cache or server for a named X11 color
