@@ -16,8 +16,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-static const char *fontname;
-static const char *emojifontname;
 static PSC_LogLevel loglevel = PSC_L_WARNING;
 
 static Window *win;
@@ -43,16 +41,10 @@ static void onprestartup(void *receiver, void *sender, void *args)
     if (X11Adapter_init(
 		startupargs.argc, startupargs.argv, "Xmoji") < 0) goto error;
     XRdb *res = X11Adapter_resources();
-    if (res)
-    {
-	if (!fontname) fontname = XRdb_value(res, XRdbKey("font"));
-	if (!emojifontname) emojifontname = XRdb_value(
-		res, XRdbKey("emojifont"));
-    }
-    if (!emojifontname) emojifontname = "emoji";
 
     if (!(win = Window_create("mainWindow", 0))) goto error;
     Window_setTitle(win, "Xmoji 😀 äöüß");
+    const char *fontname = XRdb_value(res, XRdbKey("font"), XRQF_OVERRIDES);
     if (fontname)
     {
 	Font *font = Font_create(fontname, 0);
@@ -80,7 +72,8 @@ static void onprestartup(void *receiver, void *sender, void *args)
     VBox_addWidget(box, input);
 
     label = TextLabel_create("emojiLabel", box);
-    Font *emojifont = Font_create(emojifontname, 0);
+    Font *emojifont = Font_create(XRdb_value(res, XRdbKey("emojifont"),
+		XRQF_OVERRIDES), 0);
     Widget_setFont(label, emojifont);
     Font_destroy(emojifont);
     UniStr(emojis, "😀🤡🇩🇪👺🧩🔮🐅🍻🧑🏾‍🤝‍🧑🏻");
@@ -141,15 +134,7 @@ SOLOCAL int Xmoji_run(int argc, char **argv)
 
     for (int i = 1; i < argc; ++i)
     {
-	if (i < argc - 1 && !strcmp(argv[i], "-font"))
-	{
-	    fontname = argv[i+1];
-	}
-	else if (i < argc - 1 && !strcmp(argv[i], "-emojifont"))
-	{
-	    emojifontname = argv[i+1];
-	}
-	else if (loglevel < PSC_L_INFO && !strcmp(argv[i], "-v"))
+	if (loglevel < PSC_L_INFO && !strcmp(argv[i], "-v"))
 	{
 	    loglevel = PSC_L_INFO;
 	}

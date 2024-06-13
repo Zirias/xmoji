@@ -311,12 +311,13 @@ ScrollBox *ScrollBox_createBase(void *derived, const char *name, void *parent)
     self->minSize = (Size){0, 100};
     self->scrollSize = (Size){0, 0};
     self->scrollBar = (Rect){{0, 0},
-	{XRdb_int(rdb, XRdbKey(resname, "scrollBarWidth"), 10, 2, 128), 0}};
+	{XRdb_int(rdb, XRdbKey(resname, "scrollBarWidth"), XRQF_OVERRIDES,
+		10, 2, 128), 0}};
     self->hoverBar = 0;
     self->scrollPos = 0;
     self->dragAnchor = -1;
-    self->minBarHeight = XRdb_int(rdb,
-	    XRdbKey(resname, "scrollBarMinHeight"), 16, 2, 256);
+    self->minBarHeight = XRdb_int(rdb, XRdbKey(resname, "scrollBarMinHeight"),
+	    XRQF_OVERRIDES, 16, 2, 256);
 
     Widget_setPadding(self, (Box){0, 0, 0, 0});
     PSC_Event_register(Widget_sizeChanged(self), self, sizeChanged, 0);

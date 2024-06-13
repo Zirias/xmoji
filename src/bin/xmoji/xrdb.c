@@ -25,9 +25,12 @@ typedef struct XRdbQualifiedEntry {
 struct XRdb {
     PSC_HashTable *ids;
     PSC_HashTable *instances;
+    PSC_HashTable *overrides;
     PSC_List *keys;
     PSC_List *entries;
     char *root;
+    char **argv;
+    int argc;
 };
 
 static unsigned XRdb_id(XRdb *self, const char *str)
@@ -151,14 +154,36 @@ static size_t XRdb_parseEntry(XRdb *self, const char *str, size_t slen)
     return pos;
 }
 
+static const char *getOverride(const XRdb *self, const char *key)
+{
+    if (!self->overrides) return 0;
+    char *val = PSC_HashTable_get(self->overrides, key);
+    if (val == (char *)-1) return 0;
+    if (val) return val;
+    for (int i = 1; i < self->argc - 1; ++i)
+    {
+	if (*self->argv[i] != '-') continue;
+	if (!strcmp(self->argv[i]+1, key))
+	{
+	    val = self->argv[i+1];
+	    break;
+	}
+    }
+    PSC_HashTable_set(self->overrides, key, val ? val : (char *)-1, 0);
+    return val;
+}
+
 XRdb *XRdb_create(const char *str, size_t slen,
 	const char *className, const char *instanceName)
 {
     XRdb *self = PSC_malloc(sizeof *self);
     self->ids = PSC_HashTable_create(8);
     self->instances = PSC_HashTable_create(8);
+    self->overrides = 0;
     self->keys = PSC_List_create();
     self->entries = PSC_List_create();
+    self->argv = 0;
+    self->argc = 0;
 
     if (className && instanceName)
     {
@@ -183,6 +208,14 @@ void XRdb_register(XRdb *self, const char *className, const char *instanceName)
     PSC_HashTable_set(self->instances, instanceName, (void *)(classid + 1), 0);
 }
 
+void XRdb_setOverrides(XRdb *self, int argc, char **argv)
+{
+    PSC_HashTable_destroy(self->overrides);
+    self->overrides = PSC_HashTable_create(4);
+    self->argc = argc;
+    self->argv = argv;
+}
+
 static int lowerqual(void *obj, const void *arg)
 {
     XRdbQualifiedEntry *qe = obj;
@@ -190,13 +223,13 @@ static int lowerqual(void *obj, const void *arg)
     return qe->quality < *bestqual;
 }
 
-const char *XRdb_value(const XRdb *self, XRdbKey key)
+const char *XRdb_value(const XRdb *self, XRdbKey key, XRdbQueryFlags flags)
 {
     unsigned instid[XRDB_KEYLEN];
     unsigned classid[XRDB_KEYLEN];
     unsigned keylen = 0;
     unsigned arglen = 0;
-    if (self->root)
+    if (self->root && !(flags & XRQF_ROOT))
     {
 	uintptr_t id = (uintptr_t)PSC_HashTable_get(self->ids, self->root);
 	instid[keylen] = id - 1;
@@ -214,6 +247,11 @@ const char *XRdb_value(const XRdb *self, XRdbKey key)
 	++arglen;
     }
     if (!keylen) return 0;
+    if (flags & XRQF_OVERRIDES)
+    {
+	const char *oval = getOverride(self, key[arglen-1]);
+	if (oval) return oval;
+    }
     PSC_List *matches = PSC_List_create();
     PSC_ListIterator *i = PSC_List_iterator(self->entries);
     while (PSC_ListIterator_moveNext(i))
@@ -306,22 +344,25 @@ static int strequalslc(const char *a, const char *b)
     }
 }
 
-int XRdb_bool(const XRdb *self, XRdbKey key, int def)
+int XRdb_bool(const XRdb *self, XRdbKey key, XRdbQueryFlags flags, int def)
 {
-    const char *val = XRdb_value(self, key);
+    const char *val = XRdb_value(self, key, flags);
     if (!val) return def;
-    if (strequalslc(val, "false")
+    if ((*val == '0' && ! val[1])
+	    || strequalslc(val, "false")
 	    || strequalslc(val, "off")
 	    || strequalslc(val, "disabled")) return 0;
-    if (strequalslc(val, "true")
+    if ((*val == '1' && ! val[1])
+	    || strequalslc(val, "true")
 	    || strequalslc(val, "on")
 	    || strequalslc(val, "enabled")) return 1;
     return def;
 }
 
-long XRdb_int(const XRdb *self, XRdbKey key, long def, long min, long max)
+long XRdb_int(const XRdb *self, XRdbKey key, XRdbQueryFlags flags,
+	long def, long min, long max)
 {
-    const char *val = XRdb_value(self, key);
+    const char *val = XRdb_value(self, key, flags);
     if (!val) return def;
     char *endptr;
     errno = 0;
@@ -332,10 +373,10 @@ long XRdb_int(const XRdb *self, XRdbKey key, long def, long min, long max)
     return intval;
 }
 
-double XRdb_float(const XRdb *self, XRdbKey key,
+double XRdb_float(const XRdb *self, XRdbKey key, XRdbQueryFlags flags,
 	double def, double min, double max)
 {
-    const char *val = XRdb_value(self, key);
+    const char *val = XRdb_value(self, key, flags);
     if (!val) return def;
     char *endptr;
     errno = 0;
@@ -352,6 +393,7 @@ void XRdb_destroy(XRdb *self)
     free(self->root);
     PSC_List_destroy(self->entries);
     PSC_List_destroy(self->keys);
+    PSC_HashTable_destroy(self->overrides);
     PSC_HashTable_destroy(self->instances);
     PSC_HashTable_destroy(self->ids);
     free(self);

@@ -99,7 +99,7 @@ static size_t wmclasssz;
 
 static xcb_connection_t *c;
 static xcb_screen_t *s;
-static XGlitch glitches = -1;
+static XGlitch glitches;
 static XRdb *rdb;
 static struct xkb_context *kbdctx;
 static struct xkb_keymap *keymap;
@@ -778,10 +778,6 @@ int X11Adapter_init(int argc, char **argv, const char *classname)
 	{
 	    nm = argv[++i];
 	}
-	else if (!strcmp(argv[i], "-glitches"))
-	{
-	    glitches = atoi(argv[++i]);
-	}
     }
     if (!nm) nm = getenv("RESOURCE_NAME");
     if (!nm && argv[0] && *argv[0])
@@ -854,15 +850,13 @@ int X11Adapter_init(int argc, char **argv, const char *classname)
 		    classname, nm);
 	    free(resreply);
 	}
-	if (rdb && (int)glitches < 0)
-	{
-	    const char *glitchstr = XRdb_value(rdb, XRdbKey("glitches"));
-	    if (glitchstr) glitches = atoi(glitchstr);
-	}
     }
-    if ((int)glitches < 0) glitches = 0;
+    if (!rdb) rdb = XRdb_create(0, 0, classname, nm);
     free(clnm);
     free(nm);
+
+    XRdb_setOverrides(rdb, argc, argv);
+    glitches = XRdb_int(rdb, XRdbKey("glitches"), XRQF_OVERRIDES, 0, 0, 1);
 
     if (xcb_cursor_context_new(c, s, &cctx) < 0)
     {

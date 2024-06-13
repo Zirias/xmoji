@@ -624,7 +624,7 @@ Window *Window_createBase(void *derived, const char *name, void *parent)
 	    "Cannot set window type for 0x%x", (unsigned)self->w);
 
     int backingstore = XRdb_bool(X11Adapter_resources(),
-	    XRdbKey(Widget_resname(self), "backingStore"), 1);
+	    XRdbKey(Widget_resname(self), "backingStore"), XRQF_OVERRIDES, 1);
     if (backingstore)
     {
 	self->p = xcb_generate_id(c);

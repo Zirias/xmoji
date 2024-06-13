@@ -71,7 +71,8 @@ ColorSet *ColorSet_createFor(const char *name)
     }
     for (unsigned i = 0; i < COLOR_NUMROLES; ++i)
     {
-	const char *colorstr = XRdb_value(rdb, XRdbKey(name, reskeys[i][1]));
+	const char *colorstr = XRdb_value(rdb,
+		XRdbKey(name, reskeys[i][1]), XRQF_OVERRIDES);
 	if (!colorstr || *colorstr != '#') continue;
 	char *endp = 0;
 	errno = 0;

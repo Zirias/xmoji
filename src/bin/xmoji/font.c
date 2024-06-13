@@ -80,10 +80,10 @@ static int Font_init(void)
 	XRdb_register(rdb, "FontOptions", "defaultFontOptions");
 	defaultOptions.maxUnscaledDeviation = XRdb_float(rdb,
 		XRdbKey("defaultFontOptions", "maxUnscaledDeviation"),
-		5., .1, 100.);
+		XRQF_OVERRIDES, 5., .1, 100.);
 	defaultOptions.pixelFractionBits = XRdb_int(rdb,
 		XRdbKey("defaultFontOptions", "pixelFractionBits"),
-		3, 0, 6);
+		XRQF_OVERRIDES, 3, 0, 6);
     }
     else
     {
