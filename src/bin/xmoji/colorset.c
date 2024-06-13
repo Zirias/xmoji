@@ -48,20 +48,20 @@ static PSC_HashTable *colorCache;
 static PSC_HashTable *lookups;
 
 static const ColorSet defcolors = {
-    .colors = {
-	0x000000ff,
-	0xbbbbbbff,
-	0x000000ff,
-	0xccccccff,
-	0x000000ff,
-	0xaaaaaaff,
-	0x004444ff,
-	0xffffffff,
-	0x666666ff,
-	0xaaaaaaff,
-	0xffffffff,
-	0x003399ff
-    },
+    .colors = {		// Color role	    X11 color name
+	0x000000ff,	// NORMAL	    black
+	0xbebebeff,	// BG_NORMAL	    gray
+	0x000000ff,	// ABOVE	    black
+	0xd3d3d3ff,	// BG_ABOVE	    light gray
+	0x000000ff,	// BELOW	    black
+	0xa9a9a9ff,	// BG_BELOW	    dark gray
+	0x2f4f4fff,	// ACTIVE	    dark slate gray
+	0xadd8e6ff,	// BG_ACTIVE	    light blue
+	0x696969ff,	// DISABLED	    dim gray
+	0xc0c0c0ff,	// BG_DISABLED	    silver
+	0xadd8e6ff,	// SELECTED	    light blue
+	0x0000cdff	// BG_SELECTED	    medium blue
+    },	// ref: https://en.wikipedia.org/wiki/X11_color_names
     .npending = 0
 };
 
