@@ -33,4 +33,6 @@ Color ColorSet_color(const ColorSet *self, ColorRole role) CMETHOD;
 void ColorSet_setColor(ColorSet *self, ColorRole role, Color color) CMETHOD;
 void ColorSet_destroy(ColorSet *self);
 
+int Color_fromString(Color *color, const char *str);
+
 #endif

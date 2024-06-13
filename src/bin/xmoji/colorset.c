@@ -166,69 +166,9 @@ ColorSet *ColorSet_createFor(const char *name)
     {
 	const char *colorstr = XRdb_value(rdb,
 		XRdbKey(name, reskeys[i][1]), XRQF_OVERRIDES);
-	if (!colorstr) continue;
-	if (*colorstr == '#')
+	if (Color_fromString(self->colors + i, colorstr) < 0)
 	{
-	    // Hex formats '#rrggbb' and '#rgb'
-	    char *endp = 0;
-	    errno = 0;
-	    unsigned long cv = strtoul(colorstr+1, &endp, 16);
-	    if (errno != 0 || endp == colorstr+1 || *endp) continue;
-	    if (endp - colorstr == 7)
-	    {
-		self->colors[i] = (cv << 8) | 0xffU;
-	    }
-	    else if (endp - colorstr == 4)
-	    {
-		uint8_t red = (cv >> 8) & 0xf;
-		red |= red << 4;
-		uint8_t green = (cv >> 4) & 0xf;
-		green |= green << 4;
-		uint8_t blue = cv & 0xf;
-		blue |= blue << 4;
-		self->colors[i] =
-		    (red << 24) | (green << 16) | (blue << 8) | 0xffU;
-	    }
-	    else continue;
-	}
-	else if (*colorstr == '(')
-	{
-	    // Decimal format '(r, g, b)'
-	    const char *p = colorstr+1;
-	    while (*p && (*p == ' ' || *p == '\t')) ++p;
-	    if (!*p) continue;
-	    char *endp = 0;
-	    errno = 0;
-	    unsigned long red = strtoul(p, &endp, 10);
-	    if (errno != 0 || endp == p || red > 255) continue;
-	    p = endp;
-	    while (*p && (*p == ' ' || *p == '\t')) ++p;
-	    if (*p != ',') continue;
-	    ++p;
-	    while (*p && (*p == ' ' || *p == '\t')) ++p;
-	    if (!*p) continue;
-	    unsigned long green = strtoul(p, &endp, 10);
-	    if (errno != 0 || endp == p || green > 255) continue;
-	    p = endp;
-	    while (*p && (*p == ' ' || *p == '\t')) ++p;
-	    if (*p != ',') continue;
-	    ++p;
-	    while (*p && (*p == ' ' || *p == '\t')) ++p;
-	    if (!*p) continue;
-	    unsigned long blue = strtoul(p, &endp, 10);
-	    if (errno != 0 || endp == p || blue > 255) continue;
-	    p = endp;
-	    while (*p && (*p == ' ' || *p == '\t')) ++p;
-	    if (*p != ')') continue;
-	    ++p;
-	    while (*p && (*p == ' ' || *p == '\t')) ++p;
-	    if (*p) continue;
-	    self->colors[i] =
-		(red << 24) | (green << 16) | (blue << 8) | 0xffU;
-	}
-	else
-	{
-	    // Named X11 color, ask the server
+	    // Ask cache or server for a named X11 color
 	    uintptr_t cached = 0;
 	    if (colorCache) cached = (uintptr_t)PSC_HashTable_get(
 		    colorCache, colorstr);
@@ -270,5 +210,156 @@ void ColorSet_destroy(ColorSet *self)
 {
     free(self);
     ColorSet_done();
+}
+
+#define chanmask(b) ((1U<<(b))-1)
+#define convert(b, shift, val) \
+    ((((val)>>(shift))&(chanmask(b)))*0xffU/(chanmask(b)))
+#define combine(r,g,b,a) (((r)<<24)|((g)<<16)|(((b)<<8))|(a))
+#define colorconv(b,cv) combine(convert((b),(b)<<1,(cv)),\
+	convert((b),(b),(cv)), convert((b),0,(cv)), 0xffU)
+
+int Color_fromString(Color *color, const char *str)
+{
+    if (!str) return -1;
+    if (*str == '#')
+    {
+	// Hex formats '#rgb', '#rrggbb', '#rrrgggbbb' and '#rrrrggggbbbb'
+	char *endp = 0;
+	errno = 0;
+	unsigned long long cv = strtoull(str+1, &endp, 16);
+	if (errno != 0 || endp == str+1 || *endp) return -1;
+	if (endp - str == 13)
+	{
+	    *color = colorconv(16, cv);
+	    return 0;
+	}
+	if (endp - str == 10)
+	{
+	    *color = colorconv(12, cv);
+	    return 0;
+	}
+	if (endp - str == 7)
+	{
+	    *color = (cv << 8) | 0xffU;
+	    return 0;
+	}
+	if (endp - str == 4)
+	{
+	    *color = colorconv(4, cv);
+	    return 0;
+	}
+	return -1;
+    }
+    int ishex = 0;
+    int isdec = 0;
+    int hasalpha = 0;
+    const char *p = 0;
+    if (*str == '(')
+    {
+	p = str + 1;
+	isdec = 1;
+    }
+    else if (!strncmp(str, "rgba:", sizeof "rgba:" - 1))
+    {
+	p = str + 5;
+	ishex = 1;
+	hasalpha = 1;
+    }
+    else if (!strncmp(str, "rgb:", sizeof "rgb:" - 1))
+    {
+	p = str + 4;
+	ishex = 1;
+    }
+    else if (!strncmp(str, "rgba(", sizeof "rgba(" - 1))
+    {
+	p = str + 5;
+	isdec = 1;
+	hasalpha = 1;
+    }
+    else if (!strncmp(str, "rgb(", sizeof "rgb(" - 1))
+    {
+	p = str + 4;
+	isdec = 1;
+    }
+    if (ishex)
+    {
+	// Hex formats 'rgb:r*/g*/b*' and 'rgba:r*/g*/b*/a*'
+	char *endp = 0;
+	errno = 0;
+	unsigned long chan = strtoul(p, &endp, 16);
+	if (errno != 0 || endp == p || endp - p > 4 || *endp != '/') return -1;
+	uint8_t red = convert((endp-p)*4, 0, chan);
+	p = endp + 1;
+	chan = strtoul(p, &endp, 16);
+	if (errno != 0 || endp == p || endp - p > 4 || *endp != '/') return -1;
+	uint8_t green = convert((endp-p)*4, 0, chan);
+	p = endp + 1;
+	chan = strtoul(p, &endp, 16);
+	if (errno != 0 || endp == p || endp - p > 4) return -1;
+	uint8_t blue = convert((endp-p)*4, 0, chan);
+	uint8_t alpha = 0xffU;
+	if (hasalpha)
+	{
+	    if (*endp != '/') return -1;
+	    p = endp + 1;
+	    chan = strtoul(p, &endp, 16);
+	    if (errno != 0 || endp == p || endp - p > 4) return -1;
+	    alpha = convert((endp-p)*4, 0, chan);
+	}
+	p = endp;
+	while (*p && (*p == ' ' || *p == '\t')) ++p;
+	if (*p) return -1;
+	*color = combine(red, green, blue, alpha);
+	return 0;
+    }
+    if (isdec)
+    {
+	// Decimal formats '(r, g, b)', 'rgb(r, g, b)' and 'rgba(r, g, b, a)'
+	// (borrowed from CSS)
+	while (*p && (*p == ' ' || *p == '\t')) ++p;
+	if (!*p) return -1;
+	char *endp = 0;
+	errno = 0;
+	unsigned long red = strtoul(p, &endp, 10);
+	if (errno != 0 || endp == p || red > 255) return -1;
+	p = endp;
+	while (*p && (*p == ' ' || *p == '\t')) ++p;
+	if (*p != ',') return -1;
+	++p;
+	while (*p && (*p == ' ' || *p == '\t')) ++p;
+	if (!*p) return -1;
+	unsigned long green = strtoul(p, &endp, 10);
+	if (errno != 0 || endp == p || green > 255) return -1;
+	p = endp;
+	while (*p && (*p == ' ' || *p == '\t')) ++p;
+	if (*p != ',') return -1;
+	++p;
+	while (*p && (*p == ' ' || *p == '\t')) ++p;
+	if (!*p) return -1;
+	unsigned long blue = strtoul(p, &endp, 10);
+	if (errno != 0 || endp == p || blue > 255) return -1;
+	p = endp;
+	while (*p && (*p == ' ' || *p == '\t')) ++p;
+	unsigned long alpha = 255;
+	if (hasalpha)
+	{
+	    if (*p != ',') return -1;
+	    ++p;
+	    while (*p && (*p == ' ' || *p == '\t')) ++p;
+	    if (!*p) return -1;
+	    alpha = strtoul(p, &endp, 10);
+	    if (errno != 0 || endp == p || alpha > 255) return -1;
+	    p = endp;
+	    while (*p && (*p == ' ' || *p == '\t')) ++p;
+	}
+	if (*p != ')') return -1;
+	++p;
+	while (*p && (*p == ' ' || *p == '\t')) ++p;
+	if (*p) return -1;
+	*color = combine(red, green, blue, alpha);
+	return 0;
+    }
+    return -1;
 }
 
