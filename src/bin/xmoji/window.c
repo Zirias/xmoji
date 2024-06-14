@@ -571,13 +571,9 @@ static void destroy(void *window)
 
 Window *Window_createBase(void *derived, const char *name, void *parent)
 {
-    REGTYPE(0);
-
     Window *self = PSC_malloc(sizeof *self);
-    if (!derived) derived = self;
     memset(self, 0, sizeof *self);
-    self->base.type = OBJTYPE;
-    self->base.base = Widget_createBase(derived, name, parent);
+    CREATEBASE(Widget, name, parent);
     self->closed = PSC_Event_create(self);
     self->errored = PSC_Event_create(self);
     self->propertyChanged = PSC_Event_create(self);

@@ -109,13 +109,9 @@ static Size minSize(const void *obj)
 
 Widget *Widget_createBase(void *derived, const char *name, void *parent)
 {
-    REGTYPE(0);
-
     Widget *self = PSC_malloc(sizeof *self);
     memset(self, 0, sizeof *self);
-    if (!derived) derived = self;
-    self->base.type = OBJTYPE;
-    self->base.base = Object_create(derived);
+    CREATEBASE(Object);
     self->name = name;
     if (name)
     {

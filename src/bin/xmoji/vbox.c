@@ -250,12 +250,8 @@ static void sizeRequested(void *receiver, void *sender, void *args)
 
 VBox *VBox_createBase(void *derived, void *parent)
 {
-    REGTYPE(0);
-
     VBox *self = PSC_malloc(sizeof *self);
-    if (!derived) derived = self;
-    self->base.type = OBJTYPE;
-    self->base.base = Widget_createBase(derived, 0, parent);
+    CREATEBASE(Widget, 0, parent);
     self->items = PSC_List_create();
     self->minSize = (Size){0, 0};
     self->spacing = 3;

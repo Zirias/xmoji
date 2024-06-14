@@ -125,12 +125,8 @@ static Size minSize(const void *obj)
 
 TextLabel *TextLabel_createBase(void *derived, const char *name, void *parent)
 {
-    REGTYPE(0);
-
     TextLabel *self = PSC_malloc(sizeof *self);
-    if (!derived) derived = self;
-    self->base.type = OBJTYPE;
-    self->base.base = Widget_createBase(derived, name, parent);
+    CREATEBASE(Widget, name, parent);
     self->text = 0;
     self->renderers = PSC_List_create();
     self->minSize = (Size){0, 0};

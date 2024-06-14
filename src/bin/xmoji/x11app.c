@@ -129,12 +129,9 @@ X11App *X11App_createBase(void *derived, int argc, char **argv)
     char *locale = getLocale();
     if (!locale) return 0;
     initPoser(argc, argv);
-    REGTYPE(0);
 
     X11App *self = PSC_malloc(sizeof *self);
-    if (!derived) derived = self;
-    self->base.type = OBJTYPE;
-    self->base.base = Object_create(derived);
+    CREATEBASE(Object);
     self->locale = locale;
     self->name = getName(argc, argv);
     self->argv = argv;

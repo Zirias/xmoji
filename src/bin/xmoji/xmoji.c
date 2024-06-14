@@ -95,11 +95,8 @@ static int startup(void *app)
 
 Xmoji *Xmoji_create(int argc, char **argv)
 {
-    REGTYPE(0);
-
     Xmoji *self = PSC_malloc(sizeof *self);
-    self->base.type = OBJTYPE;
-    self->base.base = X11App_createBase(self, argc, argv);
+    CREATEFINALBASE(X11App, argc, argv);
     return self;
 }
 

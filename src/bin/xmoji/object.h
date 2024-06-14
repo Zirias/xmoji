@@ -22,10 +22,10 @@ typedef struct Object
     uint32_t type;
 } Object;
 
-int MetaObject_register(void *meta);
+uint32_t MetaObject_register(void *meta);
 const void *MetaObject_get(uint32_t id);
 
-Object *Object_create(void *derived);
+Object *Object_createBase(void *derived);
 void *Object_ref(void *self);
 void Object_own(void *self, void *obj);
 void *Object_instanceOf(void *self, uint32_t type, int mustMatch);
@@ -33,17 +33,36 @@ void *Object_mostDerived(void *self);
 const char *Object_className(void *self);
 void Object_destroy(void *self);
 
-#define REGTYPE(errval) do { \
-    MetaObject *b_mo = (MetaObject *)&mo; \
-    if (!b_mo->id) { \
-	if (MetaObject_register(b_mo) < 0) return errval; \
-    } \
+#define priv_MO_basector0(derived, type) \
+    type ## _createBase (derived)
+#define priv_MO_basectorn(derived, type, ...) \
+    type ## _createBase (derived, __VA_ARGS__)
+#define priv_MO_pickctor(a,b,c,d,e,f,g,h,i,x,...) x
+#define priv_MO_basector(derived, ...) priv_MO_pickctor(__VA_ARGS__,\
+	priv_MO_basectorn,\
+	priv_MO_basectorn,\
+	priv_MO_basectorn,\
+	priv_MO_basectorn,\
+	priv_MO_basectorn,\
+	priv_MO_basectorn,\
+	priv_MO_basectorn,\
+	priv_MO_basectorn,\
+	priv_MO_basector0,)(derived, __VA_ARGS__)
+
+#define CREATEBASE(...) do { \
+    if (!derived) derived = self; \
+    self->base.type = MetaObject_register(&mo); \
+    self->base.base = priv_MO_basector(derived, __VA_ARGS__); \
 } while (0)
 
-#define OBJTYPE ((MetaObject *)&mo)->id
+#define CREATEFINALBASE(...) do { \
+    self->base.type = MetaObject_register(&mo); \
+    self->base.base = priv_MO_basector(self, __VA_ARGS__); \
+} while (0)
 
-#define Object_instance(o) Object_instanceOf((void *)(o), OBJTYPE, 1)
-#define Object_cast(o) Object_instanceOf((void *)(o), OBJTYPE, 0)
+#define priv_MO_id ((MetaObject *)&mo)->id
+#define Object_instance(o) Object_instanceOf((void *)(o), priv_MO_id, 1)
+#define Object_cast(o) Object_instanceOf((void *)(o), priv_MO_id, 0)
 
 #define priv_MO_docall(r, mo, m, ...) r = mo->m(__VA_ARGS__)
 #define priv_MO_docallv(r, mo, m, ...) mo->m(__VA_ARGS__)

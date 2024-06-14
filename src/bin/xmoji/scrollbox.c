@@ -299,12 +299,8 @@ static void sizeRequested(void *receiver, void *sender, void *args)
 
 ScrollBox *ScrollBox_createBase(void *derived, const char *name, void *parent)
 {
-    REGTYPE(0);
-
     ScrollBox *self = PSC_malloc(sizeof *self);
-    if (!derived) derived = self;
-    self->base.type = OBJTYPE;
-    self->base.base = Widget_createBase(derived, name, parent);
+    CREATEBASE(Widget, name, parent);
     XRdb *rdb = X11Adapter_resources();
     const char *resname = Widget_resname(self);
     self->widget = 0;

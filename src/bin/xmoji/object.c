@@ -3,15 +3,13 @@
 #include <poser/core.h>
 #include <stdlib.h>
 
-#define MAXTYPES 64
+#define TYPESCHUNK 64
 
 static MetaObject mo = MetaObject_init("Object", free);
-
-static MetaObject *types[MAXTYPES] = {
-    &mo,
-    0
-};
-static uint32_t ntypes = 1;
+static MetaObject **types;
+static uint32_t typesnum;
+static uint32_t typescapa;
+static size_t objects;
 
 typedef struct ObjectBase
 {
@@ -21,23 +19,36 @@ typedef struct ObjectBase
     int refcnt;
 } ObjectBase;
 
-int MetaObject_register(void *meta)
+uint32_t MetaObject_register(void *meta)
 {
-    if (ntypes == MAXTYPES) return -1;
     MetaObject *m = meta;
-    m->id = ntypes;
-    types[ntypes++] = m;
-    return 0;
+    if (m->id && m->id < typesnum) goto done;
+    if (!types)
+    {
+	typescapa = TYPESCHUNK;
+	types = PSC_malloc(typescapa * sizeof *types);
+	types[typesnum++] = &mo;
+    }
+    else if (typesnum == typescapa)
+    {
+	typescapa += TYPESCHUNK;
+	types = PSC_realloc(types, typescapa * sizeof *types);
+    }
+    m->id = typesnum;
+    types[typesnum++] = m;
+done:
+    return m->id;
 }
 
 const void *MetaObject_get(uint32_t id)
 {
-    if (id >= ntypes) return 0;
+    if (id >= typesnum) return 0;
     return types[id];
 }
 
-Object *Object_create(void *derived)
+Object *Object_createBase(void *derived)
 {
+    ++objects;
     ObjectBase *base = PSC_malloc(sizeof *base);
     base->base.base = 0;
     base->base.type = 0;
@@ -105,5 +116,12 @@ void Object_destroy(void *self)
     PSC_List_destroy(base->owned);
     Object *obj = base->mostDerived;
     destroyRecursive(obj);
+    if (!--objects)
+    {
+	free(types);
+	types = 0;
+	typesnum = 0;
+	typescapa = 0;
+    }
 }
 

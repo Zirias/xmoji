@@ -141,12 +141,8 @@ static void originChanged(void *receiver, void *sender, void *args)
 
 Button *Button_createBase(void *derived, const char *name, void *parent)
 {
-    REGTYPE(0);
-
     Button *self = PSC_malloc(sizeof *self);
-    if (!derived) derived = self;
-    self->base.type = OBJTYPE;
-    self->base.base = Widget_createBase(derived, name, parent);
+    CREATEBASE(Widget, name, parent);
     self->label = TextLabel_create(0, self);
     self->clicked = PSC_Event_create(self);
     self->color = COLOR_BG_ABOVE;
