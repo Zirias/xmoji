@@ -31,6 +31,7 @@ struct VBox
     Object base;
     PSC_List *items;
     Size minSize;
+    uint16_t spacing;
 };
 
 static void destroy(void *obj)
@@ -170,12 +171,13 @@ void layout(VBox *self, int updateMinSize)
 	while (PSC_ListIterator_moveNext(i))
 	{
 	    VBoxItem *item = PSC_ListIterator_current(i);
-	    self->minSize.height += item->minSize.height;
+	    self->minSize.height += item->minSize.height + self->spacing;
 	    if (item->minSize.width > self->minSize.width)
 	    {
 		self->minSize.width = item->minSize.width;
 	    }
 	}
+	if (self->minSize.height) self->minSize.height -= self->spacing;
 	Widget_requestSize(self);
     }
 
@@ -200,7 +202,7 @@ void layout(VBox *self, int updateMinSize)
 	itemPos.x += (itemSize.width - realSize.width) / 2;
 	itemPos.y += (itemSize.height - realSize.height) / 2;
 	Widget_setOrigin(item->widget, itemPos);
-	contentOrigin.y += itemSize.height;
+	contentOrigin.y += itemSize.height + self->spacing;
     }
 
     PSC_ListIterator_destroy(i);
@@ -256,6 +258,7 @@ VBox *VBox_createBase(void *derived, void *parent)
     self->base.base = Widget_createBase(derived, 0, parent);
     self->items = PSC_List_create();
     self->minSize = (Size){0, 0};
+    self->spacing = 3;
 
     PSC_Event_register(Widget_sizeChanged(self), self, layoutChanged, 0);
     PSC_Event_register(Widget_originChanged(self), self, layoutChanged, 0);
@@ -273,5 +276,21 @@ void VBox_addWidget(void *self, void *widget)
     PSC_Event_register(Widget_sizeRequested(widget), b, sizeRequested, 0);
     PSC_List_append(b->items, item, free);
     layout(self, 1);
+}
+
+uint16_t VBox_spacing(const void *self)
+{
+    VBox *b = Object_instance(self);
+    return b->spacing;
+}
+
+void VBox_setSpacing(void *self, uint16_t spacing)
+{
+    VBox *b = Object_instance(self);
+    if (spacing != b->spacing)
+    {
+	b->spacing = spacing;
+	layout(self, 1);
+    }
 }
 
