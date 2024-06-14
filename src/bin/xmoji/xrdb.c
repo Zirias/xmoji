@@ -146,6 +146,15 @@ static size_t XRdb_parseEntry(XRdb *self, const char *str, size_t slen)
     }
     if (vallen == sizeof valstr) return slen;
     valstr[vallen] = 0;
+    for (size_t i = 0; i < PSC_List_size(self->entries); ++i)
+    {
+	XRdbEntry *entry = PSC_List_at(self->entries, i);
+	if (entry->keylen != keylen) continue;
+	if (memcmp(entry->key, key, keylen * sizeof *entry->key)) continue;
+	free(entry->value);
+	entry->value = PSC_copystr(valstr);
+	return pos;
+    }
     XRdbEntry *entry = PSC_malloc(sizeof *entry + keylen * sizeof *entry->key);
     entry->value = PSC_copystr(valstr);
     entry->keylen = keylen;
