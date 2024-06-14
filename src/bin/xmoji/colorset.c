@@ -221,10 +221,13 @@ void ColorSet_destroy(ColorSet *self)
 	convert((b),(b),(cv)), convert((b),0,(cv)), 0xffU)
 #define colorconva(b,cv) combine(convert((b),(b)*3,(cv)),\
 	convert((b),(b)*2,(cv)), convert((b),(b),(cv)), convert((b),0,(cv)))
+#define skipws(p) while (*(p) == ' ' || *(p) == '\t') ++(p)
 
 int Color_fromString(Color *color, const char *str)
 {
     if (!str) return -1;
+    skipws(str);
+    if (!*str) return -1;
     if (*str == '#')
     {
 	// Hex formats '#rgb', '#rrggbb', '#rrrgggbbb', '#rrrrggggbbbb',
@@ -232,7 +235,10 @@ int Color_fromString(Color *color, const char *str)
 	char *endp = 0;
 	errno = 0;
 	unsigned long long cv = strtoull(str+1, &endp, 16);
-	if (errno != 0 || endp == str+1 || *endp) return -1;
+	if (errno != 0 || endp == str+1) return -1;
+	char *p = endp;
+	skipws(p);
+	if (*p) return -1;
 	if (endp - str == 17)
 	{
 	    *color = colorconva(16, cv);
@@ -327,7 +333,7 @@ int Color_fromString(Color *color, const char *str)
 	    alpha = convert((endp-p)*4, 0, chan);
 	}
 	p = endp;
-	while (*p && (*p == ' ' || *p == '\t')) ++p;
+	skipws(p);
 	if (*p) return -1;
 	*color = combine(red, green, blue, alpha);
 	return 0;
@@ -336,45 +342,45 @@ int Color_fromString(Color *color, const char *str)
     {
 	// Decimal formats '(r, g, b)', 'rgb(r, g, b)' and 'rgba(r, g, b, a)'
 	// (borrowed from CSS)
-	while (*p && (*p == ' ' || *p == '\t')) ++p;
+	skipws(p);
 	if (!*p) return -1;
 	char *endp = 0;
 	errno = 0;
 	unsigned long red = strtoul(p, &endp, 10);
 	if (errno != 0 || endp == p || red > 255) return -1;
 	p = endp;
-	while (*p && (*p == ' ' || *p == '\t')) ++p;
+	skipws(p);
 	if (*p != ',') return -1;
 	++p;
-	while (*p && (*p == ' ' || *p == '\t')) ++p;
+	skipws(p);
 	if (!*p) return -1;
 	unsigned long green = strtoul(p, &endp, 10);
 	if (errno != 0 || endp == p || green > 255) return -1;
 	p = endp;
-	while (*p && (*p == ' ' || *p == '\t')) ++p;
+	skipws(p);
 	if (*p != ',') return -1;
 	++p;
-	while (*p && (*p == ' ' || *p == '\t')) ++p;
+	skipws(p);
 	if (!*p) return -1;
 	unsigned long blue = strtoul(p, &endp, 10);
 	if (errno != 0 || endp == p || blue > 255) return -1;
 	p = endp;
-	while (*p && (*p == ' ' || *p == '\t')) ++p;
+	skipws(p);
 	unsigned long alpha = 255;
 	if (hasalpha)
 	{
 	    if (*p != ',') return -1;
 	    ++p;
-	    while (*p && (*p == ' ' || *p == '\t')) ++p;
+	    skipws(p);
 	    if (!*p) return -1;
 	    alpha = strtoul(p, &endp, 10);
 	    if (errno != 0 || endp == p || alpha > 255) return -1;
 	    p = endp;
-	    while (*p && (*p == ' ' || *p == '\t')) ++p;
+	    skipws(p);
 	}
 	if (*p != ')') return -1;
 	++p;
-	while (*p && (*p == ' ' || *p == '\t')) ++p;
+	skipws(p);
 	if (*p) return -1;
 	*color = combine(red, green, blue, alpha);
 	return 0;
