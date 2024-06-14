@@ -1,5 +1,6 @@
 #include "xmoji.h"
 
+#include "button.h"
 #include "scrollbox.h"
 #include "textbox.h"
 #include "textlabel.h"
@@ -60,6 +61,13 @@ static void onprestartup(void *receiver, void *sender, void *args)
     Widget_show(input);
     VBox_addWidget(box, input);
 
+    Button *button = Button_create("quitButton", box);
+    UniStr(quit, "Quit");
+    Button_setText(button, quit);
+    Widget_setAlign(button, AH_CENTER);
+    Widget_show(button);
+    VBox_addWidget(box, button);
+
     label = TextLabel_create("emojiLabel", box);
     Widget_setFontResName(label, "emojifont", "emoji", 0);
     UniStr(emojis, "😀🤡🇩🇪👺🧩🔮🐅🍻🧑🏾‍🤝‍🧑🏻");
@@ -82,6 +90,7 @@ static void onprestartup(void *receiver, void *sender, void *args)
     Window_setMainWidget(win, scroll);
 
     PSC_Event_register(Window_closed(win), 0, onclose, 0);
+    PSC_Event_register(Button_clicked(button), 0, onclose, 0);
     PSC_Event_register(Window_errored(win), 0, onclose, 0);
     return;
 

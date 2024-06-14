@@ -94,7 +94,8 @@ typedef struct XkbKeyEventArgs
 typedef enum XCursor
 {
     XC_LEFTPTR,
-    XC_XTERM
+    XC_XTERM,
+    XC_HAND
 } XCursor;
 
 typedef void (*X11ReplyHandler)(void *ctx, unsigned sequence, void *reply,

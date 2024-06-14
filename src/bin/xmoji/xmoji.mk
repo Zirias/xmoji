@@ -1,4 +1,5 @@
-xmoji_MODULES=		colorset \
+xmoji_MODULES=		button \
+			colorset \
 			font \
 			main \
 			nanosvg \
