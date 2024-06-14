@@ -5,7 +5,6 @@
 #include "xrdb.h"
 
 #include <inttypes.h>
-#include <locale.h>
 #include <poser/core.h>
 #include <stdlib.h>
 #include <string.h>
@@ -563,7 +562,8 @@ static void flushandsync(void *receiver, void *sender, void *args)
     }
 }
 
-int X11Adapter_init(int argc, char **argv, const char *classname)
+int X11Adapter_init(int argc, char **argv, const char *locale,
+	const char *name, const char *classname)
 {
     xcb_render_query_pict_formats_reply_t *pf = 0;
     if (c) return 0;
@@ -743,64 +743,23 @@ int X11Adapter_init(int argc, char **argv, const char *classname)
     xcb_get_property_cookie_t rescookie = xcb_get_property(c, 0, s->root,
 	    XCB_ATOM_RESOURCE_MANAGER, XCB_ATOM_STRING, 0, maxproplen);
 
-    char *lc = setlocale(LC_ALL, "");
-    if (!lc) lc = "C";
-    char *lcdot = strchr(lc, '.');
-    if (!lcdot || strcmp(lcdot+1, "UTF-8"))
-    {
-	char utf8lc[32];
-	if (lcdot) *lcdot = 0;
-	snprintf(utf8lc, sizeof utf8lc, "%s.UTF-8", lc);
-	PSC_Log_fmt(PSC_L_WARNING, "Configured locale doesn't use UTF-8 "
-		"encoding, trying `%s' instead", utf8lc);
-	lc = setlocale(LC_ALL, utf8lc);
-    }
-    if (lc)
-    {
-	PSC_Log_fmt(PSC_L_INFO, "Starting with locale `%s'", lc);
-    }
-    else
-    {
-	PSC_Log_msg(PSC_L_ERROR, "Couldn't set locale");
-	goto error;
-    }
-    kbdcompose = xkb_compose_table_new_from_locale(kbdctx, lc,
+    kbdcompose = xkb_compose_table_new_from_locale(kbdctx, locale,
 	    XKB_COMPOSE_COMPILE_NO_FLAGS);
     if (!kbdcompose)
     {
-	PSC_Log_fmt(PSC_L_ERROR, "Couldn't create compose table for `%s'", lc);
+	PSC_Log_fmt(PSC_L_ERROR,
+		"Couldn't create compose table for `%s'", locale);
 	goto error;
     }
 
-    char *nm = 0;
-    for (int i = 1; i < argc-1; ++i)
-    {
-	if (!strcmp(argv[i], "-name"))
-	{
-	    nm = argv[++i];
-	}
-    }
-    if (!nm) nm = getenv("RESOURCE_NAME");
-    if (!nm && argv[0] && *argv[0])
-    {
-	char *lastslash = strrchr(argv[0], '/');
-	if (lastslash) nm = lastslash+1;
-	else nm = argv[0];
-	if (!*nm) nm = 0;
-    }
-    if (!nm) nm = "unknown";
-    nm = LATIN1(nm);
-    char *clnm = 0;
-    if (classname)
-    {
-	clnm = LATIN1(classname);
-	classname = clnm;
-    }
-    else classname = nm;
+    char *nm = LATIN1(name);
+    char *cnm = LATIN1(classname);
     int len = snprintf(wmclass, sizeof wmclass / 2, "%s", nm);
     size_t pos = len + 1;
     if (pos > sizeof wmclass / 2) pos = sizeof wmclass / 2;
-    int len2 = snprintf(wmclass+pos, sizeof wmclass / 2, "%s", classname);
+    int len2 = snprintf(wmclass+pos, sizeof wmclass / 2, "%s", cnm);
+    free(cnm);
+    free(nm);
     wmclasssz = pos + len2 + 1;
     if (wmclasssz > sizeof wmclass) wmclasssz = sizeof wmclass;
     PSC_Log_fmt(PSC_L_INFO,
@@ -839,7 +798,7 @@ int X11Adapter_init(int argc, char **argv, const char *classname)
 	    }
 	    if (resreply)
 	    {
-		rdb = XRdb_create(resstr, ressz, classname, nm);
+		rdb = XRdb_create(resstr, ressz, classname, name);
 		free(resreply);
 	    }
 	    free(resstr);
@@ -848,13 +807,11 @@ int X11Adapter_init(int argc, char **argv, const char *classname)
 	{
 	    rdb = XRdb_create(xcb_get_property_value(resreply),
 		    xcb_get_property_value_length(resreply),
-		    classname, nm);
+		    classname, name);
 	    free(resreply);
 	}
     }
-    if (!rdb) rdb = XRdb_create(0, 0, classname, nm);
-    free(clnm);
-    free(nm);
+    if (!rdb) rdb = XRdb_create(0, 0, classname, name);
 
     XRdb_setOverrides(rdb, argc, argv);
     glitches = XRdb_int(rdb, XRdbKey("glitches"), XRQF_OVERRIDES, 0, 0, 1);

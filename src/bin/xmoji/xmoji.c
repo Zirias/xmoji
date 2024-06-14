@@ -1,5 +1,3 @@
-#include "xmoji.h"
-
 #include "button.h"
 #include "scrollbox.h"
 #include "textbox.h"
@@ -9,16 +7,20 @@
 #include "vbox.h"
 #include "window.h"
 #include "x11adapter.h"
+#include "x11app.h"
 
 #include <poser/core.h>
 #include <stdio.h>
 #include <stdlib.h>
 
-static PSC_LogLevel loglevel = PSC_L_WARNING;
+static int startup(void *app);
 
-static Window *win;
+static MetaX11App mo = MetaX11App_init(startup, 0, "Xmoji", free);
 
-static struct { int argc; char **argv; } startupargs;
+typedef struct Xmoji
+{
+    Object base;
+} Xmoji;
 
 static void onclose(void *receiver, void *sender, void *args)
 {
@@ -29,17 +31,11 @@ static void onclose(void *receiver, void *sender, void *args)
     PSC_Service_quit();
 }
 
-static void onprestartup(void *receiver, void *sender, void *args)
+static int startup(void *app)
 {
-    (void)receiver;
-    (void)sender;
+    Xmoji *self = Object_instance(app);
 
-    PSC_EAStartup *ea = args;
-
-    if (X11Adapter_init(
-		startupargs.argc, startupargs.argv, "Xmoji") < 0) goto error;
-
-    if (!(win = Window_create("mainWindow", 0))) goto error;
+    Window *win = Window_create("mainWindow", self);
     Window_setTitle(win, "Xmoji 😀 äöüß");
 
     ScrollBox *scroll = ScrollBox_create("mainScrollBox", win);
@@ -92,58 +88,24 @@ static void onprestartup(void *receiver, void *sender, void *args)
     PSC_Event_register(Window_closed(win), 0, onclose, 0);
     PSC_Event_register(Button_clicked(button), 0, onclose, 0);
     PSC_Event_register(Window_errored(win), 0, onclose, 0);
-    return;
 
-error:
-    PSC_EAStartup_return(ea, EXIT_FAILURE);
-}
-
-static void onstartup(void *receiver, void *sender, void *args)
-{
-    (void)receiver;
-    (void)sender;
-    (void)args;
-
-#ifndef DEBUG
-    PSC_Log_setAsync(1);
-#endif
     Widget_show(win);
+    return 0;
 }
 
-static void onshutdown(void *receiver, void *sender, void *args)
+Xmoji *Xmoji_create(int argc, char **argv)
 {
-    (void)receiver;
-    (void)sender;
-    (void)args;
+    REGTYPE(0);
 
-    Object_destroy(win);
-    win = 0;
-    X11Adapter_done();
-    PSC_Log_setAsync(0);
+    Xmoji *self = PSC_malloc(sizeof *self);
+    self->base.type = OBJTYPE;
+    self->base.base = X11App_createBase(self, argc, argv);
+    return self;
 }
 
-SOLOCAL int Xmoji_run(int argc, char **argv)
+int main(int argc, char **argv)
 {
-    startupargs.argc = argc;
-    startupargs.argv = argv;
-
-    for (int i = 1; i < argc; ++i)
-    {
-	if (loglevel < PSC_L_INFO && !strcmp(argv[i], "-v"))
-	{
-	    loglevel = PSC_L_INFO;
-	}
-	else if (loglevel < PSC_L_DEBUG && !strcmp(argv[i], "-vv"))
-	{
-	    loglevel = PSC_L_DEBUG;
-	}
-    }
-
-    PSC_RunOpts_foreground();
-    PSC_Log_setFileLogger(stderr);
-    PSC_Log_setMaxLogLevel(loglevel);
-    PSC_Event_register(PSC_Service_prestartup(), 0, onprestartup, 0);
-    PSC_Event_register(PSC_Service_startup(), 0, onstartup, 0);
-    PSC_Event_register(PSC_Service_shutdown(), 0, onshutdown, 0);
-    return PSC_Service_run();
+    Xmoji_create(argc, argv);
+    return X11App_run();
 }
+

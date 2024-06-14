@@ -1,7 +1,6 @@
 xmoji_MODULES=		button \
 			colorset \
 			font \
-			main \
 			nanosvg \
 			object \
 			scrollbox \
@@ -16,6 +15,7 @@ xmoji_MODULES=		button \
 			widget \
 			window \
 			x11adapter \
+			x11app \
 			xmoji \
 			xrdb \
 			xselection

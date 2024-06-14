@@ -168,7 +168,9 @@ typedef void (*X11ReplyHandler)(void *ctx, unsigned sequence, void *reply,
 	    int: X11Adapter_checkLogString \
 	)(priv_Trace(x), (c), (h))
 
-int X11Adapter_init(int argc, char **argv, const char *classname);
+int X11Adapter_init(int argc, char **argv, const char *locale,
+	const char *name, const char *classname)
+    ATTR_NONNULL((3)) ATTR_NONNULL((4));
 
 xcb_connection_t *X11Adapter_connection(void);
 xcb_screen_t *X11Adapter_screen(void);
