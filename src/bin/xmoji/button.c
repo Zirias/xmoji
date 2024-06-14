@@ -7,6 +7,7 @@
 #include <stdlib.h>
 
 static void destroy(void *obj);
+static void expose(void *obj, Rect region);
 static int draw(void *obj, xcb_render_picture_t picture);
 static void enter(void *obj);
 static void leave(void *obj);
@@ -15,7 +16,7 @@ static int clicked(void *obj, const ClickEvent *event);
 static Size minSize(const void *obj);
 
 static MetaButton mo = MetaButton_init(
-	0, draw, 0, 0,
+	expose, draw, 0, 0,
 	0, 0, enter, leave, 0, 0, 0, 0, setFont,
 	0, minSize, 0, clicked, 0,
 	"Button", destroy);
@@ -35,12 +36,17 @@ static void destroy(void *obj)
     free(self);
 }
 
+static void expose(void *obj, Rect region)
+{
+    Button *self = Object_instance(obj);
+    Widget_invalidateRegion(self->label, region);
+}
+
 static int draw(void *obj, xcb_render_picture_t picture)
 {
     Button *self = Object_instance(obj);
     if (picture)
     {
-	Widget_invalidate(self->label);
 	Rect geom = Widget_geometry(self->label);
 	xcb_rectangle_t rect = { geom.pos.x, geom.pos.y,
 	    geom.size.width, geom.size.height };
