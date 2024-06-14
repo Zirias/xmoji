@@ -403,7 +403,6 @@ static void setFont(void *obj, Font *font)
 	TextRenderer_setText(self->placeholder, self->phtext);
     }
     self->minSize.height = (Font_maxHeight(font) + 0x3f) >> 6;
-    Widget_setMaxSize(self, (Size){ -1, self->minSize.height });
     Widget_invalidate(self);
     Widget_requestSize(self);
 }
@@ -534,8 +533,8 @@ TextBox *TextBox_createBase(void *derived, const char *name, void *parent)
     self->scrollpos = 0;
     self->cursorvisible = 0;
 
-    Widget_setMaxSize(self, (Size){ -1, self->minSize.height });
     Widget_setBackground(self, 1, COLOR_BG_BELOW);
+    Widget_setExpand(self, EXPAND_X);
     Widget_setCursor(self, XC_XTERM);
     Widget_acceptFocus(self, 1);
 

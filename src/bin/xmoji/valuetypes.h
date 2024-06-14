@@ -100,4 +100,11 @@ typedef enum Align
     AV_MIDDLE	= 1 << 3
 } Align;
 
+typedef enum Expand
+{
+    EXPAND_NONE	= 0,
+    EXPAND_X	= 1 << 0,
+    EXPAND_Y	= 1 << 1
+} Expand;
+
 #endif

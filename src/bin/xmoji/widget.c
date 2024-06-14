@@ -43,6 +43,7 @@ struct Widget
     xcb_render_picture_t picture;
     ColorRole backgroundRole;
     Align align;
+    Expand expand;
     XCursor cursor;
     int drawBackground;
     int ndamages;
@@ -132,6 +133,7 @@ Widget *Widget_createBase(void *derived, const char *name, void *parent)
     self->colorSet = ColorSet_createFor(self->resname);
     self->padding = (Box){ 3, 3, 3, 3 };
     self->maxSize = (Size){ -1, -1 };
+    self->expand = EXPAND_X|EXPAND_Y;
     self->cursor = XC_LEFTPTR;
 
     if (parent) Object_own(parent, derived);
@@ -458,8 +460,23 @@ static void setSize(Widget *self, int external, Size size)
     {
 	max.height += self->padding.top + self->padding.bottom;
     }
-    if (size.width > max.width) size.width = max.width;
-    if (size.height > max.height) size.height = max.height;
+    if (!external)
+    {
+	if (self->expand != (EXPAND_X|EXPAND_Y))
+	{
+	    Size minSize = Widget_minSize(self);
+	    if (!(self->expand & EXPAND_X) && size.width > minSize.width)
+	    {
+		size.width = minSize.width;
+	    }
+	    if (!(self->expand & EXPAND_Y) && size.height > minSize.height)
+	    {
+		size.height = minSize.height;
+	    }
+	}
+	if (size.width > max.width) size.width = max.width;
+	if (size.height > max.height) size.height = max.height;
+    }
     if (memcmp(&self->geometry.size, &size, sizeof size))
     {
 	SizeChangedEventArgs args = { external, self->geometry.size, size };
@@ -522,6 +539,18 @@ Align Widget_align(const void *self)
 {
     const Widget *w = Object_instance(self);
     return w->align;
+}
+
+void Widget_setExpand(void *self, Expand expand)
+{
+    Widget *w = Object_instance(self);
+    w->expand = expand;
+}
+
+Expand Widget_expand(const void *self)
+{
+    const Widget *w = Object_instance(self);
+    return w->expand;
 }
 
 void Widget_setCursor(void *self, XCursor cursor)

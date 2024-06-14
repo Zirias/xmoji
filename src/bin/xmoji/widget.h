@@ -151,6 +151,8 @@ void Widget_setPadding(void *self, Box padding) CMETHOD;
 Box Widget_padding(const void *self) CMETHOD;
 void Widget_setAlign(void *self, Align align) CMETHOD;
 Align Widget_align(const void *self) CMETHOD;
+void Widget_setExpand(void *self, Expand expand) CMETHOD;
+Expand Widget_expand(const void *self) CMETHOD;
 void Widget_setCursor(void *self, XCursor cursor) CMETHOD;
 XCursor Widget_cursor(const void *self) CMETHOD;
 void Widget_setOrigin(void *self, Pos origin) CMETHOD;

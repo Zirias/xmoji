@@ -98,7 +98,6 @@ static Size minSize(const void *obj)
     minSize.height += 2;
 
     if (minSize.width < 120) minSize.width = 120;
-    Widget_setMaxSize(self, (Size){-1, minSize.height});
     return minSize;
 }
 
@@ -148,6 +147,7 @@ Button *Button_createBase(void *derived, const char *name, void *parent)
 
     Widget_setBackground(self, 1, COLOR_BG_BELOW);
     Widget_setPadding(self, (Box){1, 1, 1, 1});
+    Widget_setExpand(self, EXPAND_NONE);
     Widget_setCursor(self, XC_HAND);
     Widget_setContainer(self->label, self);
     Widget_setAlign(self->label, AH_CENTER|AV_MIDDLE);
