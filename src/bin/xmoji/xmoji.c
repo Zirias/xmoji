@@ -6,7 +6,6 @@
 #include "valuetypes.h"
 #include "vbox.h"
 #include "window.h"
-#include "x11adapter.h"
 #include "x11app.h"
 
 #include <poser/core.h>
@@ -28,7 +27,7 @@ static void onclose(void *receiver, void *sender, void *args)
     (void)sender;
     (void)args;
 
-    PSC_Service_quit();
+    X11App_quit();
 }
 
 static int startup(void *app)

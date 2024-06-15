@@ -25,5 +25,6 @@ X11App *app(void);
 X11App *X11App_createBase(void *derived, int argc, char **argv);
 #define X11App_create(...) X11App_createBase(0, __VA_ARGS__)
 int X11App_run(void);
+void X11App_quit(void);
 
 #endif

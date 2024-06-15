@@ -160,3 +160,9 @@ done:
     return rc ? EXIT_FAILURE : EXIT_SUCCESS;
 }
 
+void X11App_quit(void)
+{
+    if (!instance) return;
+    PSC_Service_quit();
+}
+
