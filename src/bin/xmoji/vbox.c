@@ -41,6 +41,13 @@ static void destroy(void *obj)
     free(self);
 }
 
+static void destroyItem(void *obj)
+{
+    VBoxItem *self = obj;
+    Object_destroy(self->widget);
+    free(self);
+}
+
 static void expose(void *obj, Rect region)
 {
     VBox *self = Object_instance(obj);
@@ -266,11 +273,11 @@ void VBox_addWidget(void *self, void *widget)
 {
     VBox *b = Object_instance(self);
     VBoxItem *item = PSC_malloc(sizeof *item);
-    item->widget = Widget_cast(widget);
+    item->widget = Widget_cast(Object_ref(widget));
     item->minSize = Widget_minSize(widget);
     Widget_setContainer(widget, b);
     PSC_Event_register(Widget_sizeRequested(widget), b, sizeRequested, 0);
-    PSC_List_append(b->items, item, free);
+    PSC_List_append(b->items, item, destroyItem);
     layout(self, 1);
 }
 

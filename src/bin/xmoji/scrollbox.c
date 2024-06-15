@@ -99,6 +99,7 @@ static void updateHover(ScrollBox *self, Pos pos)
 static void destroy(void *obj)
 {
     ScrollBox *self = obj;
+    Object_destroy(self->widget);
     free(self);
 }
 
@@ -329,10 +330,15 @@ void ScrollBox_setWidget(void *self, void *widget)
 	Widget_setContainer(b->widget, 0);
 	PSC_Event_unregister(Widget_sizeRequested(b->widget), b,
 		sizeRequested, 0);
+	Object_destroy(b->widget);
     }
-    b->widget = widget;
-    Widget_setContainer(widget, b);
-    PSC_Event_register(Widget_sizeRequested(widget), b, sizeRequested, 0);
-    sizeRequested(b, widget, 0);
+    if (widget)
+    {
+	b->widget = Object_ref(widget);
+	Widget_setContainer(widget, b);
+	PSC_Event_register(Widget_sizeRequested(widget), b, sizeRequested, 0);
+	sizeRequested(b, widget, 0);
+    }
+    else b->widget = 0;
 }
 

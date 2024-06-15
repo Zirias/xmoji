@@ -389,6 +389,17 @@ static void doupdates(void *receiver, void *sender, void *args)
 	}
 	if (hoverPos.x >= 0 && hoverPos.y >= 0)
 	{
+	    Widget *hover = Widget_enterAt(self->mainWidget, hoverPos);
+	    if (hover != self->hoverWidget)
+	    {
+		if (self->hoverWidget) Object_destroy(self->hoverWidget);
+		if (!hover)
+		{
+		    self->hoverWidget = 0;
+		    goto done;
+		}
+		else self->hoverWidget = Object_ref(hover);
+	    }
 	    self->hoverWidget = Widget_enterAt(self->mainWidget, hoverPos);
 	    XCursor cursor = Widget_cursor(self->hoverWidget);
 	    if (cursor != self->cursor)
@@ -411,10 +422,12 @@ static void doupdates(void *receiver, void *sender, void *args)
 	}
 	else
 	{
+	    Object_destroy(self->hoverWidget);
 	    self->hoverWidget = 0;
 	    Widget_leave(self->mainWidget);
 	}
     }
+done:
     Widget_draw(self);
 }
 
@@ -556,6 +569,9 @@ static void destroy(void *window)
     PSC_Event_destroy(self->propertyChanged);
     PSC_Event_destroy(self->errored);
     PSC_Event_destroy(self->closed);
+    Object_destroy(self->hoverWidget);
+    Object_destroy(self->focusWidget);
+    Object_destroy(self->mainWidget);
     xcb_connection_t *c = X11Adapter_connection();
     if (self->p)
     {
@@ -802,8 +818,9 @@ void Window_setMainWidget(void *self, void *widget)
 	PSC_Event_unregister(Widget_sizeRequested(w->mainWidget), w,
 		sizeRequested, 0);
 	Widget_setContainer(w->mainWidget, 0);
+	Object_destroy(w->mainWidget);
     }
-    w->mainWidget = widget;
+    w->mainWidget = Object_ref(widget);
     if (widget)
     {
 	Widget_setContainer(widget, w);
@@ -824,8 +841,9 @@ void Window_setFocusWidget(void *self, void *widget)
 	Widget *prev = w->focusWidget;
 	w->focusWidget = 0;
 	Widget_unfocus(prev);
+	Object_destroy(prev);
     }
-    w->focusWidget = widget;
+    w->focusWidget = Object_ref(widget);
 }
 
 xcb_atom_t Window_takeProperty(void *self)
