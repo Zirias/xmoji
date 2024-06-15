@@ -400,7 +400,6 @@ static void doupdates(void *receiver, void *sender, void *args)
 		}
 		else self->hoverWidget = Object_ref(hover);
 	    }
-	    self->hoverWidget = Widget_enterAt(self->mainWidget, hoverPos);
 	    XCursor cursor = Widget_cursor(self->hoverWidget);
 	    if (cursor != self->cursor)
 	    {

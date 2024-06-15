@@ -383,7 +383,7 @@ int Widget_active(const void *self)
     return w->active;
 }
 
-void *Widget_enterAt(void *self, Pos pos)
+Widget *Widget_enterAt(void *self, Pos pos)
 {
     Widget *w = Object_instance(self);
     if (!w->entered)
@@ -391,7 +391,7 @@ void *Widget_enterAt(void *self, Pos pos)
 	w->entered = 1;
 	Object_vcallv(Widget, enter, w);
     }
-    Widget *child = self;
+    Widget *child = w;
     Object_vcall(child, Widget, childAt, self, pos);
     return child;
 }

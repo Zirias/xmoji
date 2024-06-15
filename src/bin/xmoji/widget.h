@@ -62,7 +62,7 @@ typedef struct MetaWidget
     void (*paste)(void *widget, XSelectionContent content);
     void (*unselect)(void *widget);
     void (*setFont)(void *widget, Font *font);
-    void *(*childAt)(void *widget, Pos pos);
+    Widget *(*childAt)(void *widget, Pos pos);
     Size (*minSize)(const void *widget);
     void (*keyPressed)(void *widget, const KeyEvent *event);
     int (*clicked)(void *widget, const ClickEvent *event);
@@ -136,7 +136,7 @@ int Widget_hide(void *self) CMETHOD;
 void Widget_activate(void *self) CMETHOD;
 void Widget_deactivate(void *self) CMETHOD;
 int Widget_active(const void *self) CMETHOD;
-void *Widget_enterAt(void *self, Pos pos) CMETHOD;
+Widget *Widget_enterAt(void *self, Pos pos) CMETHOD;
 void Widget_leave(void *self) CMETHOD;
 void Widget_acceptFocus(void *self, int accept) CMETHOD;
 void Widget_focus(void *self) CMETHOD;

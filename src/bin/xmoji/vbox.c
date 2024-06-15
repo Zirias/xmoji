@@ -11,7 +11,7 @@ static Size minSize(const void *obj);
 static void leave(void *obj);
 static void unselect(void *obj);
 static void setFont(void *obj, Font *font);
-static void *childAt(void *obj, Pos pos);
+static Widget *childAt(void *obj, Pos pos);
 static int clicked(void *obj, const ClickEvent *event);
 
 static MetaVBox mo = MetaVBox_init(
@@ -123,10 +123,10 @@ static void setFont(void *obj, Font *font)
     PSC_ListIterator_destroy(i);
 }
 
-static void *childAt(void *obj, Pos pos)
+static Widget *childAt(void *obj, Pos pos)
 {
     VBox *self = Object_instance(obj);
-    void *child = obj;
+    Widget *child = Widget_cast(obj);
     PSC_ListIterator *i = PSC_List_iterator(self->items);
     while (PSC_ListIterator_moveNext(i))
     {

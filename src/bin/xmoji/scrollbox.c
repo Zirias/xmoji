@@ -12,7 +12,7 @@ static Size minSize(const void *obj);
 static void leave(void *obj);
 static void unselect(void *obj);
 static void setFont(void *obj, Font *font);
-static void *childAt(void *obj, Pos pos);
+static Widget *childAt(void *obj, Pos pos);
 static int clicked(void *obj, const ClickEvent *event);
 static void dragged(void *obj, const DragEvent *event);
 
@@ -171,11 +171,11 @@ static void setFont(void *obj, Font *font)
     Widget_offerFont(self->widget, font);
 }
 
-static void *childAt(void *obj, Pos pos)
+static Widget *childAt(void *obj, Pos pos)
 {
     ScrollBox *self = Object_instance(obj);
-    if (!self->widget) return self;
-    void *child = self;
+    Widget *child = Widget_cast(self);
+    if (!self->widget) return child;
     Rect childGeom = Widget_geometry(self->widget);
     if (pos.x >= childGeom.pos.x
 	    && pos.x < childGeom.pos.x + childGeom.size.width
