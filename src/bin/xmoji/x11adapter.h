@@ -101,18 +101,18 @@ typedef struct X11RequestId
     unsigned sequence;
 } X11RequestId;
 #include <poser/core/log.h>
-#define priv_Trace(x) ( \
+#define priv_Trace(x,s) ( \
 	PSC_Log_fmt(PSC_L_DEBUG, __FILE__ ":" STR(__LINE__) \
-	    ":%s: " #x, __func__), \
+	    ":%s: " s, __func__), \
 	(X11RequestId) { \
-	    .reqsource = #x, \
+	    .reqsource = s, \
 	    .sourcefile = __FILE__, \
 	    .function = __func__, \
 	    .lineno = __LINE__, \
 	    .sequence = (x).sequence })
 #else
 typedef unsigned X11RequestId;
-#define priv_Trace(x) (x).sequence
+#define priv_Trace(x,s) (x).sequence
 #endif
 
 typedef struct RequestErrorEventArgs
@@ -152,7 +152,7 @@ typedef void (*X11ReplyHandler)(void *ctx, unsigned sequence, void *reply,
 #define AWAIT(x,c,h) _Generic((x), \
 	    xcb_void_cookie_t: X11Adapter_awaitNoreply, \
 	    default: X11Adapter_await \
-	)(priv_Trace(x), (c), (h))
+	)(priv_Trace(x,#x), (c), (h))
 
 /** Check an X11 request for errors
  *
@@ -188,7 +188,7 @@ typedef void (*X11ReplyHandler)(void *ctx, unsigned sequence, void *reply,
 	    char *: X11Adapter_checkLogString, \
 	    unsigned: X11Adapter_checkLogUnsigned, \
 	    int: X11Adapter_checkLogString \
-	)(priv_Trace(x), (c), (h))
+	)(priv_Trace(x,#x), (c), (h))
 
 int X11Adapter_init(int argc, char **argv, const char *locale,
 	const char *name, const char *classname)
