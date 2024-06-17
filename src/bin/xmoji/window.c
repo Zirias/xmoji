@@ -833,7 +833,7 @@ void Window_setFocusWidget(void *self, void *widget)
 	Widget_unfocus(prev);
 	Object_destroy(prev);
     }
-    w->focusWidget = Object_ref(widget);
+    if (widget) w->focusWidget = Object_ref(widget);
 }
 
 xcb_atom_t Window_takeProperty(void *self)
