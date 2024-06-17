@@ -45,8 +45,9 @@ uint32_t Font_maxHeight(const Font *self) CMETHOD;
 uint32_t Font_baseline(const Font *self) CMETHOD;
 uint32_t Font_scale(const Font *self, uint32_t val) CMETHOD;
 int32_t Font_ftLoadFlags(const Font *self) CMETHOD;
-int Font_uploadGlyphs(Font *self, unsigned len, GlyphRenderInfo *glyphinfo)
-    CMETHOD ATTR_NONNULL((3));
+int Font_uploadGlyphs(Font *self, uint32_t ownerid,
+	unsigned len, GlyphRenderInfo *glyphinfo)
+    CMETHOD ATTR_NONNULL((4));
 xcb_render_glyphset_t Font_glyphset(const Font *self) CMETHOD;
 xcb_render_glyphset_t Font_maskGlyphset(const Font *self) CMETHOD;
 void Font_destroy(Font *self);

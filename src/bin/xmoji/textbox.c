@@ -518,7 +518,7 @@ TextBox *TextBox_createBase(void *derived, const char *name, void *parent)
     TextBox *self = PSC_malloc(sizeof *self);
     CREATEBASE(Widget, name, parent);
     self->text = UniStrBuilder_create();
-    self->renderer = TextRenderer_create();
+    self->renderer = TextRenderer_create(self->base.base);
     TextRenderer_setNoLigatures(self->renderer, 1);
     self->phtext = 0;
     self->placeholder = 0;
@@ -569,7 +569,7 @@ void TextBox_setPlaceholder(void *self, const UniStr *text)
     if (b->placeholder) UniStr_destroy(b->phtext);
     else
     {
-	b->placeholder = TextRenderer_create();
+	b->placeholder = TextRenderer_create(b->base.base);
 	Font *font = Widget_font(self);
 	if (font) TextRenderer_setFont(b->placeholder, font);
     }

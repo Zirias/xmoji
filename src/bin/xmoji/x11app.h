@@ -5,6 +5,10 @@
 
 #include <poser/decl.h>
 
+C_CLASS_DECL(X11Error);
+C_CLASS_DECL(PSC_Event);
+C_CLASS_DECL(Widget);
+C_CLASS_DECL(Window);
 C_CLASS_DECL(X11App);
 
 typedef struct MetaX11App
@@ -26,5 +30,17 @@ X11App *X11App_createBase(void *derived, int argc, char **argv);
 #define X11App_create(...) X11App_createBase(0, __VA_ARGS__)
 int X11App_run(void);
 void X11App_quit(void);
+PSC_Event *X11App_error(void);
+
+void X11App_raiseError(X11App *self, Window *window, Widget *widget,
+	uint8_t code, uint8_t opMajor, uint16_t opMinor)
+    CMETHOD ATTR_NONNULL((2)) ATTR_NONNULL((3));
+
+Window *X11Error_window(X11Error *self) CMETHOD;
+Widget *X11Error_widget(X11Error *self) CMETHOD;
+uint8_t X11Error_code(X11Error *self) CMETHOD;
+uint8_t X11Error_opMajor(X11Error *self) CMETHOD;
+uint16_t X11Error_opMinor(X11Error *self) CMETHOD;
+void X11Error_ignore(X11Error *self) CMETHOD;
 
 #endif

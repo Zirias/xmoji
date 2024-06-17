@@ -46,7 +46,7 @@ static void update(TextLabel *self, Font *font)
 	    const UniStr *line = PSC_ListIterator_current(i);
 	    if (UniStr_len(line))
 	    {
-		TextRenderer *renderer = TextRenderer_create();
+		TextRenderer *renderer = TextRenderer_create(self->base.base);
 		TextRenderer_setFont(renderer, font);
 		PSC_List_append(self->renderers, renderer, freerenderer);
 		TextRenderer_setText(renderer, line);

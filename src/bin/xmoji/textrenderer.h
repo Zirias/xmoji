@@ -10,8 +10,9 @@
 C_CLASS_DECL(Font);
 C_CLASS_DECL(TextRenderer);
 C_CLASS_DECL(UniStr);
+C_CLASS_DECL(Widget);
 
-TextRenderer *TextRenderer_create(void);
+TextRenderer *TextRenderer_create(Widget *owner);
 Size TextRenderer_size(const TextRenderer *self)
     CMETHOD;
 void TextRenderer_setNoLigatures(TextRenderer *self, int noLigatures)

@@ -2,6 +2,7 @@
 
 #include "font.h"
 #include "unistr.h"
+#include "widget.h"
 #include "x11adapter.h"
 
 #include <hb.h>
@@ -18,6 +19,7 @@ static const hb_feature_t nolig = {
 
 struct TextRenderer
 {
+    Widget *owner;
     Font *font;
     hb_font_t *hbfont;
     hb_buffer_t *hbbuffer;
@@ -36,21 +38,13 @@ struct TextRenderer
     Selection selection;
     unsigned hblen;
     int noligatures;
+    int uploaded;
 };
-
-static void requestError(void *receiver, void *sender, void *args)
-{
-    (void)sender;
-    (void)args;
-
-    TextRenderer *self = receiver;
-    PSC_Log_fmt(PSC_L_ERROR, "TextRenderer: Failed for pixmap 0x%x",
-	    (unsigned)self->pixmap);
-}
 
 static void clearRenderer(TextRenderer *self)
 {
     free(self->glyphs);
+    self->uploaded = 0;
     hb_buffer_destroy(self->hbbuffer);
     self->hbbuffer = 0;
     hb_font_destroy(self->hbfont);
@@ -68,10 +62,11 @@ static void clearRenderer(TextRenderer *self)
     self->font = 0;
 }
 
-TextRenderer *TextRenderer_create(void)
+TextRenderer *TextRenderer_create(Widget *owner)
 {
     TextRenderer *self = PSC_malloc(sizeof *self);
     memset(self, 0, sizeof *self);
+    self->owner = Object_ref(owner);
     return self;
 }
 
@@ -90,43 +85,30 @@ void TextRenderer_setFont(TextRenderer *self, Font *font)
     clearRenderer(self);
     self->font = Font_ref(font);
     self->hbfont = hb_ft_font_create_referenced(Font_face(font));
-    xcb_connection_t *c = X11Adapter_connection();
-    self->pixmap = xcb_generate_id(c);
-    PSC_Event_register(X11Adapter_requestError(), self, requestError,
-	    self->pixmap);
-    CHECK(xcb_create_pixmap(c, 24, self->pixmap,
-		X11Adapter_screen()->root, 1, 1),
-	    "TextRenderer: Cannot create drawing pixmap 0x%x",
-	    (unsigned)self->pixmap);
-    self->pen = xcb_generate_id(c);
-    uint32_t repeat = XCB_RENDER_REPEAT_NORMAL;
-    CHECK(xcb_render_create_picture(c, self->pen, self->pixmap,
-		X11Adapter_rgbformat(), XCB_RENDER_CP_REPEAT, &repeat),
-	    "TextRenderer: Cannot create pen on pixmap 0x%x",
-	    (unsigned)self->pixmap);
-    if (Font_glyphtype(self->font) == FGT_BITMAP_BGRA)
-    {
-	self->color = 0xffffffff;
-	xcb_rectangle_t rect = { 0, 0, 1, 1 };
-	CHECK(xcb_render_fill_rectangles(c, XCB_RENDER_PICT_OP_OVER,
-		    self->pen, Color_xcb(self->color), 1, &rect),
-		"TextRenderer: Cannot colorize pen for 0x%x",
-		(unsigned)self->pixmap);
-    }
 }
 
 static void createTmpPicture(TextRenderer *self, xcb_connection_t *c)
 {
+    xcb_render_picture_t ownerpic = Widget_picture(self->owner);
     self->tmp = xcb_generate_id(c);
     CHECK(xcb_create_pixmap(c, 24, self->tmp, X11Adapter_screen()->root,
 		self->size.width, self->size.height),
 	    "TextRenderer: Cannot create temporary pixmap for 0x%x",
-	    (unsigned)self->pixmap);
+	    (unsigned)ownerpic);
     self->tpic = xcb_generate_id(c);
     CHECK(xcb_render_create_picture(c, self->tpic, self->tmp,
 		X11Adapter_rgbformat(), 0, 0),
 	    "TextRenderer: Cannot create temporary picture for 0x%x",
-	    (unsigned)self->pixmap);
+	    (unsigned)ownerpic);
+    if (Font_glyphtype(self->font) == FGT_BITMAP_BGRA)
+    {
+	CHECK(xcb_render_composite_glyphs_32(c, XCB_RENDER_PICT_OP_IN,
+		    self->pen, self->tpic, 0, Font_glyphset(self->font), 0, 0,
+		    self->hblen * sizeof *self->glyphs,
+		    (const uint8_t *)self->glyphs),
+		"TextRenderer: Cannot render glyphs for 0x%x",
+		(unsigned)ownerpic);
+    }
     if (X11Adapter_glitches() & XG_RENDER_SRC_OFFSET)
     {
 	self->pos = (Pos){0, 0};
@@ -222,17 +204,7 @@ int TextRenderer_setText(TextRenderer *self, const UniStr *text)
 	x += self->hbpos[i].x_advance;
 	y += self->hbpos[i].y_advance;
     }
-    Font_uploadGlyphs(self->font, self->hblen, self->glyphs);
-    if (Font_glyphtype(self->font) == FGT_BITMAP_BGRA)
-    {
-	createTmpPicture(self, c);
-	CHECK(xcb_render_composite_glyphs_32(c, XCB_RENDER_PICT_OP_IN,
-		    self->pen, self->tpic, 0, Font_glyphset(self->font), 0, 0,
-		    self->hblen * sizeof *self->glyphs,
-		    (const uint8_t *)self->glyphs),
-		"TextRenderer: Cannot render glyphs for 0x%x",
-		(unsigned)self->pixmap);
-    }
+    self->uploaded = 0;
     return 0;
 }
 
@@ -279,38 +251,61 @@ int TextRenderer_renderWithSelection(TextRenderer *self,
 	Selection selection, Color selectionColor)
 {
     if (!self->hbbuffer) return -1;
-    uint16_t odx = self->glyphs[0].dx;
-    uint16_t ody = self->glyphs[0].dy;
-    self->glyphs[0].dx += pos.x;
-    self->glyphs[0].dy += pos.y;
     xcb_connection_t *c = X11Adapter_connection();
+    xcb_render_picture_t ownerpic = Widget_picture(self->owner);
+    if (!self->pixmap)
+    {
+	self->pixmap = xcb_generate_id(c);
+	CHECK(xcb_create_pixmap(c, 24, self->pixmap,
+		    X11Adapter_screen()->root, 1, 1),
+		"TextRenderer: Cannot create drawing pixmap for 0x%x",
+		(unsigned)ownerpic);
+	self->pen = xcb_generate_id(c);
+	uint32_t repeat = XCB_RENDER_REPEAT_NORMAL;
+	CHECK(xcb_render_create_picture(c, self->pen, self->pixmap,
+		    X11Adapter_rgbformat(), XCB_RENDER_CP_REPEAT, &repeat),
+		"TextRenderer: Cannot create pen for 0x%x",
+		(unsigned)ownerpic);
+	if (Font_glyphtype(self->font) == FGT_BITMAP_BGRA)
+	{
+	    self->color = 0xffffffff;
+	    xcb_rectangle_t rect = { 0, 0, 1, 1 };
+	    CHECK(xcb_render_fill_rectangles(c, XCB_RENDER_PICT_OP_OVER,
+			self->pen, Color_xcb(self->color), 1, &rect),
+		    "TextRenderer: Cannot colorize pen for 0x%x",
+		    (unsigned)ownerpic);
+	}
+    }
+    if (!self->uploaded)
+    {
+	Font_uploadGlyphs(self->font, ownerpic, self->hblen, self->glyphs);
+	self->uploaded = 1;
+    }
     xcb_render_picture_t srcpic = self->pen;
-    if (selection.len)
+    if (selection.len || Font_glyphtype(self->font) == FGT_BITMAP_BGRA)
     {
 	if (!self->tpic) createTmpPicture(self, c);
-	if (memcmp(&selection, &self->selection, sizeof selection)
-		|| color != self->tcolor
-		|| selectionColor != self->scolor)
+	if (selection.len &&
+		(memcmp(&selection, &self->selection, sizeof selection)
+		    || color != self->tcolor
+		    || selectionColor != self->scolor))
 	{
 	    xcb_rectangle_t rect = { 0, 0,
 		self->size.width, self->size.height };
 	    CHECK(xcb_render_fill_rectangles(c, XCB_RENDER_PICT_OP_OVER,
 			self->tpic, Color_xcb(color), 1, &rect),
 		    "TextRenderer: Cannot colorize foreground for 0x%x",
-		    (unsigned)self->pixmap);
+		    (unsigned)ownerpic);
 	    rect.x = selection.start;
 	    rect.width = selection.len;
 	    CHECK(xcb_render_fill_rectangles(c, XCB_RENDER_PICT_OP_OVER,
 			self->tpic, Color_xcb(selectionColor), 1, &rect),
 		    "TextRenderer: Cannot colorize selection for 0x%x",
-		    (unsigned)self->pixmap);
+		    (unsigned)ownerpic);
 	    self->scolor = selectionColor;
 	    self->tcolor = color;
 	    self->selection = selection;
 	}
-    }
-    if (selection.len || Font_glyphtype(self->font) == FGT_BITMAP_BGRA)
-    {
 	if (X11Adapter_glitches() & XG_RENDER_SRC_OFFSET
 		&& memcmp(&pos, &self->pos, sizeof pos))
 	{
@@ -321,7 +316,7 @@ int TextRenderer_renderWithSelection(TextRenderer *self,
 	    };
 	    CHECK(xcb_render_set_picture_transform(c, self->tpic, shift),
 		    "TextRenderer: Cannot shift temporary picture for 0x%x",
-		    (unsigned)self->pixmap);
+		    (unsigned)ownerpic);
 	    self->pos = pos;
 	}
 	srcpic = self->tpic;
@@ -332,16 +327,20 @@ int TextRenderer_renderWithSelection(TextRenderer *self,
 	CHECK(xcb_render_fill_rectangles(c, XCB_RENDER_PICT_OP_OVER,
 		    self->pen, Color_xcb(color), 1, &rect),
 		"TextRenderer: Cannot colorize pen for 0x%x",
-		(unsigned)self->pixmap);
+		(unsigned)ownerpic);
 	self->color = color;
     }
+    uint16_t odx = self->glyphs[0].dx;
+    uint16_t ody = self->glyphs[0].dy;
+    self->glyphs[0].dx += pos.x;
+    self->glyphs[0].dy += pos.y;
     CHECK(xcb_render_composite_glyphs_32(c, XCB_RENDER_PICT_OP_OVER, srcpic,
 		picture, 0, Font_glyphtype(self->font) == FGT_BITMAP_BGRA ?
 		Font_maskGlyphset(self->font) : Font_glyphset(self->font),
 		0, ody, self->hblen * sizeof *self->glyphs,
 		(const uint8_t *)self->glyphs),
 	    "TextRenderer: Cannot render glyphs for 0x%x",
-	    (unsigned)self->pixmap);
+	    (unsigned)ownerpic);
     self->glyphs[0].dx = odx;
     self->glyphs[0].dy = ody;
     return 0;
@@ -358,5 +357,6 @@ void TextRenderer_destroy(TextRenderer *self)
 {
     if (!self) return;
     clearRenderer(self);
+    Object_destroy(self->owner);
     free(self);
 }

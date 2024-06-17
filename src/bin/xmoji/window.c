@@ -3,6 +3,7 @@
 #include "font.h"
 #include "unistr.h"
 #include "x11adapter.h"
+#include "x11app.h"
 #include "xrdb.h"
 #include "xselection.h"
 
@@ -31,7 +32,6 @@ struct Window
 {
     Object base;
     PSC_Event *closed;
-    PSC_Event *errored;
     PSC_Event *propertyChanged;
     XSelection *primary;
     XSelection *clipboard;
@@ -52,7 +52,6 @@ struct Window
     xcb_render_picture_t src;
     xcb_render_picture_t dst;
     xcb_timestamp_t clicktime;
-    int haserror;
     int haveMinSize;
     int mapped;
     int wantmap;
@@ -358,14 +357,14 @@ static void clientmsg(void *receiver, void *sender, void *args)
 static void requestError(void *receiver, void *sender, void *args)
 {
     (void)sender;
-    (void)args;
 
+    X11App *xapp = app();
+    if (!xapp) PSC_Service_panic("BUG, received error without running app");
     Window *self = receiver;
-    if (self->haserror) return;
-    PSC_Log_setAsync(0);
-    PSC_Log_fmt(PSC_L_ERROR, "Window 0x%x failed", (unsigned)self->w);
-    self->haserror = 1;
-    PSC_Event_raise(self->errored, 0, 0);
+    Widget *widget = Widget_cast(self);
+    xcb_generic_error_t *xerr = args;
+    X11App_raiseError(xapp, self, widget,
+	    xerr->error_code, xerr->major_code, xerr->minor_code);
 }
 
 static void doupdates(void *receiver, void *sender, void *args)
@@ -566,7 +565,6 @@ static void destroy(void *window)
     XSelection_destroy(self->clipboard);
     XSelection_destroy(self->primary);
     PSC_Event_destroy(self->propertyChanged);
-    PSC_Event_destroy(self->errored);
     PSC_Event_destroy(self->closed);
     Object_destroy(self->hoverWidget);
     Object_destroy(self->focusWidget);
@@ -590,7 +588,6 @@ Window *Window_createBase(void *derived, const char *name, void *parent)
     memset(self, 0, sizeof *self);
     CREATEBASE(Widget, name, parent);
     self->closed = PSC_Event_create(self);
-    self->errored = PSC_Event_create(self);
     self->propertyChanged = PSC_Event_create(self);
     self->kbcompose = xkb_compose_state_new(
 	    X11Adapter_kbdcompose(), XKB_COMPOSE_STATE_NO_FLAGS);
@@ -721,12 +718,6 @@ PSC_Event *Window_closed(void *self)
 {
     Window *w = Object_instance(self);
     return w->closed;
-}
-
-PSC_Event *Window_errored(void *self)
-{
-    Window *w = Object_instance(self);
-    return w->errored;
 }
 
 PSC_Event *Window_propertyChanged(void *self)

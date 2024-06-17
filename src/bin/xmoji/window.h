@@ -32,9 +32,6 @@ xcb_window_t Window_id(const void *self)
 PSC_Event *Window_closed(void *self)
     CMETHOD ATTR_RETNONNULL;
 
-PSC_Event *Window_errored(void *self)
-    CMETHOD ATTR_RETNONNULL;
-
 PSC_Event *Window_propertyChanged(void *self)
     CMETHOD ATTR_RETNONNULL;
 

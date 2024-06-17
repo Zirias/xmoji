@@ -3,6 +3,7 @@
 #include "font.h"
 #include "window.h"
 #include "x11adapter.h"
+#include "x11app.h"
 #include "xrdb.h"
 
 #include <poser/core.h>
@@ -105,6 +106,21 @@ static Size minSize(const void *obj)
 {
     (void)obj;
     return (Size){0, 0};
+}
+
+static void requestError(void *receiver, void *sender, void *args)
+{
+    (void)sender;
+
+    Widget *self = receiver;
+    X11App *xapp = app();
+    Window *win = Window_fromWidget(self);
+    xcb_generic_error_t *xerr = args;
+
+    if (!xapp) PSC_Service_panic("BUG, received error without running app");
+    if (!win) PSC_Service_panic("BUG, received error without a parent window");
+    X11App_raiseError(xapp, win, self,
+	    xerr->error_code, xerr->major_code, xerr->minor_code);
 }
 
 Widget *Widget_createBase(void *derived, const char *name, void *parent)
@@ -265,7 +281,7 @@ static void setContentClipArea(Widget *self, xcb_connection_t *c)
 	CHECK(xcb_render_set_picture_clip_rectangles(c,
 		    self->picture, 0, 0, 1, &cliprect),
 		"Cannot set clipping region on 0x%x",
-		(unsigned)self->drawable);
+		(unsigned)self->picture);
     }
     else
     {
@@ -292,7 +308,7 @@ static void setContentClipArea(Widget *self, xcb_connection_t *c)
 	CHECK(xcb_render_set_picture_clip_rectangles(c,
 		    self->picture, 0, 0, i, cliprects),
 		"Cannot set clipping region on 0x%x",
-		(unsigned)self->drawable);
+		(unsigned)self->picture);
     }
 }
 
@@ -315,7 +331,7 @@ int Widget_draw(void *self)
 	CHECK(xcb_render_set_picture_clip_rectangles(c,
 		    w->picture, 0, 0, 1, &clip),
 		"Cannot set clipping region on 0x%x",
-		(unsigned)w->drawable);
+		(unsigned)w->picture);
 	Color color = Widget_color(w, w->backgroundRole);
 	if (w->ndamages < 0)
 	{
@@ -640,6 +656,13 @@ xcb_drawable_t Widget_drawable(const void *self)
     return w->drawable;
 }
 
+xcb_render_picture_t Widget_picture(const void *self)
+{
+    Widget *w = Object_instance(self);
+    if (!Widget_drawable(w)) return 0;
+    return w->picture;
+}
+
 void Widget_setDrawable(void *self, xcb_drawable_t drawable)
 {
     Widget *w = Object_instance(self);
@@ -647,15 +670,19 @@ void Widget_setDrawable(void *self, xcb_drawable_t drawable)
     xcb_connection_t *c = X11Adapter_connection();
     if (w->drawable)
     {
+	PSC_Event_unregister(X11Adapter_requestError(), w,
+		requestError, w->picture);
 	xcb_render_free_picture(c, w->picture);
     }
     if (drawable)
     {
 	w->drawable = drawable;
 	w->picture = xcb_generate_id(c);
+	PSC_Event_register(X11Adapter_requestError(), w,
+		requestError, w->picture);
 	CHECK(xcb_render_create_picture(c, w->picture, drawable,
 		    X11Adapter_rootformat(), 0, 0),
-		"Cannot create XRender picture for 0x%x", (unsigned)drawable);
+		"Cannot create XRender picture 0x%x", (unsigned)w->picture);
 	w->ndamages = -1;
     }
     else

@@ -29,7 +29,6 @@ struct Font
     double pixelsize;
     double fixedpixelsize;
     int refcnt;
-    int haserror;
     uint16_t uploading;
     uint8_t glyphidbits;
     uint8_t subpixelbits;
@@ -105,17 +104,6 @@ static void Font_done(void)
     FT_Done_FreeType(ftlib);
     FcPatternDestroy(defaultpat);
     FcFini();
-}
-
-static void requestError(void *receiver, void *sender, void *args)
-{
-    (void)sender;
-    (void)args;
-
-    Font *self = receiver;
-    PSC_Log_fmt(PSC_L_ERROR, "Font glyphset 0x%x failed",
-	    (unsigned)self->glyphset);
-    self->haserror = 1;
 }
 
 Font *Font_create(const char *pattern, const FontOptions *options)
@@ -354,27 +342,6 @@ Font *Font_create(const char *pattern, const FontOptions *options)
     self->pixelsize = pixelsize;
     self->fixedpixelsize = fixedpixelsize;
     self->refcnt = 1;
-    xcb_connection_t *c = X11Adapter_connection();
-    self->glyphset = xcb_generate_id(c);
-    PSC_Event_register(X11Adapter_requestError(), self,
-	    requestError, self->glyphset);
-    if (self->glyphtype == FGT_BITMAP_BGRA)
-    {
-	CHECK(xcb_render_create_glyph_set(c,
-		    self->glyphset, X11Adapter_argbformat()),
-		"Font: Cannot create glyphset 0x%x", (unsigned)self->glyphset);
-	self->maskglyphset = xcb_generate_id(c);
-	CHECK(xcb_render_create_glyph_set(c,
-		    self->maskglyphset, X11Adapter_alphaformat()),
-		"Font: Cannot create mask glyphset 0x%x",
-		(unsigned)self->glyphset);
-    }
-    else
-    {
-	CHECK(xcb_render_create_glyph_set(c,
-		    self->glyphset, X11Adapter_alphaformat()),
-		"Font: Cannot create glyphset 0x%x", (unsigned)self->glyphset);
-    }
     self->glyphidbits = glyphidbits;
     self->subpixelbits = subpixelbits;
     self->glyphidmask = glyphidmask;
@@ -520,8 +487,34 @@ static uint8_t filter(int k, const uint8_t *m, const uint8_t *b, int stride,
     return ((num + den/2)/den) & 0xffU;
 }
 
-int Font_uploadGlyphs(Font *self, unsigned len, GlyphRenderInfo *glyphinfo)
+int Font_uploadGlyphs(Font *self, uint32_t ownerid,
+	unsigned len, GlyphRenderInfo *glyphinfo)
 {
+    xcb_connection_t *c = 0;
+    if (!self->glyphset)
+    {
+	c = X11Adapter_connection();
+	self->glyphset = xcb_generate_id(c);
+	if (self->glyphtype == FGT_BITMAP_BGRA)
+	{
+	    CHECK(xcb_render_create_glyph_set(c,
+			self->glyphset, X11Adapter_argbformat()),
+		    "Font: Cannot create glyphset for 0x%x",
+		    (unsigned)ownerid);
+	    self->maskglyphset = xcb_generate_id(c);
+	    CHECK(xcb_render_create_glyph_set(c,
+			self->maskglyphset, X11Adapter_alphaformat()),
+		    "Font: Cannot create mask glyphset for 0x%x",
+		    (unsigned)ownerid);
+	}
+	else
+	{
+	    CHECK(xcb_render_create_glyph_set(c,
+			self->glyphset, X11Adapter_alphaformat()),
+		    "Font: Cannot create glyphset for 0x%x",
+		    (unsigned)ownerid);
+	}
+    }
     int rc = -1;
     unsigned toupload = 0;
     uint32_t *glyphids = PSC_malloc(len * sizeof *glyphids);
@@ -551,7 +544,7 @@ int Font_uploadGlyphs(Font *self, unsigned len, GlyphRenderInfo *glyphinfo)
     memset(glyphs, 0, toupload * sizeof *glyphs);
     size_t bitmapdatapos = 0;
     size_t maskdatapos = 0;
-    xcb_connection_t *c = X11Adapter_connection();
+    if (!c) c = X11Adapter_connection();
     int32_t loadflags = Font_ftLoadFlags(self);
     for (unsigned i = 0; i < toupload; ++i)
     {
@@ -595,15 +588,15 @@ int Font_uploadGlyphs(Font *self, unsigned len, GlyphRenderInfo *glyphinfo)
 	    CHECK(xcb_render_add_glyphs(c, self->glyphset, i - firstglyph,
 			glyphids + firstglyph, glyphs + firstglyph,
 			bitmapdatapos, bitmapdata),
-		    "Cannot upload to glyphset 0x%x",
-		    (unsigned)self->glyphset);
+		    "Cannot upload to glyphset for 0x%x",
+		    (unsigned)ownerid);
 	    if (maskdatapos)
 	    {
 		CHECK(xcb_render_add_glyphs(c, self->maskglyphset,
 			    i - firstglyph, glyphids + firstglyph,
 			    glyphs + firstglyph, maskdatapos, maskdata),
-			"Cannot upload to glyphset 0x%x",
-			(unsigned)self->glyphset);
+			"Cannot upload to glyphset for 0x%x",
+			(unsigned)ownerid);
 	    }
 	    for (unsigned j = firstglyph; j < i; ++j)
 	    {
@@ -689,13 +682,13 @@ int Font_uploadGlyphs(Font *self, unsigned len, GlyphRenderInfo *glyphinfo)
     CHECK(xcb_render_add_glyphs(c, self->glyphset, toupload - firstglyph,
 		glyphids + firstglyph, glyphs + firstglyph,
 		bitmapdatapos, bitmapdata),
-	    "Cannot upload to glyphset 0x%x", (unsigned)self->glyphset);
+	    "Cannot upload to glyphset for 0x%x", (unsigned)ownerid);
     if (maskdatapos)
     {
 	CHECK(xcb_render_add_glyphs(c, self->maskglyphset,
 		    toupload - firstglyph, glyphids + firstglyph,
 		    glyphs + firstglyph, maskdatapos, maskdata),
-		"Cannot upload to glyphset 0x%x", (unsigned)self->glyphset);
+		"Cannot upload to glyphset for 0x%x", (unsigned)ownerid);
     }
     for (unsigned i = firstglyph; i < toupload; ++i)
     {
@@ -726,14 +719,15 @@ void Font_destroy(Font *self)
 {
     if (!self) return;
     if (--self->refcnt) return;
-    PSC_Event_unregister(X11Adapter_requestError(), self,
-	    requestError, self->glyphset);
-    xcb_connection_t *c = X11Adapter_connection();
-    if (self->glyphtype == FGT_BITMAP_BGRA)
+    if (self->glyphset)
     {
-	xcb_render_free_glyph_set(c, self->maskglyphset);
+	xcb_connection_t *c = X11Adapter_connection();
+	if (self->glyphtype == FGT_BITMAP_BGRA)
+	{
+	    xcb_render_free_glyph_set(c, self->maskglyphset);
+	}
+	xcb_render_free_glyph_set(c, self->glyphset);
     }
-    xcb_render_free_glyph_set(c, self->glyphset);
     FT_Done_Face(self->face);
     if (self->id) PSC_HashTable_delete(byId, self->id);
     const char *pat = 0;

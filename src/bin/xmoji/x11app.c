@@ -1,5 +1,7 @@
 #include "x11app.h"
 
+#include "widget.h"
+#include "window.h"
 #include "x11adapter.h"
 
 #include <locale.h>
@@ -16,10 +18,21 @@ static MetaX11App mo = MetaX11App_init(0, 0, "X11App", destroy);
 struct X11App
 {
     Object base;
+    PSC_Event *error;
     char *locale;
     char *name;
     char **argv;
     int argc;
+};
+
+struct X11Error
+{
+    Window *window;
+    Widget *widget;
+    int ignore;
+    uint16_t opMinor;
+    uint8_t opMajor;
+    uint8_t code;
 };
 
 static void svstartup(void *receiver, void *sender, void *args)
@@ -52,6 +65,7 @@ static void destroy(void *obj)
     PSC_Event_unregister(PSC_Service_startup(), self, svstartup, 0);
     free(self->name);
     free(self->locale);
+    PSC_Event_destroy(self->error);
     free(self);
     instance = 0;
 }
@@ -132,6 +146,7 @@ X11App *X11App_createBase(void *derived, int argc, char **argv)
 
     X11App *self = PSC_malloc(sizeof *self);
     CREATEBASE(Object);
+    self->error = PSC_Event_create(self);
     self->locale = locale;
     self->name = getName(argc, argv);
     self->argv = argv;
@@ -164,5 +179,65 @@ void X11App_quit(void)
 {
     if (!instance) return;
     PSC_Service_quit();
+}
+
+PSC_Event *X11App_error(void)
+{
+    if (!instance) return 0;
+    return instance->error;
+}
+
+void X11App_raiseError(X11App *self, Window *window, Widget *widget,
+	uint8_t code, uint8_t opMajor, uint16_t opMinor)
+{
+    X11Error error = {
+	.window = window,
+	.widget = widget,
+	.ignore = 0,
+	.opMinor = opMinor,
+	.opMajor = opMajor,
+	.code = code
+    };
+    PSC_Event_raise(self->error, 0, &error);
+    if (error.ignore) return;
+    PSC_Log_setAsync(0);
+    const char *widgetName = Widget_name(widget);
+    if (!widgetName) widgetName = "<unnamed>";
+    PSC_Log_fmt(PSC_L_ERROR, "Unhandled X11 error from %s `%s' in "
+	    "Window `%s' (0x%x) for opcode %u:%u, error code %u - exiting.",
+	    Object_className(widget), widgetName,
+	    Widget_resname(window), Window_id(window),
+	    (unsigned)opMajor, (unsigned)opMinor, (unsigned)code);
+    X11App_quit();
+}
+
+Window *X11Error_window(X11Error *self)
+{
+    return self->window;
+}
+
+Widget *X11Error_widget(X11Error *self)
+{
+    return self->widget;
+}
+
+uint8_t X11Error_code(X11Error *self)
+{
+    return self->code;
+}
+
+uint8_t X11Error_opMajor(X11Error *self)
+{
+    return self->opMajor;
+}
+
+uint16_t X11Error_opMinor(X11Error *self)
+{
+    return self->opMinor;
+}
+
+void X11Error_ignore(X11Error *self)
+{
+    self->ignore = 1;
 }
 

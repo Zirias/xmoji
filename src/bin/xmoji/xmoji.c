@@ -86,7 +86,6 @@ static int startup(void *app)
 
     PSC_Event_register(Window_closed(win), 0, onclose, 0);
     PSC_Event_register(Button_clicked(button), 0, onclose, 0);
-    PSC_Event_register(Window_errored(win), 0, onclose, 0);
 
     Widget_show(win);
     return 0;
