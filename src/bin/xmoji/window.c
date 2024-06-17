@@ -3,7 +3,7 @@
 #include "font.h"
 #include "unistr.h"
 #include "x11adapter.h"
-#include "x11app.h"
+#include "x11app-int.h"
 #include "xrdb.h"
 #include "xselection.h"
 
@@ -362,9 +362,7 @@ static void requestError(void *receiver, void *sender, void *args)
     if (!xapp) PSC_Service_panic("BUG, received error without running app");
     Window *self = receiver;
     Widget *widget = Widget_cast(self);
-    xcb_generic_error_t *xerr = args;
-    X11App_raiseError(xapp, self, widget,
-	    xerr->error_code, xerr->major_code, xerr->minor_code);
+    X11App_raiseError(xapp, self, widget, args);
 }
 
 static void doupdates(void *receiver, void *sender, void *args)

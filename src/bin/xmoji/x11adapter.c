@@ -31,6 +31,12 @@ typedef struct X11ReplyHandlerRecord
     void *ctx;
     const char *sarg;
     xcb_generic_error_t *err;
+#ifdef TRACE_X11_REQUESTS
+    const char *reqsource;
+    const char *sourcefile;
+    const char *function;
+    unsigned lineno;
+#endif
     unsigned sequence;
     int replytype;
     unsigned uarg;
@@ -144,7 +150,7 @@ static unsigned waitingNum;
 static unsigned syncseq;
 static int waitingNoreply;
 
-static int enqueueWaiting(unsigned sequence, int replytype, void *ctx,
+static int enqueueWaiting(X11RequestId reqid, int replytype, void *ctx,
 	X11ReplyHandler handler, const char *sarg, unsigned uarg)
 {
     if (waitingNum == MAXWAITING) return -1;
@@ -152,7 +158,15 @@ static int enqueueWaiting(unsigned sequence, int replytype, void *ctx,
     waitingReplies[waitingBack].ctx = ctx;
     waitingReplies[waitingBack].sarg = sarg;
     waitingReplies[waitingBack].err = 0;
-    waitingReplies[waitingBack].sequence = sequence;
+#ifdef TRACE_X11_REQUESTS
+    waitingReplies[waitingBack].reqsource = reqid.reqsource;
+    waitingReplies[waitingBack].sourcefile = reqid.sourcefile;
+    waitingReplies[waitingBack].function = reqid.function;
+    waitingReplies[waitingBack].lineno = reqid.lineno;
+    waitingReplies[waitingBack].sequence = reqid.sequence;
+#else
+    waitingReplies[waitingBack].sequence = reqid;
+#endif
     waitingReplies[waitingBack].replytype = replytype;
     waitingReplies[waitingBack].uarg = uarg;
     if (++waitingBack == MAXWAITING) waitingBack = 0;
@@ -268,7 +282,23 @@ static void handleX11Reply(X11ReplyHandlerRecord *rec, void *reply,
 
 	    case RQ_CHECK_ERROR_UNSIGNED:
 		PSC_Log_fmt(PSC_L_ERROR, rec->ctx, rec->uarg);
-		PSC_Event_raise(requestError, rec->uarg, error);
+		RequestErrorEventArgs ea = {
+#ifdef TRACE_X11_REQUESTS
+		    .reqid = {
+			.reqsource = rec->reqsource,
+			.sourcefile = rec->sourcefile,
+			.function = rec->function,
+			.lineno = rec->lineno,
+			.sequence = rec->sequence
+		    },
+#else
+		    .reqid = rec->sequence,
+#endif
+		    .opMinor = error->minor_code,
+		    .opMajor = error->major_code,
+		    .code = error->error_code
+		};
+		PSC_Event_raise(requestError, rec->uarg, &ea);
 		break;
 
 	    default:
@@ -1028,59 +1058,50 @@ xcb_cursor_t X11Adapter_cursor(XCursor id)
     return cursors[id];
 }
 
-static unsigned await(unsigned sequence, int replytype, void *ctx,
+static unsigned await(X11RequestId reqid, int replytype, void *ctx,
 	X11ReplyHandler handler, const char *sarg, unsigned uarg)
 {
-    if (enqueueWaiting(sequence, replytype, ctx, handler, sarg, uarg) < 0)
+    if (enqueueWaiting(reqid, replytype, ctx, handler, sarg, uarg) < 0)
     {
 	PSC_Log_setAsync(0);
 	PSC_Log_msg(PSC_L_ERROR, "Reply queue is full");
 	PSC_Service_quit();
     }
-    switch (replytype)
-    {
-	case RQ_AWAIT_REPLY:
-	    PSC_Log_fmt(PSC_L_DEBUG, "Awaiting Reply: %u", sequence);
-	    break;
-
-	case RQ_AWAIT_NOREPLY:
-	    PSC_Log_fmt(PSC_L_DEBUG, "Awaiting Request: %u", sequence);
-	    break;
-
-	default:
-	    break;
-    }
-    return sequence;
+#ifdef TRACE_X11_REQUESTS
+    return reqid.sequence;
+#else
+    return reqid;
+#endif
 }
 
-unsigned X11Adapter_await(unsigned sequence, void *ctx,
+unsigned X11Adapter_await(X11RequestId reqid, void *ctx,
 	X11ReplyHandler handler)
 {
-    return await(sequence, RQ_AWAIT_REPLY, ctx, handler, 0, 0);
+    return await(reqid, RQ_AWAIT_REPLY, ctx, handler, 0, 0);
 }
 
-unsigned X11Adapter_awaitNoreply(unsigned sequence, void *ctx,
+unsigned X11Adapter_awaitNoreply(X11RequestId reqid, void *ctx,
 	X11ReplyHandler handler)
 {
-    return await(sequence, RQ_AWAIT_NOREPLY, ctx, handler, 0, 0);
+    return await(reqid, RQ_AWAIT_NOREPLY, ctx, handler, 0, 0);
 }
 
-unsigned X11Adapter_check(unsigned sequence, void *ctx,
+unsigned X11Adapter_check(X11RequestId reqid, void *ctx,
 	X11ReplyHandler handler)
 {
-    return await(sequence, RQ_CHECK_ERROR, ctx, handler, 0, 0);
+    return await(reqid, RQ_CHECK_ERROR, ctx, handler, 0, 0);
 }
 
-unsigned X11Adapter_checkLogUnsigned(unsigned sequence, const char *msg,
+unsigned X11Adapter_checkLogUnsigned(X11RequestId reqid, const char *msg,
 	unsigned arg)
 {
-    return await(sequence, RQ_CHECK_ERROR_UNSIGNED, (void *)msg, 0, 0, arg);
+    return await(reqid, RQ_CHECK_ERROR_UNSIGNED, (void *)msg, 0, 0, arg);
 }
 
-unsigned X11Adapter_checkLogString(unsigned sequence, const char *msg,
+unsigned X11Adapter_checkLogString(X11RequestId reqid, const char *msg,
 	const char *arg)
 {
-    return await(sequence, RQ_CHECK_ERROR_STRING, (void *)msg, 0, arg, 0);
+    return await(reqid, RQ_CHECK_ERROR_STRING, (void *)msg, 0, arg, 0);
 }
 
 void X11Adapter_done(void)

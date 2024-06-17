@@ -91,6 +91,38 @@ typedef struct XkbKeyEventArgs
     XkbModifier rawmods;
 } XkbKeyEventArgs;
 
+#ifdef TRACE_X11_REQUESTS
+typedef struct X11RequestId
+{
+    const char *reqsource;
+    const char *sourcefile;
+    const char *function;
+    unsigned lineno;
+    unsigned sequence;
+} X11RequestId;
+#include <poser/core/log.h>
+#define priv_Trace(x) ( \
+	PSC_Log_fmt(PSC_L_DEBUG, __FILE__ ":" STR(__LINE__) \
+	    ":%s: " #x, __func__), \
+	(X11RequestId) { \
+	    .reqsource = #x, \
+	    .sourcefile = __FILE__, \
+	    .function = __func__, \
+	    .lineno = __LINE__, \
+	    .sequence = (x).sequence })
+#else
+typedef unsigned X11RequestId;
+#define priv_Trace(x) (x).sequence
+#endif
+
+typedef struct RequestErrorEventArgs
+{
+    X11RequestId reqid;
+    uint16_t opMinor;
+    uint8_t opMajor;
+    uint8_t code;
+} RequestErrorEventArgs;
+
 typedef enum XCursor
 {
     XC_LEFTPTR,
@@ -100,16 +132,6 @@ typedef enum XCursor
 
 typedef void (*X11ReplyHandler)(void *ctx, unsigned sequence, void *reply,
 	xcb_generic_error_t *error);
-
-#ifdef DEBUG
-#include <poser/core/log.h>
-#define priv_Trace(x) ( \
-	PSC_Log_fmt(PSC_L_DEBUG, __FILE__ ":" STR(__LINE__) \
-	    ":%s: " #x, __func__), \
-	(x).sequence)
-#else
-#define priv_Trace(x) (x).sequence
-#endif
 
 #define A(x) (X11Adapter_atom(x))
 
@@ -205,16 +227,16 @@ PSC_Event *X11Adapter_eventsDone(void) ATTR_RETNONNULL;
 const char *X11Adapter_wmClass(size_t *sz) ATTR_RETNONNULL;
 xcb_cursor_t X11Adapter_cursor(XCursor id);
 
-unsigned X11Adapter_await(unsigned sequence, void *ctx,
+unsigned X11Adapter_await(X11RequestId reqid, void *ctx,
 	X11ReplyHandler handler) ATTR_NONNULL((3));
-unsigned X11Adapter_awaitNoreply(unsigned sequence, void *ctx,
+unsigned X11Adapter_awaitNoreply(X11RequestId reqid, void *ctx,
 	X11ReplyHandler handler) ATTR_NONNULL((3));
-unsigned X11Adapter_check(unsigned sequence, void *ctx,
+unsigned X11Adapter_check(X11RequestId reqid, void *ctx,
 	X11ReplyHandler handler) ATTR_NONNULL((3));
-unsigned X11Adapter_checkLogUnsigned(unsigned sequence, const char *msg,
+unsigned X11Adapter_checkLogUnsigned(X11RequestId reqid, const char *msg,
 	uint32_t arg)
     ATTR_NONNULL((2));
-unsigned X11Adapter_checkLogString(unsigned sequence, const char *msg,
+unsigned X11Adapter_checkLogString(X11RequestId reqid, const char *msg,
 	const char *arg)
     ATTR_NONNULL((2));
 

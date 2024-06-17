@@ -32,4 +32,8 @@ xmoji_PKGDEPS=		fontconfig \
 			xkbcommon \
 			xkbcommon-x11
 
+ifeq ($(TRACE),1)
+xmoji_DEFINES+=		-DTRACE_X11_REQUESTS
+endif
+
 $(call binrules,xmoji)

@@ -185,15 +185,15 @@ PSC_Event *X11App_error(void)
 }
 
 void X11App_raiseError(X11App *self, Window *window, Widget *widget,
-	uint8_t code, uint8_t opMajor, uint16_t opMinor)
+	RequestErrorEventArgs *err)
 {
     X11Error error = {
 	.window = window,
 	.widget = widget,
 	.ignore = 0,
-	.opMinor = opMinor,
-	.opMajor = opMajor,
-	.code = code
+	.opMinor = err->opMinor,
+	.opMajor = err->opMajor,
+	.code = err->code
     };
     PSC_Event_raise(self->error, 0, &error);
     if (error.ignore) return;
@@ -204,7 +204,13 @@ void X11App_raiseError(X11App *self, Window *window, Widget *widget,
 	    "Window `%s' (0x%x) for opcode %u:%u, error code %u - exiting.",
 	    Object_className(widget), widgetName,
 	    Widget_resname(window), Window_id(window),
-	    (unsigned)opMajor, (unsigned)opMinor, (unsigned)code);
+	    (unsigned)err->opMajor, (unsigned)err->opMinor,
+	    (unsigned)err->code);
+#ifdef TRACE_X11_REQUESTS
+    PSC_Log_fmt(PSC_L_ERROR, "** TRACE:  In %s(), %s:%u",
+	    err->reqid.function, err->reqid.sourcefile, err->reqid.lineno);
+    PSC_Log_fmt(PSC_L_ERROR, "** FAILED: %s", err->reqid.reqsource);
+#endif
     X11App_quit();
 }
 

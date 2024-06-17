@@ -32,10 +32,6 @@ int X11App_run(void);
 void X11App_quit(void);
 PSC_Event *X11App_error(void);
 
-void X11App_raiseError(X11App *self, Window *window, Widget *widget,
-	uint8_t code, uint8_t opMajor, uint16_t opMinor)
-    CMETHOD ATTR_NONNULL((2)) ATTR_NONNULL((3));
-
 Window *X11Error_window(X11Error *self) CMETHOD;
 Widget *X11Error_widget(X11Error *self) CMETHOD;
 uint8_t X11Error_code(X11Error *self) CMETHOD;

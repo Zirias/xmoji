@@ -3,7 +3,7 @@
 #include "font.h"
 #include "window.h"
 #include "x11adapter.h"
-#include "x11app.h"
+#include "x11app-int.h"
 #include "xrdb.h"
 
 #include <poser/core.h>
@@ -115,12 +115,10 @@ static void requestError(void *receiver, void *sender, void *args)
     Widget *self = receiver;
     X11App *xapp = app();
     Window *win = Window_fromWidget(self);
-    xcb_generic_error_t *xerr = args;
 
     if (!xapp) PSC_Service_panic("BUG, received error without running app");
     if (!win) PSC_Service_panic("BUG, received error without a parent window");
-    X11App_raiseError(xapp, win, self,
-	    xerr->error_code, xerr->major_code, xerr->minor_code);
+    X11App_raiseError(xapp, win, self, args);
 }
 
 Widget *Widget_createBase(void *derived, const char *name, void *parent)
