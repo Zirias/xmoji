@@ -39,11 +39,14 @@ static void svstartup(void *receiver, void *sender, void *args)
 {
     (void)receiver;
     (void)sender;
-    (void)args;
 
 #ifndef DEBUG
     PSC_Log_setAsync(1);
 #endif
+    PSC_EAStartup *ea = args;
+    int rc = 0;
+    Object_vcall(rc, X11App, startup, instance);
+    if (rc != 0) PSC_EAStartup_return(ea, EXIT_FAILURE);
 }
 
 static void svshutdown(void *receiver, void *sender, void *args)
@@ -55,6 +58,7 @@ static void svshutdown(void *receiver, void *sender, void *args)
 #ifndef DEBUG
     PSC_Log_setAsync(0);
 #endif
+    Object_vcallv(X11App, shutdown, instance);
 }
 
 static void destroy(void *obj)
@@ -152,9 +156,7 @@ X11App *X11App_createBase(void *derived, int argc, char **argv)
     self->argv = argv;
     self->argc = argc;
 
-#ifndef DEBUG
     PSC_Event_register(PSC_Service_startup(), self, svstartup, 0);
-#endif
     PSC_Event_register(PSC_Service_shutdown(), self, svshutdown, 0);
 
     return (instance = self);
@@ -165,12 +167,7 @@ int X11App_run(void)
     if (!instance) return EXIT_FAILURE;
     int rc = X11Adapter_init(instance->argc, instance->argv, instance->locale,
 	    instance->name, Object_className(instance));
-    if (rc != 0) goto done;
-    Object_vcall(rc, X11App, startup, instance);
-    if (rc != 0) goto done;
-    rc = PSC_Service_run();
-    Object_vcallv(X11App, shutdown, instance);
-done:
+    if (rc == 0) rc = PSC_Service_run();
     Object_destroy(instance);
     return rc ? EXIT_FAILURE : EXIT_SUCCESS;
 }
