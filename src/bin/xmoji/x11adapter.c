@@ -99,6 +99,7 @@ static size_t wmclasssz;
 
 static xcb_connection_t *c;
 static xcb_screen_t *s;
+uint64_t rdpos;
 static XGlitch glitches;
 static XRdb *rdb;
 static struct xkb_context *kbdctx;
@@ -444,16 +445,18 @@ static void readX11Input(void *receiver, void *sender, void *args)
     (void)args;
 
     /* This function is called from the main event loop when the X11 socket is
-     * ready to read. We will block on select() before this is called again,
+     * ready to read, or at the end of the event loop when xcb read more bytes
+     * meanwhile. We will then block on select() before this is called again,
      * therefore we must make sure to always process all input already read and
      * queued by xcb, otherwise X11 events could sit unnoticed until new input
      * from the X server arrives.
      */
 
-    int gotinput = 1;
-    while (gotinput)
+    /* Determine how many bytes xcb read before starting to process */
+    uint64_t newrdpos = xcb_total_read(c);
+    do
     {
-	gotinput = 0; // whether we found new input in this iteration
+	rdpos = newrdpos;
 
 	/* Initialize a flag whether we attempted to read new input in this
 	 * loop iteration. When waiting for the result of a request, we must
@@ -469,9 +472,9 @@ static void readX11Input(void *receiver, void *sender, void *args)
 	    xcb_generic_error_t *error = 0;
 	    X11ReplyHandlerRecord *rec = waitingReplies + waitingFront;
 
-	    gotinput = xcb_poll_for_reply(c, rec->sequence, &reply, &error);
-	    if (gotinput)
+	    if (xcb_poll_for_reply(c, rec->sequence, &reply, &error))
 	    {
+		newrdpos = xcb_total_read(c);
 		if (!reply && !error && !rec->err)
 		{
 		    /* The request is considered completed, but we got neither
@@ -515,17 +518,17 @@ static void readX11Input(void *receiver, void *sender, void *args)
 	 */
 	if (polled) ev = xcb_poll_for_queued_event(c);
 
-	/* Otherwise, attempt once to read new input and update our flag
-	 * whether new input was available.
+	/* Otherwise, attempt once to read new input and update our read
+	 * position.
 	 */
-	else if ((ev = xcb_poll_for_event(c))) gotinput = 1;
+	else if ((ev = xcb_poll_for_event(c))) newrdpos = xcb_total_read(c);
 
 	while (ev)
 	{
 	    handleX11Event(ev);
 	    ev = xcb_poll_for_queued_event(c);
 	}
-    }
+    } while (newrdpos != rdpos); /* repeat as long as new input was read */
 }
 
 static void sync_cb(void *ctx, unsigned sequence,
@@ -550,6 +553,10 @@ static void flushandsync(void *receiver, void *sender, void *args)
     (void)receiver;
     (void)sender;
     (void)args;
+
+    /* First check whether there's more X11 input to process */
+    uint64_t newrdpos = xcb_total_read(c);
+    if (newrdpos != rdpos) readX11Input(0, 0, 0);
 
     PSC_Event_raise(eventsDone, 0, 0);
     if (waitingNum)
@@ -852,6 +859,7 @@ int X11Adapter_init(int argc, char **argv, const char *locale,
 
     updateKeymap();
 
+    rdpos = xcb_total_read(c);
     return 0;
 
 error:
