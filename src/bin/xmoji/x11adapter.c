@@ -457,15 +457,6 @@ static void readX11Input(void *receiver, void *sender, void *args)
     do
     {
 	rdpos = newrdpos;
-
-	/* Initialize a flag whether we attempted to read new input in this
-	 * loop iteration. When waiting for the result of a request, we must
-	 * call xcb_poll_for_reply() to check for it. This function might
-	 * always attempt to read new input (and buffer X11 events in xcb's
-	 * queue).
-	 */
-	int polled = !!waitingNum;
-
 	while (waitingNum)
 	{
 	    void *reply = 0;
@@ -474,7 +465,6 @@ static void readX11Input(void *receiver, void *sender, void *args)
 
 	    if (xcb_poll_for_reply(c, rec->sequence, &reply, &error))
 	    {
-		newrdpos = xcb_total_read(c);
 		if (!reply && !error && !rec->err)
 		{
 		    /* The request is considered completed, but we got neither
@@ -511,23 +501,17 @@ static void readX11Input(void *receiver, void *sender, void *args)
 	    }
 	}
 
-	xcb_generic_event_t *ev;
-
-	/* If we already attempted to read new input in this iteration,
-	 * just process what's already queued.
-	 */
-	if (polled) ev = xcb_poll_for_queued_event(c);
-
-	/* Otherwise, attempt once to read new input and update our read
-	 * position.
-	 */
-	else if ((ev = xcb_poll_for_event(c))) newrdpos = xcb_total_read(c);
-
+	xcb_generic_event_t *ev = xcb_poll_for_event(c);
 	while (ev)
 	{
 	    handleX11Event(ev);
 	    ev = xcb_poll_for_queued_event(c);
 	}
+
+	/* Flush and check whether we read new data */
+	if (waitingNum) xcb_flush(c);
+	newrdpos = xcb_total_read(c);
+
     } while (newrdpos != rdpos); /* repeat as long as new input was read */
 }
 
@@ -554,18 +538,23 @@ static void flushandsync(void *receiver, void *sender, void *args)
     (void)sender;
     (void)args;
 
-    /* First check whether there's more X11 input to process */
-    uint64_t newrdpos = xcb_total_read(c);
-    if (newrdpos != rdpos) readX11Input(0, 0, 0);
-
+    /* Trigger event for end of event-loop iteration and flush
+     * xcb connection */
     PSC_Event_raise(eventsDone, 0, 0);
-    if (waitingNum)
+    if (waitingNum) xcb_flush(c);
+
+    /* Repeat this until it did not trigger reading more data */
+    while (xcb_total_read(c) != rdpos)
     {
-	if (!syncseq && (waitingNoreply || waitingNum >= SYNCTHRESH))
-	{
-	    syncseq = AWAIT(xcb_get_input_focus(c), 0, sync_cb);
-	}
-	xcb_flush(c);
+	readX11Input(0, 0, 0);
+	PSC_Event_raise(eventsDone, 0, 0);
+	if (waitingNum) xcb_flush(c);
+    }
+
+    /* Finally check whether a sync is needed */
+    if (!syncseq && (waitingNoreply || waitingNum >= SYNCTHRESH))
+    {
+	syncseq = AWAIT(xcb_get_input_focus(c), 0, sync_cb);
     }
 }
 
