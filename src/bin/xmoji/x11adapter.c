@@ -267,7 +267,7 @@ static void handleX11Reply(X11ReplyHandlerRecord *rec, void *reply,
 
 	    case RQ_CHECK_ERROR_UNSIGNED:
 		PSC_Log_fmt(PSC_L_ERROR, rec->ctx, rec->uarg);
-		PSC_Event_raise(requestError, rec->uarg, 0);
+		PSC_Event_raise(requestError, rec->uarg, error);
 		break;
 
 	    default:
