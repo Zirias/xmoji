@@ -78,4 +78,7 @@ void Window_close(void *self)
 void Window_showTooltip(void *self, void *widget)
     CMETHOD ATTR_NONNULL((2));
 
+void Window_invalidateHover(void *self)
+    CMETHOD;
+
 #endif

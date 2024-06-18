@@ -383,10 +383,6 @@ static void motionNotify(void *receiver, void *sender, void *args)
 	    self->anchorPos = (Pos){-1, -1};
 	}
     }
-    if (self->tooltipWindow && self->tooltipWindow->mapped)
-    {
-	Window_close(self->tooltipWindow);
-    }
 }
 
 static void readWmState(void *obj, unsigned sequence,
@@ -506,6 +502,11 @@ static void doupdates(void *receiver, void *sender, void *args)
     if (memcmp(&self->mouse, &self->mouseUpdate, sizeof self->mouse))
     {
 	self->mouse = self->mouseUpdate;
+	if (self->mouse.x >= 0 && self->mouse.y >= 0
+		&& self->tooltipWindow && self->tooltipWindow->mapped)
+	{
+	    Window_close(self->tooltipWindow);
+	}
 	Pos hoverPos;
 	if (self->anchorPos.x >= 0 && self->anchorPos.y >= 0)
 	{
@@ -1082,3 +1083,8 @@ void Window_showTooltip(void *self, void *widget)
     Widget_show(w->tooltipWindow);
 }
 
+void Window_invalidateHover(void *self)
+{
+    Window *w = Object_instance(self);
+    w->mouse = (Pos){-1, -1};
+}

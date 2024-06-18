@@ -1,5 +1,6 @@
 #include "scrollbox.h"
 
+#include "window.h"
 #include "xrdb.h"
 
 #include <poser/core.h>
@@ -60,6 +61,8 @@ static void updateScrollbar(ScrollBox *self, Size size)
 done:
     geom.pos.y -= self->scrollPos;
     Widget_setOrigin(self->widget, geom.pos);
+    Window *win = Window_fromWidget(self);
+    if (win) Window_invalidateHover(win);
 }
 
 static Rect scrollBarGeom(ScrollBox *self)
