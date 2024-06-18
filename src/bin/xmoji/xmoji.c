@@ -64,7 +64,7 @@ static int startup(void *app)
     UniStr(clickhere, "Click here to type ...");
     UniStr(tip, "Tip: Click in the box to type");
     TextBox_setPlaceholder(input, clickhere);
-    Widget_setTooltip(input, tip);
+    Widget_setTooltip(input, tip, 0);
     Widget_show(input);
     VBox_addWidget(box, input);
 

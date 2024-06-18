@@ -247,11 +247,11 @@ void Widget_setFontResName(void *self, const char *name,
     doSetFont(Object_instance(self), Font_create(pattern, options));
 }
 
-void Widget_setTooltip(void *self, const UniStr *tooltip)
+void Widget_setTooltip(void *self, const UniStr *tooltip, unsigned delay)
 {
     Widget *w = Object_instance(self);
     if (w->tooltip) Tooltip_destroy(w->tooltip);
-    w->tooltip = Tooltip_create(tooltip);
+    w->tooltip = Tooltip_create(tooltip, delay);
 }
 
 Widget *Widget_container(const void *self)

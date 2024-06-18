@@ -11,6 +11,7 @@ struct Tooltip
     TextLabel *label;
     Timer *timer;
     Window *window;
+    unsigned delay;
 };
 
 static void timeout(void *receiver, void *sender, void *args)
@@ -23,12 +24,13 @@ static void timeout(void *receiver, void *sender, void *args)
     if (self->window) Window_showTooltip(self->window, self->label);
 }
 
-Tooltip *Tooltip_create(const UniStr *text)
+Tooltip *Tooltip_create(const UniStr *text, unsigned delay)
 {
     Tooltip *self = PSC_malloc(sizeof *self);
     self->label = TextLabel_create(0, 0);
     self->timer = Timer_create();
     self->window = 0;
+    self->delay = delay ? delay : 2000;
 
     TextLabel_setText(self->label, text);
     TextLabel_setColor(self->label, COLOR_SELECTED);
@@ -43,7 +45,7 @@ Tooltip *Tooltip_create(const UniStr *text)
 void Tooltip_activate(Tooltip *self, Window *window)
 {
     self->window = window;
-    Timer_start(self->timer, 3000);
+    Timer_start(self->timer, self->delay);
 }
 
 void Tooltip_cancel(Tooltip *self)

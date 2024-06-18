@@ -129,7 +129,8 @@ Font *Widget_font(const void *self) CMETHOD;
 void Widget_setFont(void *self, Font *font) CMETHOD;
 void Widget_setFontResName(void *self, const char *name,
 	const char *defpattern, const FontOptions *options) CMETHOD;
-void Widget_setTooltip(void *self, const UniStr *tooltip) CMETHOD;
+void Widget_setTooltip(void *self,
+	const UniStr *tooltip, unsigned delay) CMETHOD;
 Widget *Widget_container(const void *self) CMETHOD;
 void Widget_setContainer(void *self, void *container) CMETHOD;
 int Widget_draw(void *self) CMETHOD;
