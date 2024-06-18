@@ -2,6 +2,7 @@
 
 #include "timer.h"
 
+#include <fcntl.h>
 #include <poser/core.h>
 #include <signal.h>
 #include <stdlib.h>
@@ -41,6 +42,7 @@ Timer *Timer_create(void)
     Timer *self = PSC_malloc(sizeof *self);
     memset(self, 0, sizeof *self);
     if (pipe(self->pipe) < 0) goto error;
+    fcntl(self->pipe[0], F_SETFL, fcntl(self->pipe[0], F_GETFL) | O_NONBLOCK);
     PSC_Event_register(PSC_Service_readyRead(), self, expired, self->pipe[0]);
     PSC_Service_registerRead(self->pipe[0]);
     struct sigevent ev = {
