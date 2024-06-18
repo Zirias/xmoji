@@ -33,8 +33,8 @@ Tooltip *Tooltip_create(const UniStr *text, unsigned delay)
     self->delay = delay ? delay : 2000;
 
     TextLabel_setText(self->label, text);
-    TextLabel_setColor(self->label, COLOR_SELECTED);
-    Widget_setBackground(self->label, 1, COLOR_BG_SELECTED);
+    TextLabel_setColor(self->label, COLOR_TOOLTIP);
+    Widget_setBackground(self->label, 1, COLOR_BG_TOOLTIP);
     Widget_show(self->label);
 
     PSC_Event_register(Timer_expired(self->timer), self, timeout, 0);

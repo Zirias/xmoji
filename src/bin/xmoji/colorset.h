@@ -19,6 +19,8 @@ typedef enum ColorRole
     COLOR_BG_DISABLED,
     COLOR_SELECTED,
     COLOR_BG_SELECTED,
+    COLOR_TOOLTIP,
+    COLOR_BG_TOOLTIP,
     COLOR_NUMROLES
 } ColorRole;
 

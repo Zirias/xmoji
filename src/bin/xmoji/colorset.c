@@ -41,7 +41,9 @@ static const char *reskeys[COLOR_NUMROLES][2] = {
     { "Foreground", "disabledForeground" },
     { "Background", "disabledBackground" },
     { "Foreground", "selectedForeground" },
-    { "Background", "selectedBackground" }
+    { "Background", "selectedBackground" },
+    { "Foreground", "tooltipForeground" },
+    { "Background", "tooltipBackground" }
 };
 static int refcnt;
 static PSC_HashTable *colorCache;
@@ -60,7 +62,9 @@ static const ColorSet defcolors = {
 	0x696969ff,	// DISABLED	    dim gray
 	0xc0c0c0ff,	// BG_DISABLED	    silver
 	0xadd8e6ff,	// SELECTED	    light blue
-	0x0000cdff	// BG_SELECTED	    medium blue
+	0x0000cdff,	// BG_SELECTED	    medium blue
+	0x000000ff,	// TOOLTIP	    black
+	0xffdeadff	// BG_TOOLTIP	    navajo white
     },	// ref: https://en.wikipedia.org/wiki/X11_color_names
     .npending = 0
 };
