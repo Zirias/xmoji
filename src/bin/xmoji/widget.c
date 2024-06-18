@@ -1,6 +1,7 @@
 #include "widget.h"
 
 #include "font.h"
+#include "tooltip.h"
 #include "window.h"
 #include "x11adapter.h"
 #include "x11app-int.h"
@@ -28,6 +29,7 @@ struct Widget
     const char *resname;
     Font *font;
     Font *explicitFont;
+    Tooltip *tooltip;
     PSC_Event *shown;
     PSC_Event *hidden;
     PSC_Event *activated;
@@ -65,6 +67,7 @@ static void destroy(void *obj)
     PSC_Event_destroy(self->activated);
     PSC_Event_destroy(self->hidden);
     PSC_Event_destroy(self->shown);
+    Tooltip_destroy(self->tooltip);
     Font_destroy(self->font);
     free(self);
 }
@@ -244,6 +247,13 @@ void Widget_setFontResName(void *self, const char *name,
     doSetFont(Object_instance(self), Font_create(pattern, options));
 }
 
+void Widget_setTooltip(void *self, const UniStr *tooltip)
+{
+    Widget *w = Object_instance(self);
+    if (w->tooltip) Tooltip_destroy(w->tooltip);
+    w->tooltip = Tooltip_create(tooltip);
+}
+
 Widget *Widget_container(const void *self)
 {
     const Widget *w = Object_instance(self);
@@ -407,6 +417,7 @@ Widget *Widget_enterAt(void *self, Pos pos)
     }
     Widget *child = w;
     Object_vcall(child, Widget, childAt, self, pos);
+    if (w->tooltip) Tooltip_activate(w->tooltip, Window_fromWidget(w));
     return child;
 }
 
@@ -416,6 +427,7 @@ void Widget_leave(void *self)
     if (!w->entered) return;
     w->entered = 0;
     Object_vcallv(Widget, leave, w);
+    if (w->tooltip) Tooltip_cancel(w->tooltip);
 }
 
 void Widget_acceptFocus(void *self, int accept)

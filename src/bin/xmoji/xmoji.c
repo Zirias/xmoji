@@ -62,7 +62,9 @@ static int startup(void *app)
 
     TextBox *input = TextBox_create("upperBox", box);
     UniStr(clickhere, "Click here to type ...");
+    UniStr(tip, "Tip: Click in the box to type");
     TextBox_setPlaceholder(input, clickhere);
+    Widget_setTooltip(input, tip);
     Widget_show(input);
     VBox_addWidget(box, input);
 

@@ -24,6 +24,7 @@ struct TextLabel
     UniStr *text;
     PSC_List *renderers;
     Size minSize;
+    ColorRole color;
 };
 
 static void freerenderer(void *renderer)
@@ -87,7 +88,7 @@ static int draw(void *obj, xcb_render_picture_t picture)
     if (!picture || !self->text) return 0;
     Font *font = Widget_font(self);
     if (!font) return 0;
-    Color color = Widget_color(self, COLOR_NORMAL);
+    Color color = Widget_color(self, self->color);
     Pos pos = Widget_contentOrigin(self, self->minSize);
     Align align = Widget_align(self);
     uint16_t linespace = Font_linespace(font);
@@ -130,6 +131,7 @@ TextLabel *TextLabel_createBase(void *derived, const char *name, void *parent)
     self->text = 0;
     self->renderers = PSC_List_create();
     self->minSize = (Size){0, 0};
+    self->color = COLOR_NORMAL;
 
     return self;
 }
@@ -147,5 +149,15 @@ void TextLabel_setText(void *self, const UniStr *text)
     l->text = UniStr_ref(text);
     Font *font = Widget_font(l);
     if (font) update(l, font);
+}
+
+void TextLabel_setColor(void *self, ColorRole color)
+{
+    TextLabel *l = Object_instance(self);
+    if (l->color != color)
+    {
+	l->color = color;
+	Widget_invalidate(l);
+    }
 }
 

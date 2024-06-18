@@ -19,5 +19,6 @@ TextLabel *TextLabel_createBase(void *derived, const char *name, void *parent);
 #define TextLabel_create(...) TextLabel_createBase(0, __VA_ARGS__)
 const UniStr *TextLabel_text(const void *self) CMETHOD;
 void TextLabel_setText(void *self, const UniStr *text) CMETHOD;
+void TextLabel_setColor(void *self, ColorRole color) CMETHOD;
 
 #endif

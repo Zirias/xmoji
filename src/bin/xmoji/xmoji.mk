@@ -9,6 +9,7 @@ xmoji_MODULES=		button \
 			textlabel \
 			textrenderer \
 			timer \
+			tooltip \
 			unistr \
 			unistrbuilder \
 			vbox \

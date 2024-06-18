@@ -41,6 +41,9 @@ struct Window
     void *mainWidget;
     void *focusWidget;
     void *hoverWidget;
+    Window *tooltipWindow;
+    Window *parent;
+    Pos absMouse;
     Pos mouse;
     Pos mouseUpdate;
     Pos anchorPos;
@@ -64,7 +67,35 @@ struct Window
 
 static void map(Window *self)
 {
-    CHECK(xcb_map_window(X11Adapter_connection(), self->w),
+    xcb_connection_t *c = X11Adapter_connection();
+    if (self->parent)
+    {
+	Size size = Widget_minSize(self->mainWidget);
+	size.width += 2;
+	size.height += 2;
+	xcb_screen_t *s = X11Adapter_screen();
+	int16_t x = self->parent->absMouse.x - (size.width / 2);
+	if (x + size.width > s->width_in_pixels)
+	{
+	    x = s->width_in_pixels - size.width;
+	}
+	if (x < 0) x = 0;
+	int16_t y = self->parent->absMouse.y - size.height - 16;
+	if (y < 0)
+	{
+	    if (self->parent->absMouse.y + 16 < s->height_in_pixels
+		    && self->parent->absMouse.y + 16 >= 0)
+	    {
+		y = self->parent->absMouse.y + 16;
+	    }
+	    else y = 0;
+	}
+	CHECK(xcb_configure_window(c, self->w, XCB_CONFIG_WINDOW_X |
+		    XCB_CONFIG_WINDOW_Y | XCB_CONFIG_WINDOW_BORDER_WIDTH,
+		    (uint32_t[]){x, y, 1}),
+		"Cannot configure window 0x%x", (unsigned)self->w);
+    }
+    CHECK(xcb_map_window(c, self->w),
 	    "Cannot map window 0x%x", (unsigned)self->w);
     self->mapped = 1;
     PSC_Log_fmt(PSC_L_DEBUG, "Mapping window 0x%x", (unsigned)self->w);
@@ -208,6 +239,8 @@ static void enter(void *receiver, void *sender, void *args)
 
     Window *self = receiver;
     xcb_enter_notify_event_t *ev = args;
+    self->absMouse.x = ev->root_x;
+    self->absMouse.y = ev->root_y;
     self->mouseUpdate.x = ev->event_x;
     self->mouseUpdate.y = ev->event_y;
     MouseButton heldButtons = ev->state >> 8;
@@ -337,6 +370,8 @@ static void motionNotify(void *receiver, void *sender, void *args)
 
     Window *self = receiver;
     xcb_motion_notify_event_t *ev = args;
+    self->absMouse.x = ev->root_x;
+    self->absMouse.y = ev->root_y;
     self->mouseUpdate.x = ev->event_x;
     self->mouseUpdate.y = ev->event_y;
     if (self->anchorButton)
@@ -347,6 +382,10 @@ static void motionNotify(void *receiver, void *sender, void *args)
 	    self->anchorButton = 0;
 	    self->anchorPos = (Pos){-1, -1};
 	}
+    }
+    if (self->tooltipWindow && self->tooltipWindow->mapped)
+    {
+	Window_close(self->tooltipWindow);
     }
 }
 
@@ -422,7 +461,7 @@ static void propertyNotify(void *receiver, void *sender, void *args)
 		if (self->wantmap < 0)
 		{
 		    self->wantmap = 0;
-		    PSC_Event_raise(self->closed, 0, 0);
+		    if (self->closed) PSC_Event_raise(self->closed, 0, 0);
 		}
 		X11App_removeWindow(app(), self);
 		break;
@@ -617,7 +656,7 @@ static void unmapped(void *receiver, void *sender, void *args)
     if (!self->havewmstate && self->wantmap < 0)
     {
 	self->wantmap = 0;
-	PSC_Event_raise(self->closed, 0, 0);
+	if (self->closed) PSC_Event_raise(self->closed, 0, 0);
 	X11App_removeWindow(app(), self);
     }
 }
@@ -625,6 +664,7 @@ static void unmapped(void *receiver, void *sender, void *args)
 static void destroy(void *window)
 {
     Window *self = window;
+    Object_destroy(self->tooltipWindow);
     PSC_Event_unregister(Widget_sizeChanged(self), self, sizeChanged, 0);
     PSC_Event_unregister(X11Adapter_eventsDone(), self, doupdates, 0);
     PSC_Event_unregister(X11Adapter_unmapNotify(), self,
@@ -674,27 +714,45 @@ static void destroy(void *window)
     free(self);
 }
 
-Window *Window_createBase(void *derived, const char *name, void *parent)
+
+static Window *createWindow(void *derived, const char *name, void *parent,
+	int temporary)
 {
     Window *self = PSC_malloc(sizeof *self);
     memset(self, 0, sizeof *self);
-    CREATEBASE(Widget, name, parent);
-    self->closed = PSC_Event_create(self);
-    self->propertyChanged = PSC_Event_create(self);
-    self->kbcompose = xkb_compose_state_new(
-	    X11Adapter_kbdcompose(), XKB_COMPOSE_STATE_NO_FLAGS);
-    self->mouseUpdate = (Pos){-1, -1};
-    self->anchorPos = (Pos){-1, -1};
-    self->hideState = WS_MINIMIZED;
+    if (temporary)
+    {
+	CREATEBASE(Widget, 0, 0);
+    }
+    else
+    {
+	CREATEBASE(Widget, name, parent);
+	self->closed = PSC_Event_create(self);
+	self->propertyChanged = PSC_Event_create(self);
+	self->kbcompose = xkb_compose_state_new(
+		X11Adapter_kbdcompose(), XKB_COMPOSE_STATE_NO_FLAGS);
+	self->mouseUpdate = (Pos){-1, -1};
+	self->anchorPos = (Pos){-1, -1};
+	self->hideState = WS_MINIMIZED;
+    }
 
     xcb_connection_t *c = X11Adapter_connection();
     self->w = xcb_generate_id(c);
     PSC_Event_register(X11Adapter_requestError(), self, requestError, self->w);
 
     xcb_screen_t *s = X11Adapter_screen();
-    uint32_t mask = XCB_CW_EVENT_MASK;
-    uint32_t values[] = { 
-	XCB_EVENT_MASK_BUTTON_MOTION
+    uint32_t mask;
+    uint32_t values[2];
+    if (temporary)
+    {
+	mask = XCB_CW_OVERRIDE_REDIRECT | XCB_CW_EVENT_MASK;
+	values[0] = 1;
+	values[1] = XCB_EVENT_MASK_EXPOSURE | XCB_EVENT_MASK_STRUCTURE_NOTIFY;
+    }
+    else
+    {
+	mask = XCB_CW_EVENT_MASK;
+	values[0] = XCB_EVENT_MASK_BUTTON_MOTION
 	    | XCB_EVENT_MASK_BUTTON_PRESS
 	    | XCB_EVENT_MASK_BUTTON_RELEASE
 	    | XCB_EVENT_MASK_ENTER_WINDOW
@@ -704,58 +762,70 @@ Window *Window_createBase(void *derived, const char *name, void *parent)
 	    | XCB_EVENT_MASK_LEAVE_WINDOW
 	    | XCB_EVENT_MASK_POINTER_MOTION
 	    | XCB_EVENT_MASK_PROPERTY_CHANGE
-	    | XCB_EVENT_MASK_STRUCTURE_NOTIFY
-    };
+	    | XCB_EVENT_MASK_STRUCTURE_NOTIFY;
+    }
     CHECK(xcb_create_window(c, XCB_COPY_FROM_PARENT, self->w, s->root,
 		0, 0, 1, 1, 2, XCB_WINDOW_CLASS_INPUT_OUTPUT,
 		s->root_visual, mask, values),
 	    "Cannot create window 0x%x", (unsigned)self->w);
-    WMHints hints = {
-	.flags = WM_HINT_INPUT | WM_HINT_STATE,
-	.input = 1,
-	.state = WM_STATE_NORMAL
-    };
-    CHECK(xcb_change_property(c, XCB_PROP_MODE_REPLACE, self->w,
-		XCB_ATOM_WM_HINTS, XCB_ATOM_WM_HINTS, 32,
-		sizeof hints >> 2, &hints),
-	    "Cannot set window manager hints on 0x%x", (unsigned)self->w);
-    xcb_atom_t delwin = A(WM_DELETE_WINDOW);
-    CHECK(xcb_change_property(c, XCB_PROP_MODE_REPLACE, self->w,
-		A(WM_PROTOCOLS), XCB_ATOM_ATOM, 32, 1, &delwin),
-	    "Cannot set supported protocols on 0x%x", (unsigned)self->w);
-    size_t sz;
-    const char *wmclass = X11Adapter_wmClass(&sz);
-    CHECK(xcb_change_property(c, XCB_PROP_MODE_REPLACE, self->w,
-		XCB_ATOM_WM_CLASS, XCB_ATOM_STRING, 8, sz, wmclass),
-	    "Cannot set window class for 0x%x", (unsigned)self->w);
-    xcb_atom_t wtnorm = A(_NET_WM_WINDOW_TYPE_NORMAL);
-    CHECK(xcb_change_property(c, XCB_PROP_MODE_REPLACE, self->w,
-		A(_NET_WM_WINDOW_TYPE), XCB_ATOM_ATOM, 32, 1, &wtnorm),
-	    "Cannot set window type for 0x%x", (unsigned)self->w);
-
-    int backingstore = XRdb_bool(X11Adapter_resources(),
-	    XRdbKey(Widget_resname(self), "backingStore"), XRQF_OVERRIDES, 1);
-    if (backingstore)
+    if (temporary)
     {
-	self->p = xcb_generate_id(c);
-	CHECK(xcb_create_pixmap(c, 24, self->p, s->root, 1, 1),
-		"Cannot create backing store pixmap for 0x%x",
-		(unsigned)self->w);
-	self->src = xcb_generate_id(c);
-	CHECK(xcb_render_create_picture(c, self->src, self->p,
-		    X11Adapter_rgbformat(), 0, 0),
-		"Cannot create XRender picture for backing store on 0x%x",
-		(unsigned)self->w);
-	self->dst = xcb_generate_id(c);
-	CHECK(xcb_render_create_picture(c, self->dst, self->w,
-		    X11Adapter_rootformat(), 0, 0),
-		"Cannot create XRender picture for window surface on 0x%x",
-		(unsigned)self->w);
+	self->parent = (Window *)parent;
+	CHECK(xcb_change_property(c, XCB_PROP_MODE_REPLACE, self->w,
+		    XCB_ATOM_WM_TRANSIENT_FOR, XCB_ATOM_WINDOW,
+		    32, 1, &self->parent->w),
+		"Cannot set transient state for 0x%x", (unsigned)self->w);
     }
     else
     {
-	PSC_Log_fmt(PSC_L_INFO, "Disabled backing store for window 0x%x",
-		(unsigned)self->w);
+	WMHints hints = {
+	    .flags = WM_HINT_INPUT | WM_HINT_STATE,
+	    .input = 1,
+	    .state = WM_STATE_NORMAL
+	};
+	CHECK(xcb_change_property(c, XCB_PROP_MODE_REPLACE, self->w,
+		    XCB_ATOM_WM_HINTS, XCB_ATOM_WM_HINTS, 32,
+		    sizeof hints >> 2, &hints),
+		"Cannot set window manager hints on 0x%x", (unsigned)self->w);
+	xcb_atom_t delwin = A(WM_DELETE_WINDOW);
+	CHECK(xcb_change_property(c, XCB_PROP_MODE_REPLACE, self->w,
+		    A(WM_PROTOCOLS), XCB_ATOM_ATOM, 32, 1, &delwin),
+		"Cannot set supported protocols on 0x%x", (unsigned)self->w);
+	size_t sz;
+	const char *wmclass = X11Adapter_wmClass(&sz);
+	CHECK(xcb_change_property(c, XCB_PROP_MODE_REPLACE, self->w,
+		    XCB_ATOM_WM_CLASS, XCB_ATOM_STRING, 8, sz, wmclass),
+		"Cannot set window class for 0x%x", (unsigned)self->w);
+	xcb_atom_t wtnorm = A(_NET_WM_WINDOW_TYPE_NORMAL);
+	CHECK(xcb_change_property(c, XCB_PROP_MODE_REPLACE, self->w,
+		    A(_NET_WM_WINDOW_TYPE), XCB_ATOM_ATOM, 32, 1, &wtnorm),
+		"Cannot set window type for 0x%x", (unsigned)self->w);
+
+	int backingstore = XRdb_bool(X11Adapter_resources(),
+		XRdbKey(Widget_resname(self), "backingStore"),
+		XRQF_OVERRIDES, 1);
+	if (backingstore)
+	{
+	    self->p = xcb_generate_id(c);
+	    CHECK(xcb_create_pixmap(c, 24, self->p, s->root, 1, 1),
+		    "Cannot create backing store pixmap for 0x%x",
+		    (unsigned)self->w);
+	    self->src = xcb_generate_id(c);
+	    CHECK(xcb_render_create_picture(c, self->src, self->p,
+			X11Adapter_rgbformat(), 0, 0),
+		    "Cannot create XRender picture for backing store on 0x%x",
+		    (unsigned)self->w);
+	    self->dst = xcb_generate_id(c);
+	    CHECK(xcb_render_create_picture(c, self->dst, self->w,
+			X11Adapter_rootformat(), 0, 0),
+		    "Cannot create XRender picture for window surface on 0x%x",
+		    (unsigned)self->w);
+	}
+	else
+	{
+	    PSC_Log_fmt(PSC_L_INFO, "Disabled backing store for window 0x%x",
+		    (unsigned)self->w);
+	}
     }
 
     Widget_setSize(self, (Size){1, 1});
@@ -796,6 +866,11 @@ Window *Window_createBase(void *derived, const char *name, void *parent)
 	    sizeChanged, 0);
 
     return self;
+}
+
+Window *Window_createBase(void *derived, const char *name, void *parent)
+{
+    return createWindow(derived, name, parent, 0);
 }
 
 Window *Window_fromWidget(void *widget)
@@ -994,5 +1069,16 @@ void Window_close(void *self)
 		XCB_EVENT_MASK_SUBSTRUCTURE_REDIRECT, (const char *)&ev),
 	    "Cannot send unmap notify for window 0x%x", (unsigned)w->w);
     PSC_Log_fmt(PSC_L_DEBUG, "Unmapping window 0x%x", (unsigned)w->w);
+}
+
+void Window_showTooltip(void *self, void *widget)
+{
+    Window *w = Object_instance(self);
+    if (!w->tooltipWindow)
+    {
+	w->tooltipWindow = createWindow(0, 0, w, 1);
+    }
+    Window_setMainWidget(w->tooltipWindow, widget);
+    Widget_show(w->tooltipWindow);
 }
 
