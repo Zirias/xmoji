@@ -57,6 +57,7 @@ struct Window
     xcb_render_picture_t src;
     xcb_render_picture_t dst;
     xcb_timestamp_t clicktime;
+    uint32_t borderpixel;
     int haveMinSize;
     int mapped;
     int wantmap;
@@ -829,6 +830,8 @@ static Window *createWindow(void *derived, const char *name, void *parent,
 	}
     }
 
+    self->borderpixel = (uint32_t)-1;
+
     Widget_setSize(self, (Size){1, 1});
     Widget_setDrawable(self, self->p ? self->p : self->w);
     Widget_setBackground(self, 1, COLOR_BG_NORMAL);
@@ -978,6 +981,20 @@ void *Window_mainWidget(const void *self)
     return w->mainWidget;
 }
 
+static void setBorderColor(void *obj, unsigned sequence,
+	void *reply, xcb_generic_error_t *error)
+{
+    (void)sequence;
+
+    if (error || !reply) return;
+    Window *self = obj;
+    xcb_alloc_color_reply_t *color = reply;
+    self->borderpixel = color->pixel;
+    CHECK(xcb_change_window_attributes(X11Adapter_connection(), self->w,
+		XCB_CW_BORDER_PIXEL, (const void *)&self->borderpixel),
+	    "Cannot set border color for 0x%x", (unsigned)self->w);
+}
+
 void Window_setMainWidget(void *self, void *widget)
 {
     Window *w = Object_instance(self);
@@ -992,6 +1009,21 @@ void Window_setMainWidget(void *self, void *widget)
     if (widget)
     {
 	Widget_setContainer(widget, w);
+	if (w->parent)
+	{
+	    xcb_connection_t *c = X11Adapter_connection();
+	    xcb_colormap_t map = X11Adapter_screen()->default_colormap;
+	    if (w->borderpixel != (uint32_t)-1)
+	    {
+		CHECK(xcb_free_colors(c, map, 0, 1, &w->borderpixel),
+			"Cannot free color for 0x%x", w->w);
+		w->borderpixel = (uint32_t)-1;
+	    }
+	    Color bc = Widget_color(widget, COLOR_TOOLTIP);
+	    AWAIT(xcb_alloc_color(c, map,
+			Color_red16(bc), Color_green16(bc), Color_blue16(bc)),
+		    self, setBorderColor);
+	}
 	Font *font = Widget_font(w);
 	if (!font) Widget_setFontResName(w, 0, 0, 0);
 	else Widget_offerFont(widget, font);
