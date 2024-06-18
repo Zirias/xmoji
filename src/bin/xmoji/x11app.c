@@ -18,11 +18,13 @@ static MetaX11App mo = MetaX11App_init(0, 0, "X11App", destroy);
 struct X11App
 {
     Object base;
+    PSC_List *windows;
     PSC_Event *error;
     char *locale;
     char *name;
     char **argv;
     int argc;
+    int quitting;
 };
 
 struct X11Error
@@ -51,14 +53,26 @@ static void svstartup(void *receiver, void *sender, void *args)
 
 static void svshutdown(void *receiver, void *sender, void *args)
 {
-    (void)receiver;
     (void)sender;
     (void)args;
 
+    X11App *self = receiver;
 #ifndef DEBUG
     PSC_Log_setAsync(0);
 #endif
-    Object_vcallv(X11App, shutdown, instance);
+    Object_vcallv(X11App, shutdown, self);
+    if (PSC_List_size(self->windows))
+    {
+	PSC_Service_shutdownLock();
+	self->quitting = 1;
+	PSC_ListIterator *i = PSC_List_iterator(self->windows);
+	while (PSC_ListIterator_moveNext(i))
+	{
+	    Window *win = PSC_ListIterator_current(i);
+	    Window_close(win);
+	}
+	PSC_ListIterator_destroy(i);
+    }
 }
 
 static void destroy(void *obj)
@@ -70,6 +84,7 @@ static void destroy(void *obj)
     free(self->name);
     free(self->locale);
     PSC_Event_destroy(self->error);
+    PSC_List_destroy(self->windows);
     free(self);
     instance = 0;
 }
@@ -150,11 +165,13 @@ X11App *X11App_createBase(void *derived, int argc, char **argv)
 
     X11App *self = PSC_malloc(sizeof *self);
     CREATEBASE(Object);
+    self->windows = PSC_List_create();
     self->error = PSC_Event_create(self);
     self->locale = locale;
     self->name = getName(argc, argv);
     self->argv = argv;
     self->argc = argc;
+    self->quitting = 0;
 
     PSC_Event_register(PSC_Service_startup(), self, svstartup, 0);
     PSC_Event_register(PSC_Service_shutdown(), self, svshutdown, 0);
@@ -212,6 +229,21 @@ void X11App_raiseError(X11App *self, Window *window, Widget *widget,
     PSC_Log_fmt(PSC_L_ERROR, "** FAILED: %s", err->reqid.reqsource);
 #endif
     X11App_quit();
+}
+
+void X11App_addWindow(X11App *self, Window *window)
+{
+    PSC_List_remove(self->windows, window);
+    PSC_List_append(self->windows, window, 0);
+}
+
+void X11App_removeWindow(X11App *self, Window *window)
+{
+    PSC_List_remove(self->windows, window);
+    if (self->quitting && !PSC_List_size(self->windows))
+    {
+	PSC_Service_shutdownUnlock();
+    }
 }
 
 Window *X11Error_window(X11Error *self)

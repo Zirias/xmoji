@@ -20,6 +20,13 @@ C_CLASS_DECL(UniStr);
 C_CLASS_DECL(Window);
 C_CLASS_DECL(XSelection);
 
+typedef enum WindowState
+{
+    WS_NONE,
+    WS_MINIMIZED,
+    WS_NORMAL
+} WindowState;
+
 Window *Window_createBase(void *derived, const char *name, void *parent);
 #define Window_create(...) Window_createBase(0, __VA_ARGS__)
 
@@ -61,6 +68,11 @@ void Window_returnProperty(void *self, xcb_atom_t property)
 XSelection *Window_primary(void *self)
     CMETHOD;
 XSelection *Window_clipboard(void *self)
+    CMETHOD;
+
+WindowState Window_state(const void *self)
+    CMETHOD;
+void Window_close(void *self)
     CMETHOD;
 
 #endif

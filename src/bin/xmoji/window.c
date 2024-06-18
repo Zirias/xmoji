@@ -46,6 +46,8 @@ struct Window
     Pos anchorPos;
     Rect damages[MAXDAMAGES];
     MouseButton anchorButton;
+    WindowState state;
+    WindowState hideState;
     XCursor cursor;
     xcb_window_t w;
     xcb_pixmap_t p;
@@ -56,6 +58,7 @@ struct Window
     int mapped;
     int wantmap;
     int ndamages;
+    int havewmstate;
     uint16_t tmpProperties;
 };
 
@@ -122,11 +125,26 @@ static int hide(void *obj)
 {
     Window *self = Object_instance(obj);
     if (!self->mapped) return 0;
-    self->wantmap = -1;
     self->mapped = 0;
-    CHECK(xcb_unmap_window(X11Adapter_connection(), self->w),
-	    "Cannot unmap window 0x%x", (unsigned)self->w);
-    PSC_Log_fmt(PSC_L_DEBUG, "Unmapping window 0x%x", (unsigned)self->w);
+    if (self->hideState == WS_MINIMIZED)
+    {
+	xcb_client_message_event_t msg = {
+	    .response_type = XCB_CLIENT_MESSAGE,
+	    .format = 32,
+	    .sequence = 0,
+	    .window = self->w,
+	    .type = A(WM_CHANGE_STATE),
+	    .data = { .data32 = { WM_STATE_ICONIC, 0, 0, 0, 0 } }
+	};
+	CHECK(xcb_send_event(X11Adapter_connection(), 0,
+		    X11Adapter_screen()->root,
+		    XCB_EVENT_MASK_SUBSTRUCTURE_NOTIFY |
+		    XCB_EVENT_MASK_SUBSTRUCTURE_REDIRECT, (const char *)&msg),
+		"Cannot request minimizing window 0x%x", (unsigned)self->w);
+	PSC_Log_fmt(PSC_L_DEBUG, "Requesting to minimize window 0x%x",
+		(unsigned)self->w);
+    }
+    else Window_close(self);
     return 0;
 }
 
@@ -332,6 +350,53 @@ static void motionNotify(void *receiver, void *sender, void *args)
     }
 }
 
+static void readWmState(void *obj, unsigned sequence,
+	void *reply, xcb_generic_error_t *error)
+{
+    (void)sequence;
+
+    Window *self = obj;
+    if (error || !reply) goto error;
+
+    xcb_get_property_reply_t *prop = reply;
+    if (prop->type != A(WM_STATE)) goto error;
+
+    uint32_t len = xcb_get_property_value_length(prop);
+    if (len != 8) goto error;
+
+    uint32_t *state = xcb_get_property_value(prop);
+    switch (*state)
+    {
+	case WM_STATE_WITHDRAWN:
+	    self->mapped = 0;
+	    self->state = WS_NONE;
+	    CHECK(xcb_delete_property(X11Adapter_connection(),
+			self->w, A(WM_STATE)),
+		    "Cannot delete WM_STATE on window 0x%x", self->w);
+	    break;
+
+	case WM_STATE_NORMAL:
+	    self->state = WS_NORMAL;
+	    break;
+
+	case WM_STATE_ICONIC:
+	    self->state = WS_MINIMIZED;
+	    break;
+
+	default:
+	    goto error;
+    }
+    PSC_Log_fmt(PSC_L_DEBUG, "Window 0x%x new state: %u",
+	    self->w, self->state);
+    return;
+
+error:
+    CHECK(xcb_delete_property(X11Adapter_connection(),
+		self->w, A(WM_STATE)),
+	    "Cannot delete WM_STATE on window 0x%x", self->w);
+    self->havewmstate = 0;
+}
+
 static void propertyNotify(void *receiver, void *sender, void *args)
 {
     (void)sender;
@@ -339,6 +404,33 @@ static void propertyNotify(void *receiver, void *sender, void *args)
     Window *self = receiver;
     xcb_property_notify_event_t *ev = args;
     PSC_Event_raise(self->propertyChanged, ev->atom, ev);
+
+    if (ev->atom == A(WM_STATE))
+    {
+	switch (ev->state)
+	{
+	    case XCB_PROPERTY_NEW_VALUE:
+		self->havewmstate = 1;
+		AWAIT(xcb_get_property(X11Adapter_connection(), 0, self->w,
+			    ev->atom, ev->atom, 0, 2),
+			self, readWmState);
+		break;
+
+	    case XCB_PROPERTY_DELETE:
+		self->state = WS_NONE;
+		self->havewmstate = 0;
+		if (self->wantmap < 0)
+		{
+		    self->wantmap = 0;
+		    PSC_Event_raise(self->closed, 0, 0);
+		}
+		X11App_removeWindow(app(), self);
+		break;
+
+	    default:
+		break;
+	}
+    }
 }
 
 static void clientmsg(void *receiver, void *sender, void *args)
@@ -350,7 +442,7 @@ static void clientmsg(void *receiver, void *sender, void *args)
     
     if (ev->data.data32[0] == A(WM_DELETE_WINDOW))
     {
-	hide(self);
+	Window_close(self);
     }
 }
 
@@ -509,6 +601,7 @@ static void mapped(void *receiver, void *sender, void *args)
 
     Window *self = receiver;
     self->mapped = 1;
+    X11App_addWindow(app(), self);
     PSC_Log_fmt(PSC_L_DEBUG, "Window 0x%x mapped", (unsigned)self->w);
 }
 
@@ -521,10 +614,11 @@ static void unmapped(void *receiver, void *sender, void *args)
     self->mapped = 0;
     Widget_hideWindow(self);
     PSC_Log_fmt(PSC_L_DEBUG, "Window 0x%x unmapped", (unsigned)self->w);
-    if (self->wantmap < 0)
+    if (!self->havewmstate && self->wantmap < 0)
     {
 	self->wantmap = 0;
 	PSC_Event_raise(self->closed, 0, 0);
+	X11App_removeWindow(app(), self);
     }
 }
 
@@ -591,6 +685,7 @@ Window *Window_createBase(void *derived, const char *name, void *parent)
 	    X11Adapter_kbdcompose(), XKB_COMPOSE_STATE_NO_FLAGS);
     self->mouseUpdate = (Pos){-1, -1};
     self->anchorPos = (Pos){-1, -1};
+    self->hideState = WS_MINIMIZED;
 
     xcb_connection_t *c = X11Adapter_connection();
     self->w = xcb_generate_id(c);
@@ -615,9 +710,18 @@ Window *Window_createBase(void *derived, const char *name, void *parent)
 		0, 0, 1, 1, 2, XCB_WINDOW_CLASS_INPUT_OUTPUT,
 		s->root_visual, mask, values),
 	    "Cannot create window 0x%x", (unsigned)self->w);
+    WMHints hints = {
+	.flags = WM_HINT_INPUT | WM_HINT_STATE,
+	.input = 1,
+	.state = WM_STATE_NORMAL
+    };
+    CHECK(xcb_change_property(c, XCB_PROP_MODE_REPLACE, self->w,
+		XCB_ATOM_WM_HINTS, XCB_ATOM_WM_HINTS, 32,
+		sizeof hints >> 2, &hints),
+	    "Cannot set window manager hints on 0x%x", (unsigned)self->w);
     xcb_atom_t delwin = A(WM_DELETE_WINDOW);
     CHECK(xcb_change_property(c, XCB_PROP_MODE_REPLACE, self->w,
-		A(WM_PROTOCOLS), 4, 32, 1, &delwin),
+		A(WM_PROTOCOLS), XCB_ATOM_ATOM, 32, 1, &delwin),
 	    "Cannot set supported protocols on 0x%x", (unsigned)self->w);
     size_t sz;
     const char *wmclass = X11Adapter_wmClass(&sz);
@@ -626,7 +730,7 @@ Window *Window_createBase(void *derived, const char *name, void *parent)
 	    "Cannot set window class for 0x%x", (unsigned)self->w);
     xcb_atom_t wtnorm = A(_NET_WM_WINDOW_TYPE_NORMAL);
     CHECK(xcb_change_property(c, XCB_PROP_MODE_REPLACE, self->w,
-		A(_NET_WM_WINDOW_TYPE), 4, 32, 1, &wtnorm),
+		A(_NET_WM_WINDOW_TYPE), XCB_ATOM_ATOM, 32, 1, &wtnorm),
 	    "Cannot set window type for 0x%x", (unsigned)self->w);
 
     int backingstore = XRdb_bool(X11Adapter_resources(),
@@ -867,5 +971,28 @@ XSelection *Window_clipboard(void *self)
     Window *w = Object_instance(self);
     if (!w->clipboard) w->clipboard = XSelection_create(w, XSN_CLIPBOARD);
     return w->clipboard;
+}
+
+void Window_close(void *self)
+{
+    Window *w = Object_instance(self);
+    w->wantmap = -1;
+    xcb_connection_t *c = X11Adapter_connection();
+    xcb_window_t root = X11Adapter_screen()->root;
+    CHECK(xcb_unmap_window(c, w->w),
+	    "Cannot unmap window 0x%x", (unsigned)w->w);
+    xcb_unmap_notify_event_t ev = {
+	.response_type = XCB_UNMAP_NOTIFY,
+	.pad0 = 0,
+	.sequence = 0,
+	.event = root,
+	.window = w->w,
+	.from_configure = 0,
+	.pad1 = {0, 0, 0}
+    };
+    CHECK(xcb_send_event(c, 0, root, XCB_EVENT_MASK_SUBSTRUCTURE_NOTIFY |
+		XCB_EVENT_MASK_SUBSTRUCTURE_REDIRECT, (const char *)&ev),
+	    "Cannot send unmap notify for window 0x%x", (unsigned)w->w);
+    PSC_Log_fmt(PSC_L_DEBUG, "Unmapping window 0x%x", (unsigned)w->w);
 }
 

@@ -25,9 +25,11 @@ typedef enum XGlitch
     X(TARGETS) \
     X(TEXT) \
     X(UTF8_STRING) \
+    X(WM_CHANGE_STATE) \
     X(WM_CLASS) \
     X(WM_DELETE_WINDOW) \
     X(WM_PROTOCOLS) \
+    X(WM_STATE) \
     X(_NET_WM_ICON_NAME) \
     X(_NET_WM_NAME) \
     X(_NET_WM_STATE) \
@@ -43,6 +45,34 @@ typedef enum XAtomId
     X_ATOMS(X_ENUM)
     NATOMS
 } XAtomId;
+
+#define WM_STATE_WITHDRAWN  0
+#define WM_STATE_NORMAL	    1
+#define WM_STATE_ICONIC	    3
+
+typedef enum WMHintFlags
+{
+    WM_HINT_INPUT	    = 1 << 0,
+    WM_HINT_STATE	    = 1 << 1,
+    WM_HINT_ICON_PIXMAP	    = 1 << 2,
+    WM_HINT_ICON_WINDOW	    = 1 << 3,
+    WM_HINT_ICON_MASK	    = 1 << 4,
+    WM_HINT_WINDOW_GROUP    = 1 << 5,
+    WM_HINT_MESSAGE	    = 1 << 6,
+    WM_HINT_URGENCY	    = 1 << 7
+} WMHintFlags;
+
+typedef struct WMHints
+{
+    uint32_t flags;
+    uint32_t input;
+    uint32_t state;
+    uint32_t icon_pixmap;
+    uint32_t icon_window;
+    int32_t icon_x, icon_y;
+    uint32_t icon_mask;
+    uint32_t window_group;
+} WMHints;
 
 typedef enum WMSizeHintFlags
 {
@@ -199,7 +229,7 @@ xcb_screen_t *X11Adapter_screen(void);
 XRdb *X11Adapter_resources(void);
 XGlitch X11Adapter_glitches(void);
 size_t X11Adapter_maxRequestSize(void);
-xcb_atom_t X11Adapter_atom(XAtomId id);
+xcb_atom_t X11Adapter_atom(XAtomId id) ATTR_PURE;
 xcb_render_pictformat_t X11Adapter_rootformat(void);
 xcb_render_pictformat_t X11Adapter_alphaformat(void);
 xcb_render_pictformat_t X11Adapter_argbformat(void);

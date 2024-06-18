@@ -19,7 +19,17 @@ static MetaX11App mo = MetaX11App_init(startup, 0, "Xmoji", free);
 typedef struct Xmoji
 {
     Object base;
+    Window *mainWindow;
 } Xmoji;
+
+static void onhide(void *receiver, void *sender, void *args)
+{
+    (void)sender;
+    (void)args;
+
+    Xmoji *self = receiver;
+    Widget_hide(self->mainWindow);
+}
 
 static void onclose(void *receiver, void *sender, void *args)
 {
@@ -34,10 +44,10 @@ static int startup(void *app)
 {
     Xmoji *self = Object_instance(app);
 
-    Window *win = Window_create("mainWindow", self);
-    Window_setTitle(win, "Xmoji 😀 äöüß");
+    self->mainWindow = Window_create("mainWindow", self);
+    Window_setTitle(self->mainWindow, "Xmoji 😀 äöüß");
 
-    ScrollBox *scroll = ScrollBox_create("mainScrollBox", win);
+    ScrollBox *scroll = ScrollBox_create("mainScrollBox", self->mainWindow);
     VBox *box = VBox_create(scroll);
 
     TextLabel *label = TextLabel_create("helloLabel", box);
@@ -56,12 +66,13 @@ static int startup(void *app)
     Widget_show(input);
     VBox_addWidget(box, input);
 
-    Button *button = Button_create("quitButton", box);
-    UniStr(quit, "Quit");
-    Button_setText(button, quit);
+    Button *button = Button_create("hideButton", box);
+    UniStr(hide, "Hide");
+    Button_setText(button, hide);
     Widget_setAlign(button, AH_CENTER);
     Widget_show(button);
     VBox_addWidget(box, button);
+    PSC_Event_register(Button_clicked(button), self, onhide, 0);
 
     label = TextLabel_create("emojiLabel", box);
     Widget_setFontResName(label, "emojifont", "emoji", 0);
@@ -78,16 +89,23 @@ static int startup(void *app)
     Widget_show(input);
     VBox_addWidget(box, input);
 
+    button = Button_create("quitButton", box);
+    UniStr(quit, "Quit");
+    Button_setText(button, quit);
+    Widget_setAlign(button, AH_CENTER);
+    Widget_show(button);
+    VBox_addWidget(box, button);
+    PSC_Event_register(Button_clicked(button), self, onclose, 0);
+
     Widget_show(box);
     ScrollBox_setWidget(scroll, box);
 
     Widget_show(scroll);
-    Window_setMainWidget(win, scroll);
+    Window_setMainWidget(self->mainWindow, scroll);
 
-    PSC_Event_register(Window_closed(win), 0, onclose, 0);
-    PSC_Event_register(Button_clicked(button), 0, onclose, 0);
+    PSC_Event_register(Window_closed(self->mainWindow), self, onclose, 0);
 
-    Widget_show(win);
+    Widget_show(self->mainWindow);
     return 0;
 }
 
