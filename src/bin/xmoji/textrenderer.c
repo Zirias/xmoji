@@ -66,7 +66,7 @@ TextRenderer *TextRenderer_create(Widget *owner)
 {
     TextRenderer *self = PSC_malloc(sizeof *self);
     memset(self, 0, sizeof *self);
-    self->owner = Object_ref(owner);
+    self->owner = owner;
     return self;
 }
 
@@ -357,6 +357,5 @@ void TextRenderer_destroy(TextRenderer *self)
 {
     if (!self) return;
     clearRenderer(self);
-    Object_destroy(self->owner);
     free(self);
 }
