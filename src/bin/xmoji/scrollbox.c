@@ -96,7 +96,6 @@ static void updateHover(ScrollBox *self, Pos pos)
 	self->hoverBar = hover;
 	Widget_invalidateRegion(self, barGeom);
     }
-    Widget_invalidateRegion(self, barGeom);
 }
 
 static void destroy(void *obj)
