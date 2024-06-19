@@ -2,6 +2,7 @@
 #define XMOJI_X11ADAPTER_H
 
 #include "macros.h"
+#include "valuetypes.h"
 
 #include <poser/decl.h>
 #include <xcb/render.h>
@@ -162,6 +163,7 @@ typedef enum XCursor
 
 typedef void (*X11ReplyHandler)(void *ctx, unsigned sequence, void *reply,
 	xcb_generic_error_t *error);
+typedef void (*MapColorHandler)(void *ctx, Color color, uint32_t pixel);
 
 #define A(x) (X11Adapter_atom(x))
 
@@ -269,6 +271,9 @@ unsigned X11Adapter_checkLogUnsigned(X11RequestId reqid, const char *msg,
 unsigned X11Adapter_checkLogString(X11RequestId reqid, const char *msg,
 	const char *arg)
     ATTR_NONNULL((2));
+
+void X11Adapter_mapColor(void *ctx, MapColorHandler handler, Color color);
+void X11Adapter_unmapColor(uint32_t pixel);
 
 void X11Adapter_done(void);
 

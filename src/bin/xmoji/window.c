@@ -986,15 +986,12 @@ void *Window_mainWidget(const void *self)
     return w->mainWidget;
 }
 
-static void setBorderColor(void *obj, unsigned sequence,
-	void *reply, xcb_generic_error_t *error)
+static void setBorderColor(void *obj, Color color, uint32_t pixel)
 {
-    (void)sequence;
+    (void)color;
 
-    if (error || !reply) return;
     Window *self = obj;
-    xcb_alloc_color_reply_t *color = reply;
-    self->borderpixel = color->pixel;
+    self->borderpixel = pixel;
     CHECK(xcb_change_window_attributes(X11Adapter_connection(), self->w,
 		XCB_CW_BORDER_PIXEL, (const void *)&self->borderpixel),
 	    "Cannot set border color for 0x%x", (unsigned)self->w);
@@ -1016,18 +1013,13 @@ void Window_setMainWidget(void *self, void *widget)
 	Widget_setContainer(widget, w);
 	if (w->parent)
 	{
-	    xcb_connection_t *c = X11Adapter_connection();
-	    xcb_colormap_t map = X11Adapter_screen()->default_colormap;
 	    if (w->borderpixel != (uint32_t)-1)
 	    {
-		CHECK(xcb_free_colors(c, map, 0, 1, &w->borderpixel),
-			"Cannot free color for 0x%x", w->w);
+		X11Adapter_unmapColor(w->borderpixel);
 		w->borderpixel = (uint32_t)-1;
 	    }
 	    Color bc = Widget_color(widget, COLOR_TOOLTIP);
-	    AWAIT(xcb_alloc_color(c, map,
-			Color_red16(bc), Color_green16(bc), Color_blue16(bc)),
-		    self, setBorderColor);
+	    X11Adapter_mapColor(self, setBorderColor, bc);
 	}
 	Font *font = Widget_font(w);
 	if (!font) Widget_setFontResName(w, 0, 0, 0);

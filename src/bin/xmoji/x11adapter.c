@@ -18,6 +18,7 @@ ENDSUPPRESS
 
 #define MAXWAITING 256
 #define SYNCTHRESH 192
+#define MAXCOLORS 64
 
 #define RQ_AWAIT_REPLY 1
 #define RQ_AWAIT_NOREPLY 0
@@ -41,6 +42,22 @@ typedef struct X11ReplyHandlerRecord
     int replytype;
     unsigned uarg;
 } X11ReplyHandlerRecord;
+
+C_CLASS_DECL(ColorMapCallback);
+struct ColorMapCallback
+{
+    ColorMapCallback *next;
+    void *ctx;
+    MapColorHandler handler;
+};
+
+typedef struct ColorMapEntry
+{
+    Color color;
+    uint32_t pixel;
+    int ref;
+    ColorMapCallback *callbacks;
+} ColorMapEntry;
 
 typedef struct XkbEvent
 {
@@ -149,6 +166,8 @@ static unsigned waitingBack;
 static unsigned waitingNum;
 static unsigned syncseq;
 static int waitingNoreply;
+
+static ColorMapEntry colorMap[MAXCOLORS];
 
 static int enqueueWaiting(X11RequestId reqid, int replytype, void *ctx,
 	X11ReplyHandler handler, const char *sarg, unsigned uarg)
@@ -1104,9 +1123,117 @@ unsigned X11Adapter_checkLogString(X11RequestId reqid, const char *msg,
     return await(reqid, RQ_CHECK_ERROR_STRING, (void *)msg, 0, arg, 0);
 }
 
+static void receiveColor(void *ctx, unsigned sequence,
+	void *reply, xcb_generic_error_t *error)
+{
+    (void)sequence;
+
+    ColorMapEntry *entry = ctx;
+    if (error || !reply)
+    {
+	PSC_Log_msg(PSC_L_WARNING, "X11Adapter: cannot allocate color");
+	entry->ref = 0;
+	entry->pixel = s->black_pixel;
+    }
+    else
+    {
+	xcb_alloc_color_reply_t *color = reply;
+	entry->pixel = color->pixel;
+    }
+    ColorMapCallback *cb = entry->callbacks;
+    while (cb)
+    {
+	ColorMapCallback *next = cb->next;
+	if (entry->ref) ++entry->ref;
+	cb->handler(cb->ctx, entry->color, entry->pixel);
+	free(cb);
+	cb = next;
+    }
+    entry->callbacks = 0;
+}
+
+void X11Adapter_mapColor(void *ctx, MapColorHandler handler, Color color)
+{
+    ColorMapEntry *next = 0;
+    ColorMapEntry *reuse = 0;
+    for (unsigned i = 0; i < MAXCOLORS; ++i)
+    {
+	if (colorMap[i].ref && colorMap[i].color == color)
+	{
+	    if (colorMap[i].callbacks)
+	    {
+		ColorMapCallback *cb = PSC_malloc(sizeof *cb);
+		cb->next = colorMap[i].callbacks;
+		cb->ctx = ctx;
+		cb->handler = handler;
+		colorMap[i].callbacks = cb;
+		return;
+	    }
+	    ++colorMap[i].ref;
+	    handler(ctx, color, colorMap[i].pixel);
+	    return;
+	}
+	else
+	{
+	    if (!next && !colorMap[i].ref) next = colorMap + i;
+	    if (!reuse && colorMap[i].ref == 1) reuse = colorMap + i;
+	}
+    }
+    if (!next)
+    {
+	if (!reuse)
+	{
+	    PSC_Log_msg(PSC_L_WARNING, "X11Adapter: color map full");
+	    return;
+	}
+	next = reuse;
+	CHECK(xcb_free_colors(c, s->default_colormap, 0, 1, &next->pixel),
+		"X11Adapter: cannot free allocated color", 0);
+    }
+    next->callbacks = PSC_malloc(sizeof *next->callbacks);
+    next->callbacks->next = 0;
+    next->callbacks->ctx = ctx;
+    next->callbacks->handler = handler;
+    next->color = color;
+    next->ref = 1;
+    AWAIT(xcb_alloc_color(c, s->default_colormap, Color_red16(color),
+		Color_green16(color), Color_blue16(color)),
+	    next, receiveColor);
+}
+
+void X11Adapter_unmapColor(uint32_t pixel)
+{
+    for (unsigned i = 0; i < MAXCOLORS; ++i)
+    {
+	if (colorMap[i].pixel == pixel && colorMap[i].ref > 1)
+	{
+	    --colorMap[i].ref;
+	    return;
+	}
+    }
+}
+
 void X11Adapter_done(void)
 {
     if (!c) return;
+    uint32_t pixels[MAXCOLORS];
+    unsigned npixels = 0;
+    for (unsigned i = 0; i < MAXCOLORS; ++i)
+    {
+	if (colorMap[i].callbacks)
+	{
+	    ColorMapCallback *cb = colorMap[i].callbacks;
+	    while (cb)
+	    {
+		ColorMapCallback *next = cb->next;
+		free(cb);
+		cb = next;
+	    }
+	}
+	if (colorMap[i].ref) pixels[npixels++] = colorMap[i].pixel;
+    }
+    if (npixels) xcb_free_colors(c, s->default_colormap, 0, npixels, pixels);
+    memset(colorMap, 0, MAXCOLORS * sizeof *colorMap);
     PSC_Service_unregisterRead(fd);
     PSC_Event_unregister(PSC_Service_eventsDone(), 0, flushandsync, 0);
     PSC_Event_unregister(PSC_Service_readyRead(), 0, readX11Input, fd);
