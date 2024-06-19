@@ -166,7 +166,7 @@ const ColorSet *Widget_colorSet(const void *self) CMETHOD;
 Color Widget_color(const void *self, ColorRole role) CMETHOD;
 void Widget_setColor(void *self, ColorRole role, Color color) CMETHOD;
 void Widget_setBackground(void *self, int enabled, ColorRole role) CMETHOD;
-xcb_drawable_t Widget_drawable(const void *self) CMETHOD;
+xcb_drawable_t Widget_drawable(void *self) CMETHOD;
 xcb_render_picture_t Widget_picture(const void *self) CMETHOD;
 int Widget_visible(const void *self) CMETHOD;
 void Widget_keyPressed(void *self, const KeyEvent *event) CMETHOD;

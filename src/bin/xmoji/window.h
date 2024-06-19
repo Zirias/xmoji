@@ -75,7 +75,7 @@ WindowState Window_state(const void *self)
 void Window_close(void *self)
     CMETHOD;
 
-void Window_showTooltip(void *self, void *widget)
+void Window_showTooltip(void *self, void *widget, void *parentWidget)
     CMETHOD ATTR_NONNULL((2));
 
 void Window_invalidateHover(void *self)

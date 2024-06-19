@@ -1104,13 +1104,14 @@ void Window_close(void *self)
     PSC_Log_fmt(PSC_L_DEBUG, "Unmapping window 0x%x", (unsigned)w->w);
 }
 
-void Window_showTooltip(void *self, void *widget)
+void Window_showTooltip(void *self, void *widget, void *parentWidget)
 {
     Window *w = Object_instance(self);
     if (!w->tooltipWindow)
     {
 	w->tooltipWindow = createWindow(0, 0, w, 1);
     }
+    Widget_setContainer(w->tooltipWindow, parentWidget);
     Window_setMainWidget(w->tooltipWindow, widget);
     Widget_show(w->tooltipWindow);
 }

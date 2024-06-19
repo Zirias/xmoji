@@ -10,6 +10,7 @@ struct Tooltip
 {
     TextLabel *label;
     Timer *timer;
+    Widget *parent;
     Window *window;
     unsigned delay;
 };
@@ -21,14 +22,18 @@ static void timeout(void *receiver, void *sender, void *args)
 
     Tooltip *self = receiver;
     Timer_stop(self->timer);
-    if (self->window) Window_showTooltip(self->window, self->label);
+    if (self->window)
+    {
+	Window_showTooltip(self->window, self->label, self->parent);
+    }
 }
 
-Tooltip *Tooltip_create(const UniStr *text, unsigned delay)
+Tooltip *Tooltip_create(const UniStr *text, Widget *parent, unsigned delay)
 {
     Tooltip *self = PSC_malloc(sizeof *self);
     self->label = TextLabel_create(0, 0);
     self->timer = Timer_create();
+    self->parent = parent;
     self->window = 0;
     self->delay = delay ? delay : 2000;
 

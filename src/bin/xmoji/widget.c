@@ -43,6 +43,7 @@ struct Widget
     Box padding;
     Size maxSize;
     xcb_drawable_t drawable;
+    xcb_drawable_t explicitDrawable;
     xcb_render_picture_t picture;
     ColorRole backgroundRole;
     Align align;
@@ -143,7 +144,7 @@ Widget *Widget_createBase(void *derived, const char *name, void *parent)
     self->sizeRequested = PSC_Event_create(self);
     self->sizeChanged = PSC_Event_create(self);
     self->originChanged = PSC_Event_create(self);
-    self->colorSet = ColorSet_createFor(self->resname);
+    self->colorSet = name ? ColorSet_createFor(name) : ColorSet_create();
     self->padding = (Box){ 3, 3, 3, 3 };
     self->maxSize = (Size){ -1, -1 };
     self->expand = EXPAND_X|EXPAND_Y;
@@ -251,7 +252,7 @@ void Widget_setTooltip(void *self, const UniStr *tooltip, unsigned delay)
 {
     Widget *w = Object_instance(self);
     if (w->tooltip) Tooltip_destroy(w->tooltip);
-    w->tooltip = Tooltip_create(tooltip, delay);
+    w->tooltip = Tooltip_create(tooltip, w, delay);
 }
 
 Widget *Widget_container(const void *self)
@@ -659,10 +660,39 @@ void Widget_setBackground(void *self, int enabled, ColorRole role)
     w->drawBackground = enabled;
 }
 
-xcb_drawable_t Widget_drawable(const void *self)
+static void doSetDrawable(Widget *self, xcb_drawable_t drawable)
+{
+    if (self->drawable == drawable) return;
+    xcb_connection_t *c = X11Adapter_connection();
+    if (self->drawable)
+    {
+	PSC_Event_unregister(X11Adapter_requestError(), self,
+		requestError, self->picture);
+	xcb_render_free_picture(c, self->picture);
+    }
+    if (drawable)
+    {
+	self->drawable = drawable;
+	self->picture = xcb_generate_id(c);
+	PSC_Event_register(X11Adapter_requestError(), self,
+		requestError, self->picture);
+	CHECK(xcb_render_create_picture(c, self->picture, drawable,
+		    X11Adapter_rootformat(), 0, 0),
+		"Cannot create XRender picture 0x%x", (unsigned)self->picture);
+	self->ndamages = -1;
+    }
+    else
+    {
+	self->drawable = 0;
+	self->picture = 0;
+    }
+}
+
+xcb_drawable_t Widget_drawable(void *self)
 {
     Widget *w = Object_instance(self);
-    if (w->container) Widget_setDrawable(w, Widget_drawable(w->container));
+    if (w->explicitDrawable) doSetDrawable(w, w->explicitDrawable);
+    else if (w->container) doSetDrawable(w, Widget_drawable(w->container));
     return w->drawable;
 }
 
@@ -676,30 +706,7 @@ xcb_render_picture_t Widget_picture(const void *self)
 void Widget_setDrawable(void *self, xcb_drawable_t drawable)
 {
     Widget *w = Object_instance(self);
-    if (w->drawable == drawable) return;
-    xcb_connection_t *c = X11Adapter_connection();
-    if (w->drawable)
-    {
-	PSC_Event_unregister(X11Adapter_requestError(), w,
-		requestError, w->picture);
-	xcb_render_free_picture(c, w->picture);
-    }
-    if (drawable)
-    {
-	w->drawable = drawable;
-	w->picture = xcb_generate_id(c);
-	PSC_Event_register(X11Adapter_requestError(), w,
-		requestError, w->picture);
-	CHECK(xcb_render_create_picture(c, w->picture, drawable,
-		    X11Adapter_rootformat(), 0, 0),
-		"Cannot create XRender picture 0x%x", (unsigned)w->picture);
-	w->ndamages = -1;
-    }
-    else
-    {
-	w->drawable = 0;
-	w->picture = 0;
-    }
+    w->explicitDrawable = drawable;
 }
 
 int Widget_visible(const void *self)
@@ -751,10 +758,12 @@ void Widget_invalidateRegion(void *self, Rect region)
     if (w->ndamages < 0) return;
     if (!Rect_overlaps(region, w->geometry)) return;
     if (hasDamage(w, region)) return;
-    if (w->container && !hasDamage(w->container, region))
+    if (!w->explicitDrawable && w->container
+	    && !hasDamage(w->container, region))
     {
 	Widget *a = w->container;
-	while (a->container && !hasDamage(a->container, region))
+	while (!a->explicitDrawable && a->container
+		&& !hasDamage(a->container, region))
 	{
 	    a = a->container;
 	}
