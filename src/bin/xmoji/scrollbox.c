@@ -247,6 +247,7 @@ static int clicked(void *obj, const ClickEvent *event)
 static void dragged(void *obj, const DragEvent *event)
 {
     ScrollBox *self = Object_instance(obj);
+    if (!event->button) self->dragAnchor = -1;
     if (!self->hoverBar || event->button != MB_LEFT) return;
     if (self->dragAnchor < 0) self->dragAnchor = self->scrollBar.pos.y;
     Rect geom = Widget_geometry(self);

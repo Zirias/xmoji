@@ -206,11 +206,6 @@ static void buttonpress(void *receiver, void *sender, void *args)
 	.pos = { ev->event_x, ev->event_y },
 	.dblclick = 0
     };
-    if (!self->anchorButton)
-    {
-	self->anchorButton = click.button;
-	self->anchorPos = click.pos;
-    }
     if (click.button == MB_LEFT)
     {
 	if (ev->time - self->clicktime <= DBLCLICK_MS) click.dblclick = 1;
@@ -227,9 +222,9 @@ static void buttonrelease(void *receiver, void *sender, void *args)
     if (!self->mainWidget) return;
     xcb_button_release_event_t *ev = args;
     MouseButton releasedButton = 1 << (ev->detail - 1);
-    if (releasedButton == self->anchorButton)
+    if ((int)self->anchorButton >= 0 && releasedButton & self->anchorButton)
     {
-	self->anchorButton = 0;
+	self->anchorButton = (MouseButton)-1;
 	self->anchorPos = (Pos){-1, -1};
     }
 }
@@ -245,9 +240,9 @@ static void enter(void *receiver, void *sender, void *args)
     self->mouseUpdate.x = ev->event_x;
     self->mouseUpdate.y = ev->event_y;
     MouseButton heldButtons = ev->state >> 8;
-    if (!(self->anchorButton & heldButtons))
+    if ((int)self->anchorButton >= 0 && !(self->anchorButton & heldButtons))
     {
-	self->anchorButton = 0;
+	self->anchorButton = (MouseButton)-1;
 	self->anchorPos = (Pos){-1, -1};
     }
 }
@@ -343,7 +338,7 @@ static void leave(void *receiver, void *sender, void *args)
     (void)args;
 
     Window *self = receiver;
-    if (!self->anchorButton)
+    if ((int)self->anchorButton <= 0)
     {
 	self->mouseUpdate.x = -1;
 	self->mouseUpdate.y = -1;
@@ -375,12 +370,21 @@ static void motionNotify(void *receiver, void *sender, void *args)
     self->absMouse.y = ev->root_y;
     self->mouseUpdate.x = ev->event_x;
     self->mouseUpdate.y = ev->event_y;
-    if (self->anchorButton)
+    MouseButton heldButtons = ev->state >> 8;
+    if (!self->anchorButton)
     {
-	MouseButton heldButtons = ev->state >> 8;
-	if (!(heldButtons & self->anchorButton))
+	if (heldButtons)
 	{
-	    self->anchorButton = 0;
+	    self->anchorButton = heldButtons;
+	    self->anchorPos = self->mouse;
+	}
+    }
+    else
+    {
+	if ((int)self->anchorButton >= 0
+		&& !(heldButtons & self->anchorButton))
+	{
+	    self->anchorButton = (MouseButton)-1;
 	    self->anchorPos = (Pos){-1, -1};
 	}
     }
@@ -541,6 +545,7 @@ static void doupdates(void *receiver, void *sender, void *args)
 	    }
 	    if (self->anchorButton)
 	    {
+		if ((int)self->anchorButton == -1) self->anchorButton = 0;
 		DragEvent event = {
 		    .button = self->anchorButton,
 		    .from = self->anchorPos,
