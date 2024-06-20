@@ -7,6 +7,7 @@
 
 C_CLASS_DECL(Command);
 C_CLASS_DECL(PSC_Event);
+C_CLASS_DECL(UniStr);
 
 typedef struct CommandTriggeredEventArgs
 {
@@ -25,9 +26,12 @@ typedef struct MetaCommand
     .base = MetaObject_init(__VA_ARGS__) \
 }
 
-Command *Command_createBase(void *derived, void *parent);
+Command *Command_createBase(void *derived,
+	const UniStr *name, const UniStr *description, void *parent);
 #define Command_create(...) Command_createBase(0, __VA_ARGS__)
 PSC_Event *Command_triggered(void *self) CMETHOD;
+const UniStr *Command_name(const void *self) CMETHOD;
+const UniStr *Command_description(const void *self) CMETHOD;
 void Command_trigger(void *self) CMETHOD;
 void Command_attach(void *self, void *widget, WidgetEvent event)
     CMETHOD ATTR_NONNULL((2)) ATTR_NONNULL((3));

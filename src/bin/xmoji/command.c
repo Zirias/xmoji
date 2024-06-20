@@ -1,5 +1,6 @@
 #include "command.h"
 
+#include "unistr.h"
 #include "widget.h"
 
 #include <poser/core.h>
@@ -20,6 +21,8 @@ typedef struct EventEntry
 struct Command
 {
     Object base;
+    UniStr *name;
+    UniStr *description;
     PSC_Event *triggered;
     PSC_List *attachedEvents;
 };
@@ -47,13 +50,18 @@ static void destroy(void *obj)
     Command *self = Object_instance(obj);
     PSC_List_destroy(self->attachedEvents);
     PSC_Event_destroy(self->triggered);
+    UniStr_destroy(self->description);
+    UniStr_destroy(self->name);
     free(self);
 }
 
-Command *Command_createBase(void *derived, void *parent)
+Command *Command_createBase(void *derived,
+	const UniStr *name, const UniStr *description, void *parent)
 {
     Command *self = PSC_malloc(sizeof *self);
     CREATEBASE(Object);
+    self->name = name ? UniStr_ref(name) : 0;
+    self->description = description ? UniStr_ref(description) : 0;
     self->triggered = PSC_Event_create(self);
     self->attachedEvents = PSC_List_create();
     if (parent) Object_own(parent, self);
@@ -64,6 +72,18 @@ PSC_Event *Command_triggered(void *self)
 {
     Command *cmd = Object_instance(self);
     return cmd->triggered;
+}
+
+const UniStr *Command_name(const void *self)
+{
+    const Command *cmd = Object_instance(self);
+    return cmd->name;
+}
+
+const UniStr *Command_description(const void *self)
+{
+    const Command *cmd = Object_instance(self);
+    return cmd->description;
 }
 
 void Command_trigger(void *self)

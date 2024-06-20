@@ -45,9 +45,14 @@ static int startup(void *app)
 {
     Xmoji *self = Object_instance(app);
 
-    Command *quitCommand = Command_create(self);
+    UniStr(quit, "Quit");
+    UniStr(quitdesc, "Exit the application");
+    Command *quitCommand = Command_create(quit, quitdesc, self);
     PSC_Event_register(Command_triggered(quitCommand), self, onquit, 0);
-    Command *hideCommand = Command_create(self);
+
+    UniStr(hide, "Hide");
+    UniStr(hidedesc, "Minimize the application window");
+    Command *hideCommand = Command_create(hide, hidedesc, self);
     PSC_Event_register(Command_triggered(hideCommand), self, onhide, 0);
 
     Window *win = Window_create("mainWindow", self);
@@ -75,12 +80,10 @@ static int startup(void *app)
     VBox_addWidget(box, input);
 
     Button *button = Button_create("hideButton", box);
-    UniStr(hide, "Hide");
-    Button_setText(button, hide);
+    Button_attachCommand(button, hideCommand);
     Widget_setAlign(button, AH_CENTER);
     Widget_show(button);
     VBox_addWidget(box, button);
-    Command_attach(hideCommand, button, Button_clicked);
 
     label = TextLabel_create("emojiLabel", box);
     Widget_setFontResName(label, "emojiFont", "emoji", 0);
@@ -100,12 +103,10 @@ static int startup(void *app)
     VBox_addWidget(box, input);
 
     button = Button_create("quitButton", box);
-    UniStr(quit, "Quit");
-    Button_setText(button, quit);
+    Button_attachCommand(button, quitCommand);
     Widget_setAlign(button, AH_CENTER);
     Widget_show(button);
     VBox_addWidget(box, button);
-    Command_attach(quitCommand, button, Button_clicked);
 
     Widget_show(box);
     ScrollBox_setWidget(scroll, box);

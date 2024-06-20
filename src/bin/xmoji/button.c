@@ -1,5 +1,6 @@
 #include "button.h"
 
+#include "command.h"
 #include "font.h"
 #include "textlabel.h"
 
@@ -180,5 +181,15 @@ void Button_setText(void *self, const UniStr *text)
 {
     Button *b = Object_instance(self);
     TextLabel_setText(b->label, text);
+}
+
+void Button_attachCommand(void *self, Command *command)
+{
+    Button *b = Object_instance(self);
+    const UniStr *name = Command_name(command);
+    const UniStr *description = Command_description(command);
+    Command_attach(command, b, Button_clicked);
+    if (name) TextLabel_setText(b->label, name);
+    if (description) Widget_setTooltip(b, description, 0);
 }
 
