@@ -28,6 +28,7 @@ struct Button
     TextLabel *label;
     PSC_Event *clicked;
     ColorRole color;
+    uint8_t borderwidth;
 };
 
 static void destroy(void *obj)
@@ -101,8 +102,8 @@ static Size minSize(const void *obj)
 {
     Button *self = Object_instance(obj);
     Size minSize = Widget_minSize(self->label);
-    minSize.width += 2;
-    minSize.height += 2;
+    minSize.width += 2 * self->borderwidth;
+    minSize.height += 2 * self->borderwidth;
 
     if (minSize.width < 120) minSize.width = 120;
     return minSize;
@@ -123,8 +124,8 @@ static void sizeChanged(void *receiver, void *sender, void *args)
     Button *self = receiver;
     SizeChangedEventArgs *ea = args;
     Size size = ea->newSize;
-    size.width -= 2;
-    size.height -= 2;
+    size.width -= 2 * self->borderwidth;
+    size.height -= 2 * self->borderwidth;
     Widget_setSize(self->label, size);
 }
 
@@ -135,8 +136,8 @@ static void originChanged(void *receiver, void *sender, void *args)
     Button *self = receiver;
     OriginChangedEventArgs *ea = args;
     Pos origin = ea->newOrigin;
-    ++origin.x;
-    ++origin.y;
+    origin.x += self->borderwidth;
+    origin.y += self->borderwidth;
     Widget_setOrigin(self->label, origin);
 }
 
@@ -147,8 +148,9 @@ Button *Button_createBase(void *derived, const char *name, void *parent)
     self->label = TextLabel_create(0, self);
     self->clicked = PSC_Event_create(self);
     self->color = COLOR_BG_ABOVE;
+    self->borderwidth = 1;
 
-    Widget_setBackground(self, 1, COLOR_BG_BELOW);
+    Widget_setBackground(self, 1, COLOR_BORDER);
     Widget_setPadding(self, (Box){1, 1, 1, 1});
     Widget_setExpand(self, EXPAND_NONE);
     Widget_setCursor(self, XC_HAND);
@@ -181,6 +183,20 @@ void Button_setText(void *self, const UniStr *text)
 {
     Button *b = Object_instance(self);
     TextLabel_setText(b->label, text);
+}
+
+void Button_setBorderWidth(void *self, uint8_t width)
+{
+    Button *b = Object_instance(self);
+    if (width == b->borderwidth) return;
+    if (!b->borderwidth) Widget_setBackground(b, 1, COLOR_BORDER);
+    else if (!width) Widget_setBackground(b, 0, 0);
+    b->borderwidth = width;
+    Pos origin = Widget_origin(b);
+    origin.x += width;
+    origin.y += width;
+    Widget_setOrigin(b->label, origin);
+    Widget_requestSize(self);
 }
 
 void Button_attachCommand(void *self, Command *command)
