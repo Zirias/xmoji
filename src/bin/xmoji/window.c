@@ -200,6 +200,10 @@ static void buttonpress(void *receiver, void *sender, void *args)
 
     Window *self = receiver;
     if (!self->mainWidget) return;
+    if (self->tooltipWindow && self->tooltipWindow->mapped)
+    {
+	Window_close(self->tooltipWindow);
+    }
     xcb_button_press_event_t *ev = args;
     ClickEvent click = {
 	.button = 1 << (ev->detail - 1),
@@ -301,6 +305,10 @@ static void keypress(void *receiver, void *sender, void *args)
 
     Window *self = receiver;
     if (!self->focusWidget) return;
+    if (self->tooltipWindow && self->tooltipWindow->mapped)
+    {
+	Window_close(self->tooltipWindow);
+    }
 
     XkbKeyEventArgs *ea = args;
     xkb_keysym_t key = ea->keysym;
