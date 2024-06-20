@@ -1,5 +1,6 @@
 xmoji_MODULES=		button \
 			colorset \
+			command \
 			font \
 			nanosvg \
 			object \

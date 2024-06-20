@@ -1,4 +1,5 @@
 #include "button.h"
+#include "command.h"
 #include "scrollbox.h"
 #include "textbox.h"
 #include "textlabel.h"
@@ -18,19 +19,9 @@ static MetaX11App mo = MetaX11App_init(startup, 0, "Xmoji", free);
 typedef struct Xmoji
 {
     Object base;
-    Window *mainWindow;
 } Xmoji;
 
-static void onhide(void *receiver, void *sender, void *args)
-{
-    (void)sender;
-    (void)args;
-
-    Xmoji *self = receiver;
-    Widget_hide(self->mainWindow);
-}
-
-static void onclose(void *receiver, void *sender, void *args)
+static void onquit(void *receiver, void *sender, void *args)
 {
     (void)receiver;
     (void)sender;
@@ -39,14 +30,30 @@ static void onclose(void *receiver, void *sender, void *args)
     X11App_quit();
 }
 
+static void onhide(void *receiver, void *sender, void *args)
+{
+    (void)receiver;
+    (void)sender;
+
+    CommandTriggeredEventArgs *ea = args;
+    Widget *widget = ea && ea->sender ? Widget_cast(ea->sender) : 0;
+    Window *window = widget ? Window_fromWidget(widget) : 0;
+    if (window) Widget_hide(window);
+}
+
 static int startup(void *app)
 {
     Xmoji *self = Object_instance(app);
 
-    self->mainWindow = Window_create("mainWindow", self);
-    Window_setTitle(self->mainWindow, "Xmoji 😀 äöüß");
+    Command *quitCommand = Command_create(self);
+    PSC_Event_register(Command_triggered(quitCommand), self, onquit, 0);
+    Command *hideCommand = Command_create(self);
+    PSC_Event_register(Command_triggered(hideCommand), self, onhide, 0);
 
-    ScrollBox *scroll = ScrollBox_create("mainScrollBox", self->mainWindow);
+    Window *win = Window_create("mainWindow", self);
+    Window_setTitle(win, "Xmoji 😀 äöüß");
+
+    ScrollBox *scroll = ScrollBox_create("mainScrollBox", win);
     VBox *box = VBox_create(scroll);
 
     TextLabel *label = TextLabel_create("helloLabel", box);
@@ -73,7 +80,7 @@ static int startup(void *app)
     Widget_setAlign(button, AH_CENTER);
     Widget_show(button);
     VBox_addWidget(box, button);
-    PSC_Event_register(Button_clicked(button), self, onhide, 0);
+    Command_attach(hideCommand, button, Button_clicked);
 
     label = TextLabel_create("emojiLabel", box);
     Widget_setFontResName(label, "emojiFont", "emoji", 0);
@@ -98,17 +105,16 @@ static int startup(void *app)
     Widget_setAlign(button, AH_CENTER);
     Widget_show(button);
     VBox_addWidget(box, button);
-    PSC_Event_register(Button_clicked(button), self, onclose, 0);
+    Command_attach(quitCommand, button, Button_clicked);
 
     Widget_show(box);
     ScrollBox_setWidget(scroll, box);
 
     Widget_show(scroll);
-    Window_setMainWidget(self->mainWindow, scroll);
+    Window_setMainWidget(win, scroll);
+    Command_attach(quitCommand, win, Window_closed);
 
-    PSC_Event_register(Window_closed(self->mainWindow), self, onclose, 0);
-
-    Widget_show(self->mainWindow);
+    Widget_show(win);
     return 0;
 }
 
