@@ -1154,6 +1154,7 @@ static void receiveColor(void *ctx, unsigned sequence,
 
 void X11Adapter_mapColor(void *ctx, MapColorHandler handler, Color color)
 {
+    color |= 0xffU; // alpha is not supported for X11 core colors
     ColorMapEntry *next = 0;
     ColorMapEntry *reuse = 0;
     for (unsigned i = 0; i < MAXCOLORS; ++i)
