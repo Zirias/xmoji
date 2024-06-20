@@ -724,8 +724,10 @@ void Widget_keyPressed(void *self, const KeyEvent *event)
 
 int Widget_clicked(void *self, const ClickEvent *event)
 {
+    Widget *w = Object_instance(self);
+    if (w->tooltip) Tooltip_cancel(w->tooltip);
     int handled = 0;
-    Object_vcall(handled, Widget, clicked, self, event);
+    Object_vcall(handled, Widget, clicked, w, event);
     return handled;
 }
 
