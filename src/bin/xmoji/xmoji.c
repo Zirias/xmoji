@@ -9,7 +9,6 @@
 #include "x11app.h"
 
 #include <poser/core.h>
-#include <stdio.h>
 #include <stdlib.h>
 
 static int startup(void *app);
