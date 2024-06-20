@@ -77,9 +77,11 @@ static int startup(void *app)
     PSC_Event_register(Button_clicked(button), self, onhide, 0);
 
     label = TextLabel_create("emojiLabel", box);
-    Widget_setFontResName(label, "emojifont", "emoji", 0);
+    Widget_setFontResName(label, "emojiFont", "emoji", 0);
     UniStr(emojis, "😀🤡🇩🇪👺🧩🔮🐅🍻🧑🏾‍🤝‍🧑🏻");
+    UniStr(emojitip, "These emojis are picked randomly ;)");
     TextLabel_setText(label, emojis);
+    Widget_setTooltip(label, emojitip, 0);
     Widget_setAlign(label, AH_CENTER|AV_MIDDLE);
     Widget_show(label);
     VBox_addWidget(box, label);

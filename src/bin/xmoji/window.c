@@ -621,8 +621,14 @@ static void sizeRequested(void *receiver, void *sender, void *args)
     if (minSize.width && minSize.height) self->haveMinSize = 1;
     else self->haveMinSize = 0;
     Size newSize = Widget_size(self);
-    if (minSize.width > newSize.width) newSize.width = minSize.width;
-    if (minSize.height > newSize.height) newSize.height = minSize.height;
+    if (self->parent || minSize.width > newSize.width)
+    {
+	newSize.width = minSize.width;
+    }
+    if (self->parent || minSize.height > newSize.height)
+    {
+	newSize.height = minSize.height;
+    }
     Widget_setSize(self, newSize);
     WMSizeHints hints = {
 	.flags = WM_SIZE_HINT_P_MIN_SIZE,
@@ -1018,7 +1024,7 @@ void Window_setMainWidget(void *self, void *widget)
 		X11Adapter_unmapColor(w->borderpixel);
 		w->borderpixel = (uint32_t)-1;
 	    }
-	    Color bc = Widget_color(widget, COLOR_TOOLTIP);
+	    Color bc = Widget_color(widget, COLOR_BORDER_TOOLTIP);
 	    X11Adapter_mapColor(self, setBorderColor, bc);
 	}
 	Font *font = Widget_font(w);
@@ -1107,6 +1113,7 @@ void Window_showTooltip(void *self, void *widget, void *parentWidget)
     if (!w->tooltipWindow)
     {
 	w->tooltipWindow = createWindow(0, 0, w, 1);
+	Widget_setFontResName(w->tooltipWindow, "tooltipFont", 0, 0);
     }
     Widget_setContainer(w->tooltipWindow, parentWidget);
     Window_setMainWidget(w->tooltipWindow, widget);

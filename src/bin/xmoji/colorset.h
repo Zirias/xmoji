@@ -21,6 +21,7 @@ typedef enum ColorRole
     COLOR_BG_SELECTED,
     COLOR_TOOLTIP,
     COLOR_BG_TOOLTIP,
+    COLOR_BORDER_TOOLTIP,
     COLOR_NUMROLES
 } ColorRole;
 
