@@ -55,7 +55,7 @@ static int startup(void *app)
     Command *hideCommand = Command_create(hide, hidedesc, self);
     PSC_Event_register(Command_triggered(hideCommand), self, onhide, 0);
 
-    Window *win = Window_create("mainWindow", self);
+    Window *win = Window_create("mainWindow", 0, self);
     Window_setTitle(win, "Xmoji 😀 äöüß");
 
     ScrollBox *scroll = ScrollBox_create("mainScrollBox", win);

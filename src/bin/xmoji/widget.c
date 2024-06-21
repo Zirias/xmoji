@@ -159,6 +159,11 @@ Widget *Widget_cast(void *obj)
     return Object_instance(obj);
 }
 
+Widget *Widget_tryCast(void *obj)
+{
+    return Object_cast(obj);
+}
+
 const char *Widget_name(const void *self)
 {
     const Widget *w = Object_instance(self);

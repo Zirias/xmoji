@@ -27,7 +27,27 @@ typedef enum WindowState
     WS_NORMAL
 } WindowState;
 
-Window *Window_createBase(void *derived, const char *name, void *parent);
+typedef enum WindowFlags
+{
+    /* Immutable type of window */
+    WF_WINDOW_NORMAL	= 0,
+    WF_WINDOW_DIALOG	= 1,
+    WF_WINDOW_TOOLTIP	= 2,
+    WF_WINDOW_MENU	= 3,
+
+    WF_WINDOW_TYPE	= 0xf,
+
+    /* settable/clearable flags */
+    WF_REJECT_FOCUS	= 0x10 << 0,
+    WF_FIXED_SIZE	= 0x10 << 1,
+    WF_MODAL		= 0x10 << 2,
+    WF_SKIP_TASKBAR	= 0x10 << 3,
+    WF_SKIP_PAGER	= 0x10 << 4,
+    WF_STICKY		= 0x10 << 5
+} WindowFlags;
+
+Window *Window_createBase(void *derived, const char *name,
+	WindowFlags flags, void *parent);
 #define Window_create(...) Window_createBase(0, __VA_ARGS__)
 
 Window *Window_fromWidget(void *widget)

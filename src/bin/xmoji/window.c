@@ -43,6 +43,7 @@ struct Window
     void *hoverWidget;
     Window *tooltipWindow;
     Window *parent;
+    WindowFlags flags;
     Pos absMouse;
     Pos mouse;
     Pos mouseUpdate;
@@ -69,7 +70,7 @@ struct Window
 static void map(Window *self)
 {
     xcb_connection_t *c = X11Adapter_connection();
-    if (self->parent)
+    if ((self->flags & WF_WINDOW_TYPE) == WF_WINDOW_TOOLTIP)
     {
 	Size size = Widget_minSize(self->mainWidget);
 	size.width += 2;
@@ -629,11 +630,13 @@ static void sizeRequested(void *receiver, void *sender, void *args)
     if (minSize.width && minSize.height) self->haveMinSize = 1;
     else self->haveMinSize = 0;
     Size newSize = Widget_size(self);
-    if (self->parent || minSize.width > newSize.width)
+    WindowFlags wtype = self->flags & WF_WINDOW_TYPE;
+    int exactsize = wtype == WF_WINDOW_TOOLTIP || wtype == WF_WINDOW_MENU;
+    if (exactsize || minSize.width > newSize.width)
     {
 	newSize.width = minSize.width;
     }
-    if (self->parent || minSize.height > newSize.height)
+    if (exactsize || minSize.height > newSize.height)
     {
 	newSize.height = minSize.height;
     }
@@ -736,26 +739,24 @@ static void destroy(void *window)
 }
 
 
-static Window *createWindow(void *derived, const char *name, void *parent,
-	int temporary)
+Window *Window_createBase(void *derived, const char *name,
+	WindowFlags flags, void *parent)
 {
+    WindowFlags wtype = flags & WF_WINDOW_TYPE;
     Window *self = PSC_malloc(sizeof *self);
     memset(self, 0, sizeof *self);
-    if (temporary)
-    {
-	CREATEBASE(Widget, 0, 0);
-    }
-    else
-    {
-	CREATEBASE(Widget, name, parent);
-	self->closed = PSC_Event_create(self);
-	self->propertyChanged = PSC_Event_create(self);
-	self->kbcompose = xkb_compose_state_new(
-		X11Adapter_kbdcompose(), XKB_COMPOSE_STATE_NO_FLAGS);
-	self->mouseUpdate = (Pos){-1, -1};
-	self->anchorPos = (Pos){-1, -1};
-	self->hideState = WS_MINIMIZED;
-    }
+    void *owner = parent;
+    if (wtype == WF_WINDOW_TOOLTIP) owner = 0;
+    CREATEBASE(Widget, name, owner);
+    self->closed = PSC_Event_create(self);
+    self->propertyChanged = PSC_Event_create(self);
+    self->kbcompose = xkb_compose_state_new(
+	    X11Adapter_kbdcompose(), XKB_COMPOSE_STATE_NO_FLAGS);
+    self->mouseUpdate = (Pos){-1, -1};
+    self->anchorPos = (Pos){-1, -1};
+    self->hideState = WS_MINIMIZED;
+    Widget *parentWidget = parent ? Widget_tryCast(parent) : 0;
+    if (parentWidget) self->parent = Window_fromWidget(parentWidget);
 
     xcb_connection_t *c = X11Adapter_connection();
     self->w = xcb_generate_id(c);
@@ -763,17 +764,8 @@ static Window *createWindow(void *derived, const char *name, void *parent,
 
     xcb_screen_t *s = X11Adapter_screen();
     uint32_t mask;
-    uint32_t values[2];
-    if (temporary)
-    {
-	mask = XCB_CW_OVERRIDE_REDIRECT | XCB_CW_EVENT_MASK;
-	values[0] = 1;
-	values[1] = XCB_EVENT_MASK_EXPOSURE | XCB_EVENT_MASK_STRUCTURE_NOTIFY;
-    }
-    else
-    {
-	mask = XCB_CW_EVENT_MASK;
-	values[0] = XCB_EVENT_MASK_BUTTON_MOTION
+    uint32_t values[2] = { 1,
+	XCB_EVENT_MASK_BUTTON_MOTION
 	    | XCB_EVENT_MASK_BUTTON_PRESS
 	    | XCB_EVENT_MASK_BUTTON_RELEASE
 	    | XCB_EVENT_MASK_ENTER_WINDOW
@@ -783,21 +775,28 @@ static Window *createWindow(void *derived, const char *name, void *parent,
 	    | XCB_EVENT_MASK_LEAVE_WINDOW
 	    | XCB_EVENT_MASK_POINTER_MOTION
 	    | XCB_EVENT_MASK_PROPERTY_CHANGE
-	    | XCB_EVENT_MASK_STRUCTURE_NOTIFY;
+	    | XCB_EVENT_MASK_STRUCTURE_NOTIFY };
+    if (wtype == WF_WINDOW_TOOLTIP || wtype == WF_WINDOW_MENU)
+    {
+	mask = XCB_CW_OVERRIDE_REDIRECT | XCB_CW_EVENT_MASK;
+    }
+    else
+    {
+	mask = XCB_CW_EVENT_MASK;
+	values[0] = values[1];
     }
     CHECK(xcb_create_window(c, XCB_COPY_FROM_PARENT, self->w, s->root,
 		0, 0, 1, 1, 2, XCB_WINDOW_CLASS_INPUT_OUTPUT,
 		s->root_visual, mask, values),
 	    "Cannot create window 0x%x", (unsigned)self->w);
-    if (temporary)
+    if (self->parent)
     {
-	self->parent = (Window *)parent;
 	CHECK(xcb_change_property(c, XCB_PROP_MODE_REPLACE, self->w,
 		    XCB_ATOM_WM_TRANSIENT_FOR, XCB_ATOM_WINDOW,
 		    32, 1, &self->parent->w),
 		"Cannot set transient state for 0x%x", (unsigned)self->w);
     }
-    else
+    if (wtype == WF_WINDOW_NORMAL || wtype == WF_WINDOW_DIALOG)
     {
 	WMHints hints = {
 	    .flags = WM_HINT_INPUT | WM_HINT_STATE,
@@ -817,9 +816,19 @@ static Window *createWindow(void *derived, const char *name, void *parent,
 	CHECK(xcb_change_property(c, XCB_PROP_MODE_REPLACE, self->w,
 		    XCB_ATOM_WM_CLASS, XCB_ATOM_STRING, 8, sz, wmclass),
 		"Cannot set window class for 0x%x", (unsigned)self->w);
-	xcb_atom_t wtnorm = A(_NET_WM_WINDOW_TYPE_NORMAL);
+	xcb_atom_t wmtype;
+	switch (wtype)
+	{
+	    case WF_WINDOW_DIALOG:
+		wmtype = A(_NET_WM_WINDOW_TYPE_DIALOG);
+		break;
+
+	    default:
+		wmtype = A(_NET_WM_WINDOW_TYPE_NORMAL);
+		break;
+	}
 	CHECK(xcb_change_property(c, XCB_PROP_MODE_REPLACE, self->w,
-		    A(_NET_WM_WINDOW_TYPE), XCB_ATOM_ATOM, 32, 1, &wtnorm),
+		    A(_NET_WM_WINDOW_TYPE), XCB_ATOM_ATOM, 32, 1, &wmtype),
 		"Cannot set window type for 0x%x", (unsigned)self->w);
 
 	int backingstore = XRdb_bool(X11Adapter_resources(),
@@ -849,6 +858,7 @@ static Window *createWindow(void *derived, const char *name, void *parent,
 	}
     }
 
+    self->flags = flags;
     self->borderpixel = (uint32_t)-1;
 
     Widget_setSize(self, (Size){1, 1});
@@ -889,11 +899,6 @@ static Window *createWindow(void *derived, const char *name, void *parent,
 	    sizeChanged, 0);
 
     return self;
-}
-
-Window *Window_createBase(void *derived, const char *name, void *parent)
-{
-    return createWindow(derived, name, parent, 0);
 }
 
 Window *Window_fromWidget(void *widget)
@@ -1025,7 +1030,7 @@ void Window_setMainWidget(void *self, void *widget)
     if (widget)
     {
 	Widget_setContainer(widget, w);
-	if (w->parent)
+	if ((w->flags & WF_WINDOW_TYPE) == WF_WINDOW_TOOLTIP)
 	{
 	    if (w->borderpixel != (uint32_t)-1)
 	    {
@@ -1120,7 +1125,7 @@ void Window_showTooltip(void *self, void *widget, void *parentWidget)
     Window *w = Object_instance(self);
     if (!w->tooltipWindow)
     {
-	w->tooltipWindow = createWindow(0, 0, w, 1);
+	w->tooltipWindow = Window_create(0, WF_WINDOW_TOOLTIP, w);
 	Widget_setFontResName(w->tooltipWindow, "tooltipFont", 0, 0);
     }
     Widget_setContainer(w->tooltipWindow, parentWidget);
