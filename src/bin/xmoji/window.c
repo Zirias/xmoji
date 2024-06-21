@@ -750,8 +750,6 @@ Window *Window_createBase(void *derived, const char *name,
     CREATEBASE(Widget, name, owner);
     self->closed = PSC_Event_create(self);
     self->propertyChanged = PSC_Event_create(self);
-    self->kbcompose = xkb_compose_state_new(
-	    X11Adapter_kbdcompose(), XKB_COMPOSE_STATE_NO_FLAGS);
     self->mouseUpdate = (Pos){-1, -1};
     self->anchorPos = (Pos){-1, -1};
     self->hideState = WS_MINIMIZED;
@@ -798,6 +796,8 @@ Window *Window_createBase(void *derived, const char *name,
     }
     if (wtype == WF_WINDOW_NORMAL || wtype == WF_WINDOW_DIALOG)
     {
+	self->kbcompose = xkb_compose_state_new(
+		X11Adapter_kbdcompose(), XKB_COMPOSE_STATE_NO_FLAGS);
 	WMHints hints = {
 	    .flags = WM_HINT_INPUT | WM_HINT_STATE,
 	    .input = 1,
@@ -831,6 +831,9 @@ Window *Window_createBase(void *derived, const char *name,
 		    A(_NET_WM_WINDOW_TYPE), XCB_ATOM_ATOM, 32, 1, &wmtype),
 		"Cannot set window type for 0x%x", (unsigned)self->w);
 
+    }
+    if (wtype != WF_WINDOW_TOOLTIP)
+    {
 	int backingstore = XRdb_bool(X11Adapter_resources(),
 		XRdbKey(Widget_resname(self), "backingStore"),
 		XRQF_OVERRIDES, 1);
