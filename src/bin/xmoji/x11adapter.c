@@ -1286,7 +1286,7 @@ void X11Adapter_done(void)
     {
 	xcb_free_cursor(c, cursors[i]);
     }
-    xcb_cursor_context_free(cctx);
+    if (cctx) xcb_cursor_context_free(cctx);
     cctx = 0;
     XRdb_destroy(rdb);
     rdb = 0;

@@ -1,5 +1,6 @@
 #include "button.h"
 #include "command.h"
+#include "menu.h"
 #include "scrollbox.h"
 #include "textbox.h"
 #include "textlabel.h"
@@ -19,6 +20,7 @@ static MetaX11App mo = MetaX11App_init(startup, 0, "Xmoji", free);
 typedef struct Xmoji
 {
     Object base;
+    Window *mainWindow;
 } Xmoji;
 
 static void onquit(void *receiver, void *sender, void *args)
@@ -34,11 +36,10 @@ static void onhide(void *receiver, void *sender, void *args)
 {
     (void)receiver;
     (void)sender;
+    (void)args;
 
-    CommandTriggeredEventArgs *ea = args;
-    Widget *widget = ea && ea->sender ? Widget_cast(ea->sender) : 0;
-    Window *window = widget ? Window_fromWidget(widget) : 0;
-    if (window) Widget_hide(window);
+    Xmoji *self = receiver;
+    Widget_hide(self->mainWindow);
 }
 
 static int startup(void *app)
@@ -55,10 +56,16 @@ static int startup(void *app)
     Command *hideCommand = Command_create(hide, hidedesc, self);
     PSC_Event_register(Command_triggered(hideCommand), self, onhide, 0);
 
+    Menu *menu = Menu_create("mainMenu", self);
+    Menu_addItem(menu, hideCommand);
+    Menu_addItem(menu, quitCommand);
+
     Window *win = Window_create("mainWindow", 0, self);
+    self->mainWindow = win;
     Window_setTitle(win, "Xmoji 😀 äöüß");
 
     ScrollBox *scroll = ScrollBox_create("mainScrollBox", win);
+    Widget_setContextMenu(scroll, menu);
     VBox *box = VBox_create(scroll);
 
     TextLabel *label = TextLabel_create("helloLabel", box);

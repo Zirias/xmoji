@@ -1,6 +1,7 @@
 #include "widget.h"
 
 #include "font.h"
+#include "menu.h"
 #include "tooltip.h"
 #include "window.h"
 #include "x11adapter.h"
@@ -29,6 +30,7 @@ struct Widget
     const char *resname;
     Font *font;
     Font *explicitFont;
+    Menu *menu;
     Tooltip *tooltip;
     PSC_Event *shown;
     PSC_Event *hidden;
@@ -69,6 +71,7 @@ static void destroy(void *obj)
     PSC_Event_destroy(self->hidden);
     PSC_Event_destroy(self->shown);
     Tooltip_destroy(self->tooltip);
+    Object_destroy(self->menu);
     Font_destroy(self->font);
     free(self);
 }
@@ -251,6 +254,13 @@ void Widget_setFontResName(void *self, const char *name,
 	    XRdbKey(Widget_resname(self), name), XRQF_OVERRIDES);
     if (!pattern) pattern = defpattern;
     doSetFont(Object_instance(self), Font_create(pattern, options));
+}
+
+void Widget_setContextMenu(void *self, Menu *menu)
+{
+    Widget *w = Object_instance(self);
+    if (w->menu) Object_destroy(w->menu);
+    w->menu = Object_ref(menu);
 }
 
 void Widget_setTooltip(void *self, const UniStr *tooltip, unsigned delay)
@@ -733,6 +743,11 @@ int Widget_clicked(void *self, const ClickEvent *event)
     if (w->tooltip) Tooltip_cancel(w->tooltip);
     int handled = 0;
     Object_vcall(handled, Widget, clicked, w, event);
+    if (!handled && w->menu && event->button == MB_RIGHT)
+    {
+	Menu_popup(w->menu, w);
+	handled = 1;
+    }
     return handled;
 }
 

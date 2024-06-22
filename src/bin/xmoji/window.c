@@ -70,7 +70,8 @@ struct Window
 static void map(Window *self)
 {
     xcb_connection_t *c = X11Adapter_connection();
-    if ((self->flags & WF_WINDOW_TYPE) == WF_WINDOW_TOOLTIP)
+    WindowFlags wtype = self->flags & WF_WINDOW_TYPE;
+    if (wtype == WF_WINDOW_TOOLTIP || wtype == WF_WINDOW_MENU)
     {
 	Size size = Widget_minSize(self->mainWidget);
 	size.width += 2;
@@ -82,16 +83,24 @@ static void map(Window *self)
 	    x = s->width_in_pixels - size.width;
 	}
 	if (x < 0) x = 0;
-	int16_t y = self->parent->absMouse.y - size.height - 16;
+	int16_t y = self->parent->absMouse.y - 16;
+	if (wtype == WF_WINDOW_TOOLTIP) y -= size.height;
+	if (wtype == WF_WINDOW_MENU && y + size.height > s->height_in_pixels)
+	{
+	    y = s->height_in_pixels - size.height;
+	}
 	if (y < 0)
 	{
-	    if (self->parent->absMouse.y + 16 < s->height_in_pixels
+	    if (wtype == WF_WINDOW_TOOLTIP
+		    && self->parent->absMouse.y + 16 < s->height_in_pixels
 		    && self->parent->absMouse.y + 16 >= 0)
 	    {
 		y = self->parent->absMouse.y + 16;
 	    }
 	    else y = 0;
 	}
+	self->mouseUpdate.x = self->parent->absMouse.x - x;
+	self->mouseUpdate.y = self->parent->absMouse.y - y;
 	CHECK(xcb_configure_window(c, self->w, XCB_CONFIG_WINDOW_X |
 		    XCB_CONFIG_WINDOW_Y | XCB_CONFIG_WINDOW_BORDER_WIDTH,
 		    (uint32_t[]){x, y, 1}),
@@ -158,9 +167,9 @@ static int hide(void *obj)
 {
     Window *self = Object_instance(obj);
     if (!self->mapped) return 0;
-    self->mapped = 0;
-    if (self->hideState == WS_MINIMIZED)
+    if (self->havewmstate && self->hideState == WS_MINIMIZED)
     {
+	self->mapped = 0;
 	xcb_client_message_event_t msg = {
 	    .response_type = XCB_CLIENT_MESSAGE,
 	    .format = 32,
@@ -543,15 +552,6 @@ static void doupdates(void *receiver, void *sender, void *args)
 		}
 		else self->hoverWidget = Object_ref(hover);
 	    }
-	    XCursor cursor = Widget_cursor(self->hoverWidget);
-	    if (cursor != self->cursor)
-	    {
-		CHECK(xcb_change_window_attributes(X11Adapter_connection(),
-			    self->w, XCB_CW_CURSOR, (uint32_t[]){
-			    X11Adapter_cursor(cursor) }),
-			"Cannot change cursor for 0x%x", (unsigned)self->w);
-		self->cursor = cursor;
-	    }
 	    if (self->anchorButton)
 	    {
 		if ((int)self->anchorButton == -1) self->anchorButton = 0;
@@ -568,6 +568,17 @@ static void doupdates(void *receiver, void *sender, void *args)
 	    Object_destroy(self->hoverWidget);
 	    self->hoverWidget = 0;
 	    Widget_leave(self->mainWidget);
+	}
+	XCursor cursor = self->hoverWidget
+	    ? Widget_cursor(self->hoverWidget)
+	    : XC_LEFTPTR;
+	if (cursor != self->cursor)
+	{
+	    CHECK(xcb_change_window_attributes(X11Adapter_connection(),
+			self->w, XCB_CW_CURSOR, (uint32_t[]){
+			X11Adapter_cursor(cursor) }),
+		    "Cannot change cursor for 0x%x", (unsigned)self->w);
+	    self->cursor = cursor;
 	}
     }
 done:
@@ -628,7 +639,12 @@ static void sizeRequested(void *receiver, void *sender, void *args)
     Window *self = receiver;
     Size minSize = Widget_minSize(self->mainWidget);
     if (minSize.width && minSize.height) self->haveMinSize = 1;
-    else self->haveMinSize = 0;
+    else
+    {
+	self->haveMinSize = 0;
+	if (!minSize.width) minSize.width = 1;
+	if (!minSize.height) minSize.height = 1;
+    }
     Size newSize = Widget_size(self);
     WindowFlags wtype = self->flags & WF_WINDOW_TYPE;
     int exactsize = wtype == WF_WINDOW_TOOLTIP || wtype == WF_WINDOW_MENU;
@@ -724,7 +740,10 @@ static void destroy(void *window)
     PSC_Event_destroy(self->closed);
     Object_destroy(self->hoverWidget);
     Object_destroy(self->focusWidget);
-    Object_destroy(self->mainWidget);
+    if ((self->flags & WF_WINDOW_TYPE) != WF_WINDOW_MENU)
+    {
+	Object_destroy(self->mainWidget);
+    }
     xcb_connection_t *c = X11Adapter_connection();
     if (self->p)
     {
@@ -1022,25 +1041,27 @@ static void setBorderColor(void *obj, Color color, uint32_t pixel)
 void Window_setMainWidget(void *self, void *widget)
 {
     Window *w = Object_instance(self);
+    WindowFlags wtype = w->flags & WF_WINDOW_TYPE;
     if (w->mainWidget)
     {
 	PSC_Event_unregister(Widget_sizeRequested(w->mainWidget), w,
 		sizeRequested, 0);
 	Widget_setContainer(w->mainWidget, 0);
-	Object_destroy(w->mainWidget);
+	if (wtype != WF_WINDOW_MENU) Object_destroy(w->mainWidget);
     }
-    w->mainWidget = Object_ref(widget);
+    w->mainWidget = wtype == WF_WINDOW_MENU ? widget : Object_ref(widget);
     if (widget)
     {
 	Widget_setContainer(widget, w);
-	if ((w->flags & WF_WINDOW_TYPE) == WF_WINDOW_TOOLTIP)
+	if (wtype == WF_WINDOW_TOOLTIP || wtype == WF_WINDOW_MENU)
 	{
 	    if (w->borderpixel != (uint32_t)-1)
 	    {
 		X11Adapter_unmapColor(w->borderpixel);
 		w->borderpixel = (uint32_t)-1;
 	    }
-	    Color bc = Widget_color(widget, COLOR_BORDER_TOOLTIP);
+	    Color bc = Widget_color(widget, wtype == WF_WINDOW_TOOLTIP ?
+		    COLOR_BORDER_TOOLTIP : COLOR_BORDER);
 	    X11Adapter_mapColor(self, setBorderColor, bc);
 	}
 	Font *font = Widget_font(w);

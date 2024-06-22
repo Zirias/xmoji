@@ -12,6 +12,7 @@
 #include <xcb/render.h>
 
 C_CLASS_DECL(Font);
+C_CLASS_DECL(Menu);
 C_CLASS_DECL(PSC_Event);
 C_CLASS_DECL(UniStr);
 C_CLASS_DECL(Widget);
@@ -130,6 +131,7 @@ Font *Widget_font(const void *self) CMETHOD;
 void Widget_setFont(void *self, Font *font) CMETHOD;
 void Widget_setFontResName(void *self, const char *name,
 	const char *defpattern, const FontOptions *options) CMETHOD;
+void Widget_setContextMenu(void *self, Menu *menu) CMETHOD;
 void Widget_setTooltip(void *self,
 	const UniStr *tooltip, unsigned delay) CMETHOD;
 Widget *Widget_container(const void *self) CMETHOD;

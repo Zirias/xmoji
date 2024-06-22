@@ -28,6 +28,9 @@ struct Button
     TextLabel *label;
     PSC_Event *clicked;
     ColorRole color;
+    ColorRole background;
+    ColorRole hoverBackground;
+    uint16_t minwidth;
     uint8_t borderwidth;
 };
 
@@ -41,6 +44,7 @@ static void destroy(void *obj)
 static void expose(void *obj, Rect region)
 {
     Button *self = Object_instance(obj);
+    Widget_setAlign(self->label, Widget_align(self) | AV_MIDDLE);
     Widget_invalidateRegion(self->label, region);
 }
 
@@ -64,9 +68,9 @@ static int draw(void *obj, xcb_render_picture_t picture)
 static void enter(void *obj)
 {
     Button *self = Object_instance(obj);
-    if (self->color != COLOR_BG_ACTIVE)
+    if (self->color != self->hoverBackground)
     {
-	self->color = COLOR_BG_ACTIVE;
+	self->color = self->hoverBackground;
 	Widget_invalidate(self);
     }
 }
@@ -74,9 +78,9 @@ static void enter(void *obj)
 static void leave(void *obj)
 {
     Button *self = Object_instance(obj);
-    if (self->color != COLOR_BG_ABOVE)
+    if (self->color != self->background)
     {
-	self->color = COLOR_BG_ABOVE;
+	self->color = self->background;
 	Widget_invalidate(self);
     }
 }
@@ -105,7 +109,7 @@ static Size minSize(const void *obj)
     minSize.width += 2 * self->borderwidth;
     minSize.height += 2 * self->borderwidth;
 
-    if (minSize.width < 120) minSize.width = 120;
+    if (minSize.width < self->minwidth) minSize.width = self->minwidth;
     return minSize;
 }
 
@@ -148,14 +152,17 @@ Button *Button_createBase(void *derived, const char *name, void *parent)
     self->label = TextLabel_create(0, self);
     self->clicked = PSC_Event_create(self);
     self->color = COLOR_BG_ABOVE;
+    self->background = COLOR_BG_ABOVE;
+    self->hoverBackground = COLOR_BG_ACTIVE;
+    self->minwidth = 120;
     self->borderwidth = 1;
 
     Widget_setBackground(self, 1, COLOR_BORDER);
     Widget_setPadding(self, (Box){1, 1, 1, 1});
     Widget_setExpand(self, EXPAND_NONE);
     Widget_setCursor(self, XC_HAND);
+    Widget_setAlign(self, AH_CENTER|AV_MIDDLE);
     Widget_setContainer(self->label, self);
-    Widget_setAlign(self->label, AH_CENTER|AV_MIDDLE);
     Widget_show(self->label);
 
     PSC_Event_register(Widget_sizeChanged(self), self, sizeChanged, 0);
@@ -197,6 +204,26 @@ void Button_setBorderWidth(void *self, uint8_t width)
     origin.y += width;
     Widget_setOrigin(b->label, origin);
     Widget_requestSize(self);
+}
+
+void Button_setColors(void *self, ColorRole normal, ColorRole hover)
+{
+    Button *b = Object_instance(self);
+    b->color = normal;
+    b->background = normal;
+    b->hoverBackground = hover;
+}
+
+void Button_setLabelPadding(void *self, Box padding)
+{
+    Button *b = Object_instance(self);
+    Widget_setPadding(b->label, padding);
+}
+
+void Button_setMinWidth(void *self, uint16_t width)
+{
+    Button *b = Object_instance(self);
+    b->minwidth = width;
 }
 
 void Button_attachCommand(void *self, Command *command)

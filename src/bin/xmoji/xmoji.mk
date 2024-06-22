@@ -2,6 +2,7 @@ xmoji_MODULES=		button \
 			colorset \
 			command \
 			font \
+			menu \
 			nanosvg \
 			object \
 			scrollbox \
