@@ -97,7 +97,6 @@ static int dohide(Widget *self, int external)
     if (self->visible)
     {
 	self->visible = 0;
-	self->ndamages = 0;
 	WidgetEventArgs args = { external };
 	PSC_Event_raise(self->hidden, 0, &args);
     }
@@ -775,7 +774,6 @@ static int hasDamage(Widget *self, Rect region)
 
 void Widget_invalidateRegion(void *self, Rect region)
 {
-    if (!Widget_visible(self)) return;
     Widget *w = Object_instance(self);
     if (w->ndamages < 0) return;
     if (!Rect_overlaps(region, w->geometry)) return;
@@ -805,7 +803,6 @@ void Widget_invalidateRegion(void *self, Rect region)
 
 void Widget_invalidate(void *self)
 {
-    if (!Widget_visible(self)) return;
     Widget *w = Object_instance(self);
     Widget_invalidateRegion(w, w->geometry);
 }
