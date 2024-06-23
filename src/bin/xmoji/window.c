@@ -189,6 +189,11 @@ static int hide(void *obj)
 		(unsigned)self->w);
     }
     else Window_close(self);
+    if (self->hoverWidget)
+    {
+	Object_destroy(self->hoverWidget);
+	self->hoverWidget = 0;
+    }
     return 0;
 }
 
@@ -530,7 +535,7 @@ static void doupdates(void *receiver, void *sender, void *args)
     (void)args;
 
     Window *self = receiver;
-    if (!self->mainWidget) return;
+    if (!self->mainWidget || !self->mapped) return;
     if (memcmp(&self->mouse, &self->mouseUpdate, sizeof self->mouse))
     {
 	self->mouse = self->mouseUpdate;
@@ -782,7 +787,11 @@ Window *Window_createBase(void *derived, const char *name,
     self->anchorPos = (Pos){-1, -1};
     self->hideState = WS_MINIMIZED;
     Widget *parentWidget = parent ? Widget_tryCast(parent) : 0;
-    if (parentWidget) self->parent = Window_fromWidget(parentWidget);
+    if (parentWidget)
+    {
+	Widget_setContainer(self, parentWidget);
+	self->parent = Window_fromWidget(parentWidget);
+    }
 
     xcb_connection_t *c = X11Adapter_connection();
     self->w = xcb_generate_id(c);
@@ -858,7 +867,7 @@ Window *Window_createBase(void *derived, const char *name,
 	CHECK(xcb_change_property(c, XCB_PROP_MODE_REPLACE, self->w,
 		    A(_NET_WM_WINDOW_TYPE), XCB_ATOM_ATOM, 32, 1, &wmtype),
 		"Cannot set window type for 0x%x", (unsigned)self->w);
-
+	Widget_setBackground(self, 1, COLOR_BG_NORMAL);
     }
     if (wtype != WF_WINDOW_TOOLTIP)
     {
@@ -894,7 +903,6 @@ Window *Window_createBase(void *derived, const char *name,
 
     Widget_setSize(self, (Size){1, 1});
     Widget_setDrawable(self, self->p ? self->p : self->w);
-    Widget_setBackground(self, 1, COLOR_BG_NORMAL);
 
     PSC_Event_register(X11Adapter_buttonpress(), self,
 	    buttonpress, self->w);
