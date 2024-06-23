@@ -254,12 +254,7 @@ static void pointerGrabbed(void *obj, unsigned sequence,
 
     if (error || !reply) goto error;
     xcb_grab_pointer_reply_t *grab = reply;
-    if (grab->status == XCB_GRAB_STATUS_SUCCESS)
-    {
-	Menu *self = obj;
-	Widget_invalidate(self->window);
-	return;
-    }
+    if (grab->status == XCB_GRAB_STATUS_SUCCESS) return;
 error:
     Widget_hide(obj);
 }
