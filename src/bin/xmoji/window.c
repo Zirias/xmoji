@@ -22,10 +22,11 @@ static int show(void *obj);
 static int hide(void *obj);
 static void unselect(void *obj);
 static void setFont(void *obj, Font *font);
+static int clicked(void *obj, const ClickEvent *event);
 
 static MetaWindow mo = MetaWindow_init(expose, draw, show, hide,
 	0, 0, 0, 0, 0, 0, 0,
-	unselect, setFont, 0, 0, 0, 0, 0,
+	unselect, setFont, 0, 0, 0, clicked, 0,
 	"Window", destroy);
 
 struct Window
@@ -204,6 +205,13 @@ static void setFont(void *obj, Font *font)
     Widget_offerFont(self->mainWidget, font);
 }
 
+static int clicked(void *obj, const ClickEvent *event)
+{
+    Window *self = Object_instance(obj);
+    if (!self->mainWidget) return 0;
+    return Widget_clicked(self->mainWidget, event);
+}
+
 static void buttonpress(void *receiver, void *sender, void *args)
 {
     (void)sender;
@@ -225,7 +233,7 @@ static void buttonpress(void *receiver, void *sender, void *args)
 	if (ev->time - self->clicktime <= DBLCLICK_MS) click.dblclick = 1;
 	self->clicktime = ev->time;
     }
-    Widget_clicked(self->mainWidget, &click);
+    Widget_clicked(self, &click);
 }
 
 static void buttonrelease(void *receiver, void *sender, void *args)

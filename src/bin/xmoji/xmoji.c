@@ -63,9 +63,9 @@ static int startup(void *app)
     Window *win = Window_create("mainWindow", 0, self);
     self->mainWindow = win;
     Window_setTitle(win, "Xmoji 😀 äöüß");
+    Widget_setContextMenu(win, menu);
 
     ScrollBox *scroll = ScrollBox_create("mainScrollBox", win);
-    Widget_setContextMenu(scroll, menu);
     VBox *box = VBox_create(scroll);
 
     TextLabel *label = TextLabel_create("helloLabel", box);
