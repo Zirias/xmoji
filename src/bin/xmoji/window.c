@@ -100,8 +100,9 @@ static void map(Window *self)
 	    }
 	    else y = 0;
 	}
-	self->mouseUpdate.x = self->parent->absMouse.x - x;
-	self->mouseUpdate.y = self->parent->absMouse.y - y;
+	self->absMouse = self->parent->absMouse;
+	self->mouseUpdate.x = self->absMouse.x - x;
+	self->mouseUpdate.y = self->absMouse.y - y;
 	CHECK(xcb_configure_window(c, self->w, XCB_CONFIG_WINDOW_X |
 		    XCB_CONFIG_WINDOW_Y | XCB_CONFIG_WINDOW_BORDER_WIDTH,
 		    (uint32_t[]){x, y, 1}),
