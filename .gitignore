@@ -22,3 +22,8 @@ defaults.mk
 /obj/
 /test/
 /dist/
+icon256.h
+icon48.h
+icon32.h
+icon16.h
+

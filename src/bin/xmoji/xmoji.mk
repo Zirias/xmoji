@@ -1,7 +1,11 @@
+GEN_BIN2CSTR_tool=	$(BIN2CSTR_TARGET)
+GEN_BIN2CSTR_args=	$1 $2
+
 xmoji_MODULES=		button \
 			colorset \
 			command \
 			font \
+			icons \
 			menu \
 			nanosvg \
 			object \
@@ -22,11 +26,17 @@ xmoji_MODULES=		button \
 			xmoji \
 			xrdb \
 			xselection
-xmoji_LIBS+=		m \
+xmoji_GEN=		BIN2CSTR
+xmoji_BIN2CSTR_FILES=	icon256.h:icons/256x256/xmoji.png \
+			icon48.h:icons/48x48/xmoji.png \
+			icon32.h:icons/32x32/xmoji.png \
+			icon16.h:icons/16x16/xmoji.png
+xmoji_LIBS=		m \
 			rt
 xmoji_PKGDEPS=		fontconfig \
 			freetype2 \
 			harfbuzz \
+			libpng >= 1.6 \
 			posercore \
 			xcb \
 			xcb-cursor \
