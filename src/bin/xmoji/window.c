@@ -104,8 +104,9 @@ static void map(Window *self)
 	self->mouseUpdate.x = self->absMouse.x - x;
 	self->mouseUpdate.y = self->absMouse.y - y;
 	CHECK(xcb_configure_window(c, self->w, XCB_CONFIG_WINDOW_X |
-		    XCB_CONFIG_WINDOW_Y | XCB_CONFIG_WINDOW_BORDER_WIDTH,
-		    (uint32_t[]){x, y, 1}),
+		    XCB_CONFIG_WINDOW_Y | XCB_CONFIG_WINDOW_BORDER_WIDTH |
+		    XCB_CONFIG_WINDOW_STACK_MODE,
+		    (uint32_t[]){x, y, 1, XCB_STACK_MODE_ABOVE}),
 		"Cannot configure window 0x%x", (unsigned)self->w);
     }
     CHECK(xcb_map_window(c, self->w),
@@ -824,7 +825,7 @@ Window *Window_createBase(void *derived, const char *name,
 		0, 0, 1, 1, 2, XCB_WINDOW_CLASS_INPUT_OUTPUT,
 		s->root_visual, mask, values),
 	    "Cannot create window 0x%x", (unsigned)self->w);
-    if (self->parent)
+    if (self->parent && wtype != WF_WINDOW_MENU)
     {
 	CHECK(xcb_change_property(c, XCB_PROP_MODE_REPLACE, self->w,
 		    XCB_ATOM_WM_TRANSIENT_FOR, XCB_ATOM_WINDOW,
