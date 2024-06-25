@@ -233,7 +233,7 @@ static void doSetFont(void *self, Font *font)
     {
 	w->explicitFont = 0;
 	w->font = w->container && w->container->font ?
-	    w->container->font : Font_create(0, 0);
+	    Font_ref(w->container->font) : Font_create(0, 0);
     }
     Object_vcallv(Widget, setFont, self, w->font);
 }
