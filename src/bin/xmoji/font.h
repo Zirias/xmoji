@@ -31,7 +31,16 @@ typedef struct FontOptions
     uint8_t pixelFractionBits;
 } FontOptions;
 
+typedef enum FontStyle
+{
+    FS_NONE	= 0,
+    FS_BOLD	= 1 << 0,
+    FS_ITALIC	= 1 << 1
+} FontStyle;
+
 Font *Font_create(const char *pattern, const FontOptions *options);
+Font *Font_createVariant(Font *font, double pixelsize, FontStyle style,
+	const FontOptions *options);
 Font *Font_ref(Font *font);
 FT_Face Font_face(const Font *self) CMETHOD ATTR_RETNONNULL;
 FontGlyphType Font_glyphtype(const Font *self) CMETHOD;

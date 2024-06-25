@@ -24,6 +24,7 @@ static FontOptions defaultOptions;
 struct Font
 {
     char *id;
+    FcPattern *pattern;
     FT_Face face;
     FontGlyphType glyphtype;
     double pixelsize;
@@ -100,205 +101,99 @@ static void Font_done(void)
 {
     if (--refcnt) return;
     PSC_HashTable_destroy(byId);
+    byId = 0;
     PSC_HashTable_destroy(byPattern);
+    byPattern = 0;
     FT_Done_FreeType(ftlib);
     FcPatternDestroy(defaultpat);
     FcFini();
 }
 
-Font *Font_create(const char *pattern, const FontOptions *options)
+static char *createFontId(const char *file, int index, double pixelsize)
 {
-    if (Font_init() < 0) return 0;
-    Font *cached = PSC_HashTable_get(byPattern,
-	    pattern ? pattern : "<default>");
-    if (cached)
-    {
-	Font_done();
-	++cached->refcnt;
-	return cached;
-    }
-    PSC_List *patterns = 0;
-    PSC_ListIterator *pi = 0;
-    if (pattern)
-    {
-	patterns = PSC_List_fromString(pattern, ",");
-	pi = PSC_List_iterator(patterns);
-    }
+    int fi = index;
+    int fic = 0;
+    while (fi) { ++fic; fi /= 10; }
+    if (!fic) ++fic;
+    size_t len = strlen(file) + fic + 9;
+    char *id = PSC_malloc(len);
+    snprintf(id, len, "%s:%d:%06.2f", file, index, pixelsize);
+    return id;
+}
 
-    int ismatch = 0;
-    FcPattern *fcfont;
-    FT_Face face;
-    char *id = 0;
-    double pixelsize = defaultpixelsize;
+static Font *createFromFile(const char *file, int index, char *id,
+	FcPattern *pattern, const FontOptions *options, double pixelsize)
+{
     double fixedpixelsize = 0;
-    int defstep = 1;
-    while (!ismatch && ((pi && PSC_ListIterator_moveNext(pi)) || defstep--))
+    FT_Face face = 0;
+    if (FT_New_Face(ftlib, file, index, &face) == 0)
     {
-	const char *patstr = defstep ? PSC_ListIterator_current(pi) : "";
-	FcPattern *fcpat;
-	if (*patstr)
+	if (!(face->face_flags & FT_FACE_FLAG_SCALABLE))
 	{
-	    PSC_Log_fmt(PSC_L_DEBUG, "Looking for font: %s", patstr);
-	    fcpat = FcNameParse((FcChar8 *)patstr);
-	    double reqsize = 0;
-	    double reqpxsize = 0;
-	    FcPatternGetDouble(fcpat, FC_SIZE, 0, &reqsize);
-	    FcPatternGetDouble(fcpat, FC_PIXEL_SIZE, 0, &reqpxsize);
-	    if (!reqsize && !reqpxsize)
+	    /* Check available fixed sizes, pick the best match.
+	     * Prefer the smallest deviation within the configured
+	     * range allowed to be used unscaled. Otherwise prefer
+	     * the largest available size.
+	     */
+	    double maxunscaleddeviation =
+		(options && options->maxUnscaledDeviation >= .1f
+		 ? options->maxUnscaledDeviation
+		 : defaultOptions.maxUnscaledDeviation) / 100.;
+	    double bestdeviation = HUGE_VAL;
+	    int bestidx = -1;
+	    for (int i = 0; i < face->num_fixed_sizes; ++i)
 	    {
-		FcPatternAddDouble(fcpat, FC_PIXEL_SIZE, pixelsize);
-	    }
-	    FcConfigSubstitute(0, fcpat, FcMatchPattern);
-	    FcDefaultSubstitute(fcpat);
-	    FcPatternGetDouble(fcpat, FC_PIXEL_SIZE, 0, &pixelsize);
-	}
-	else
-	{
-	    PSC_Log_msg(PSC_L_DEBUG, "Looking for default font");
-	    fcpat = defaultpat;
-	}
-	FcResult result;
-	fcfont = FcFontMatch(0, fcpat, &result);
-	ismatch = (result == FcResultMatch);
-	FcChar8 *foundfamily = 0;
-	if (ismatch) FcPatternGetString(fcfont, FC_FAMILY, 0, &foundfamily);
-	if (ismatch && *patstr)
-	{
-	    FcChar8 *reqfamily = 0;
-	    FcPatternGetString(fcpat, FC_FAMILY, 0, &reqfamily);
-	    if (reqfamily && (!foundfamily ||
-			strcmp((const char *)reqfamily,
-			    (const char *)foundfamily)))
-	    {
-		ismatch = 0;
-	    }
-	}
-	fixedpixelsize = 0;
-	if (fcpat != defaultpat) FcPatternDestroy(fcpat);
-	fcpat = 0;
-	FcChar8 *fontfile = 0;
-	int fontindex = 0;
-	if (ismatch)
-	{
-	    FcPatternGetString(fcfont, FC_FILE, 0, &fontfile);
-	    FcPatternGetInteger(fcfont, FC_INDEX, 0, &fontindex);
-	    if (!fontfile)
-	    {
-		PSC_Log_msg(PSC_L_WARNING, "Found font without a file");
-		ismatch = 0;
-	    }
-	}
-	if (ismatch)
-	{
-	    int fi = fontindex;
-	    int fic = 0;
-	    while (fi) { ++fic; fi /= 10; }
-	    if (!fic) ++fic;
-	    size_t len = strlen((const char *)fontfile) + fic + 2;
-	    id = PSC_malloc(len);
-	    snprintf(id, len, "%s:%d", (const char *)fontfile, fontindex);
-	    cached = PSC_HashTable_get(byId, id);
-	    if (cached)
-	    {
-		FcPatternDestroy(fcfont);
-		break;
-	    }
-	}
-	if (ismatch)
-	{
-	    if (FT_New_Face(ftlib,
-			(const char *)fontfile, fontindex, &face) == 0)
-	    {
-		if (!(face->face_flags & FT_FACE_FLAG_SCALABLE))
+		double fpx =
+		    (double)face->available_sizes[i].y_ppem / 64.;
+		double dev = (fpx > pixelsize ? fpx / pixelsize :
+			pixelsize / fpx) - 1.;
+		if (bestidx < 0 || dev < bestdeviation ||
+			(fpx > fixedpixelsize &&
+			 bestdeviation > maxunscaleddeviation))
 		{
-		    /* Check available fixed sizes, pick the best match.
-		     * Prefer the smallest deviation within the configured
-		     * range allowed to be used unscaled. Otherwise prefer
-		     * the largest available size.
-		     */
-		    double maxunscaleddeviation =
-			(options && options->maxUnscaledDeviation >= .1f
-			 ? options->maxUnscaledDeviation
-			 : defaultOptions.maxUnscaledDeviation) / 100.;
-		    double bestdeviation = HUGE_VAL;
-		    int bestidx = -1;
-		    for (int i = 0; i < face->num_fixed_sizes; ++i)
-		    {
-			double fpx =
-			    (double)face->available_sizes[i].y_ppem / 64.;
-			double dev = (fpx > pixelsize ? fpx / pixelsize :
-				pixelsize / fpx) - 1.;
-			if (bestidx < 0 || dev < bestdeviation ||
-				(fpx > fixedpixelsize &&
-				 bestdeviation > maxunscaleddeviation))
-			{
-			    fixedpixelsize = fpx;
-			    bestdeviation = dev;
-			    bestidx = i;
-			}
-		    }
-		    if (FT_Select_Size(face, bestidx) != 0)
-		    {
-			PSC_Log_msg(PSC_L_WARNING,
-				"Cannot select best matching font size");
-			ismatch = 0;
-		    }
-		    if (bestdeviation <= maxunscaleddeviation)
-		    {
-			pixelsize = fixedpixelsize;
-		    }
-		}
-		else if (FT_Set_Char_Size(face, 0,
-			    (unsigned)(64.0 * pixelsize), 0, 0) != 0)
-		{
-		    PSC_Log_msg(PSC_L_WARNING, "Cannot set desired font size");
-		    ismatch = 0;
+		    fixedpixelsize = fpx;
+		    bestdeviation = dev;
+		    bestidx = i;
 		}
 	    }
-	    else
+	    if (FT_Select_Size(face, bestidx) != 0)
 	    {
-		PSC_Log_fmt(PSC_L_WARNING, "Cannot open font file %s",
-			(const char *)fontfile);
-		ismatch = 0;
+		PSC_Log_msg(PSC_L_WARNING,
+			"Cannot select best matching font size");
+		FT_Done_Face(face);
+		return 0;
+	    }
+	    if (bestdeviation <= maxunscaleddeviation)
+	    {
+		pixelsize = fixedpixelsize;
 	    }
 	}
-	if (ismatch)
+	else if (FT_Set_Char_Size(face, 0,
+		    (unsigned)(64.0 * pixelsize), 0, 0) != 0)
 	{
-	    if (fixedpixelsize && fixedpixelsize != pixelsize)
-	    {
-		PSC_Log_fmt(PSC_L_INFO, "Font `%s:pixelsize=%.2f' "
-			"(scaled from pixelsize=%.2f) found in `%s'",
-			(const char *)foundfamily, pixelsize, fixedpixelsize,
-			(const char *)fontfile);
-	    }
-	    else
-	    {
-		PSC_Log_fmt(PSC_L_INFO, "Font `%s:pixelsize=%.2f' "
-			"found in `%s'", (const char *)foundfamily, pixelsize,
-			(const char *)fontfile);
-	    }
+	    PSC_Log_msg(PSC_L_WARNING, "Cannot set desired font size");
+	    FT_Done_Face(face);
+	    return 0;
 	}
-	else
-	{
-	    free(id);
-	    id = 0;
-	}
-	FcPatternDestroy(fcfont);
-	fcfont = 0;
     }
-    PSC_ListIterator_destroy(pi);
-    PSC_List_destroy(patterns);
-
-    if (cached)
+    else
     {
-	Font_done();
-	++cached->refcnt;
-	return cached;
+	PSC_Log_fmt(PSC_L_WARNING, "Cannot open font file %s", file);
+	return 0;
     }
 
-    if (!ismatch)
+    char *family = 0;
+    FcPatternGetString(pattern, FC_FAMILY, 0, (FcChar8 **)&family);
+    if (fixedpixelsize && fixedpixelsize != pixelsize)
     {
-	PSC_Log_fmt(PSC_L_WARNING, "No matching font found for `%s'", pattern);
+	PSC_Log_fmt(PSC_L_INFO, "Font `%s:pixelsize=%.2f' "
+		"(scaled from pixelsize=%.2f) found in `%s'",
+		family, pixelsize, fixedpixelsize, file);
+    }
+    else
+    {
+	PSC_Log_fmt(PSC_L_INFO, "Font `%s:pixelsize=%.2f' "
+		"found in `%s'", family, pixelsize, file);
     }
 
     uint8_t subpixelbits;
@@ -325,6 +220,7 @@ Font *Font_create(const char *pattern, const FontOptions *options)
 
     if (id) PSC_Log_fmt(PSC_L_DEBUG, "Font id: %s", id);
     self->id = id;
+    self->pattern = pattern;
     self->face = face;
     double scale = 0;
     if (fixedpixelsize)
@@ -332,10 +228,8 @@ Font *Font_create(const char *pattern, const FontOptions *options)
 	self->glyphtype = face->face_flags & FT_FACE_FLAG_COLOR ?
 	    FGT_BITMAP_BGRA : FGT_BITMAP_GRAY;
 	scale = pixelsize / fixedpixelsize;
-	face->size->metrics.x_scale = 
-	    face->size->metrics.x_scale * scale + 1.;
-	face->size->metrics.y_scale = 
-	    face->size->metrics.y_scale * scale + 1.;
+	face->size->metrics.x_scale = face->size->metrics.x_scale * scale + 1.;
+	face->size->metrics.y_scale = face->size->metrics.y_scale * scale + 1.;
     }
     else self->glyphtype = face->face_flags & FT_FACE_FLAG_COLOR ?
 	FGT_BITMAP_BGRA : FGT_OUTLINE;
@@ -364,9 +258,185 @@ Font *Font_create(const char *pattern, const FontOptions *options)
     }
     else self->baseline = FT_MulFix(face->bbox.yMax,
 	    face->size->metrics.y_scale);
-    PSC_HashTable_set(byPattern, pattern ? pattern : "<default>", self, 0);
-    if (id) PSC_HashTable_set(byId, id, self, 0);
     return self;
+}
+
+Font *Font_create(const char *pattern, const FontOptions *options)
+{
+    if (Font_init() < 0) return 0;
+
+    Font *cached = PSC_HashTable_get(byPattern,
+	    pattern ? pattern : "<default>");
+    if (cached)
+    {
+	Font_done();
+	++cached->refcnt;
+	return cached;
+    }
+    PSC_List *patterns = 0;
+    PSC_ListIterator *pi = 0;
+    if (pattern)
+    {
+	patterns = PSC_List_fromString(pattern, ",");
+	pi = PSC_List_iterator(patterns);
+    }
+
+    int ismatch = 0;
+    double pixelsize = defaultpixelsize;
+    int defstep = 1;
+    while (!ismatch && ((pi && PSC_ListIterator_moveNext(pi)) || defstep--))
+    {
+	const char *patstr = defstep ? PSC_ListIterator_current(pi) : "";
+	FcPattern *fcpat;
+	if (*patstr)
+	{
+	    PSC_Log_fmt(PSC_L_DEBUG, "Looking for font: %s", patstr);
+	    fcpat = FcNameParse((FcChar8 *)patstr);
+	    double reqsize = 0;
+	    double reqpxsize = 0;
+	    FcPatternGetDouble(fcpat, FC_SIZE, 0, &reqsize);
+	    FcPatternGetDouble(fcpat, FC_PIXEL_SIZE, 0, &reqpxsize);
+	    if (!reqsize && !reqpxsize)
+	    {
+		FcPatternAddDouble(fcpat, FC_PIXEL_SIZE, pixelsize);
+	    }
+	    FcConfigSubstitute(0, fcpat, FcMatchPattern);
+	    FcDefaultSubstitute(fcpat);
+	    FcPatternGetDouble(fcpat, FC_PIXEL_SIZE, 0, &pixelsize);
+	}
+	else
+	{
+	    PSC_Log_msg(PSC_L_DEBUG, "Looking for default font");
+	    fcpat = defaultpat;
+	}
+	FcResult result;
+	FcPattern *fcfont = FcFontMatch(0, fcpat, &result);
+	ismatch = (result == FcResultMatch);
+	FcChar8 *foundfamily = 0;
+	if (ismatch) FcPatternGetString(fcfont, FC_FAMILY, 0, &foundfamily);
+	if (ismatch && *patstr)
+	{
+	    FcChar8 *reqfamily = 0;
+	    FcPatternGetString(fcpat, FC_FAMILY, 0, &reqfamily);
+	    if (reqfamily && (!foundfamily ||
+			strcmp((const char *)reqfamily,
+			    (const char *)foundfamily)))
+	    {
+		ismatch = 0;
+	    }
+	}
+	FcChar8 *fontfile = 0;
+	int fontindex = 0;
+	if (ismatch)
+	{
+	    FcPatternGetString(fcfont, FC_FILE, 0, &fontfile);
+	    FcPatternGetInteger(fcfont, FC_INDEX, 0, &fontindex);
+	    if (!fontfile)
+	    {
+		PSC_Log_msg(PSC_L_WARNING, "Found font without a file");
+		ismatch = 0;
+	    }
+	}
+	if (ismatch)
+	{
+	    char *id = createFontId((const char *)fontfile,
+		    fontindex, pixelsize);
+	    cached = PSC_HashTable_get(byId, id);
+	    if (cached)
+	    {
+		if (fcpat != defaultpat) FcPatternDestroy(fcpat);
+		FcPatternDestroy(fcfont);
+		free(id);
+		Font_done();
+		++cached->refcnt;
+		return cached;
+	    }
+
+	    Font *self = createFromFile((const char *)fontfile, fontindex,
+		    id, fcpat, options, pixelsize);
+	    if (self)
+	    {
+		FcPatternDestroy(fcfont);
+		PSC_ListIterator_destroy(pi);
+		PSC_List_destroy(patterns);
+		PSC_HashTable_set(byPattern,
+			pattern ? pattern : "<default>", self, 0);
+		if (id) PSC_HashTable_set(byId, id, self, 0);
+		return self;
+	    }
+	    else
+	    {
+		if (fcpat != defaultpat) FcPatternDestroy(fcpat);
+		FcPatternDestroy(fcfont);
+		free(id);
+		id = 0;
+		ismatch = 0;
+	    }
+	}
+    }
+    PSC_ListIterator_destroy(pi);
+    PSC_List_destroy(patterns);
+    Font_done();
+    PSC_Log_fmt(PSC_L_ERROR, "No matching font found for `%s'", pattern);
+    return 0;
+}
+
+Font *Font_createVariant(Font *font, double pixelsize, FontStyle style,
+	const FontOptions *options)
+{
+    if (Font_init() < 0) return 0;
+
+    FcPattern *pattern = FcPatternDuplicate(font->pattern);
+    FcPatternDel(pattern, FC_STYLE);
+    FcPatternDel(pattern, FC_SIZE);
+    FcPatternDel(pattern, FC_PIXEL_SIZE);
+    FcPatternDel(pattern, FC_WEIGHT);
+    FcPatternDel(pattern, FC_SLANT);
+    FcPatternAddDouble(pattern, FC_PIXEL_SIZE, pixelsize);
+    FcPatternAddInteger(pattern, FC_WEIGHT, (style & FS_BOLD)
+	    ? FC_WEIGHT_BOLD : FC_WEIGHT_REGULAR);
+    FcPatternAddInteger(pattern, FC_SLANT, (style & FS_ITALIC)
+	    ? FC_SLANT_ITALIC : FC_SLANT_ROMAN);
+
+    FcResult result;
+    FcPattern *fcfont = FcFontMatch(0, pattern, &result);
+    char *id = 0;
+    if (result != FcResultMatch) goto error;
+
+    FcChar8 *fontfile = 0;
+    int fontindex = 0;
+    FcPatternGetString(fcfont, FC_FILE, 0, &fontfile);
+    FcPatternGetInteger(fcfont, FC_INDEX, 0, &fontindex);
+    if (!fontfile)
+    {
+	PSC_Log_msg(PSC_L_WARNING, "Found font without a file");
+	goto error;
+    }
+
+    id = createFontId((const char *)fontfile, fontindex, pixelsize);
+    Font *cached = PSC_HashTable_get(byId, id);
+    if (cached)
+    {
+	FcPatternDestroy(pattern);
+	FcPatternDestroy(fcfont);
+	free(id);
+	Font_done();
+	++cached->refcnt;
+	return cached;
+    }
+
+    Font *self = createFromFile((const char *)fontfile, fontindex,
+	    id, pattern, options, pixelsize);
+    FcPatternDestroy(fcfont);
+    if (self) return self;
+
+error:
+    FcPatternDestroy(fcfont);
+    Font_done();
+    free(id);
+    FcPatternDestroy(pattern);
+    ++font->refcnt;
+    return font;
 }
 
 Font *Font_ref(Font *font)
@@ -742,6 +812,7 @@ void Font_destroy(Font *self)
     }
     PSC_HashTableIterator_destroy(i);
     if (pat) PSC_HashTable_delete(byPattern, pat);
+    if (self->pattern != defaultpat) FcPatternDestroy(self->pattern);
     free(self->id);
     free(self);
     Font_done();
