@@ -44,6 +44,7 @@ struct TextRenderer
 static void clearRenderer(TextRenderer *self)
 {
     free(self->glyphs);
+    self->glyphs = 0;
     self->uploaded = 0;
     hb_buffer_destroy(self->hbbuffer);
     self->hbbuffer = 0;
