@@ -7,6 +7,7 @@ xmoji_MODULES=		button \
 			font \
 			hbox \
 			icons \
+			imagelabel \
 			menu \
 			nanosvg \
 			object \
