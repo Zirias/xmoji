@@ -636,8 +636,16 @@ int Font_uploadGlyphs(Font *self, uint32_t ownerid,
 	    pixelsize = 4;
 	}
 	FT_Render_Glyph(slot, FT_RENDER_MODE_NORMAL);
-	glyphs[i].width = Font_scale(self, slot->bitmap.width);
-	glyphs[i].height = Font_scale(self, slot->bitmap.rows);
+	if (slot->bitmap.buffer)
+	{
+	    glyphs[i].width = Font_scale(self, slot->bitmap.width);
+	    glyphs[i].height = Font_scale(self, slot->bitmap.rows);
+	}
+	else
+	{
+	    glyphs[i].width = 0;
+	    glyphs[i].height = 0;
+	}
 	glyphs[i].x = Font_scale(self, -slot->bitmap_left);
 	glyphs[i].y = Font_scale(self, slot->bitmap_top);
 	unsigned stride = (glyphs[i].width * pixelsize + 3) & ~3;
