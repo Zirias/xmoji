@@ -5,6 +5,7 @@ xmoji_MODULES=		button \
 			colorset \
 			command \
 			font \
+			hbox \
 			icons \
 			menu \
 			nanosvg \
