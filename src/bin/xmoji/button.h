@@ -25,6 +25,7 @@ void Button_setText(void *self, const UniStr *text) CMETHOD;
 void Button_setBorderWidth(void *self, uint8_t width) CMETHOD;
 void Button_setColors(void *self, ColorRole normal, ColorRole hover) CMETHOD;
 void Button_setLabelPadding(void *self, Box padding) CMETHOD;
+void Button_setLabelAlign(void *self, Align align) CMETHOD;
 void Button_setMinWidth(void *self, uint16_t width) CMETHOD;
 void Button_attachCommand(void *self, Command *command) CMETHOD;
 

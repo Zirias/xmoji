@@ -238,9 +238,9 @@ void Menu_addItem(void *self, void *command)
     Button_setBorderWidth(item->content, 0);
     Button_setColors(item->content, COLOR_BG_NORMAL, COLOR_BG_ACTIVE);
     Button_setLabelPadding(item->content, (Box){20, 1, 16, 1});
+    Button_setLabelAlign(item->content, AV_MIDDLE);
     Button_setMinWidth(item->content, 0);
     Widget_setPadding(item->content, (Box){0, 0, 0, 0});
-    Widget_setAlign(item->content, 0);
     Widget_setExpand(item->content, EXPAND_X);
     Widget_setContainer(item->content, self);
     Widget_show(item->content);

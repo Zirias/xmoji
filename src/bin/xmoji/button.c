@@ -44,7 +44,6 @@ static void destroy(void *obj)
 static void expose(void *obj, Rect region)
 {
     Button *self = Object_instance(obj);
-    Widget_setAlign(self->label, Widget_align(self) | AV_MIDDLE);
     Widget_invalidateRegion(self->label, region);
 }
 
@@ -161,7 +160,7 @@ Button *Button_createBase(void *derived, const char *name, void *parent)
     Widget_setPadding(self, (Box){1, 1, 1, 1});
     Widget_setExpand(self, EXPAND_NONE);
     Widget_setCursor(self, XC_HAND);
-    Widget_setAlign(self, AH_CENTER|AV_MIDDLE);
+    Widget_setAlign(self->label, AH_CENTER|AV_MIDDLE);
     Widget_setContainer(self->label, self);
     Widget_show(self->label);
 
@@ -218,6 +217,12 @@ void Button_setLabelPadding(void *self, Box padding)
 {
     Button *b = Object_instance(self);
     Widget_setPadding(b->label, padding);
+}
+
+void Button_setLabelAlign(void *self, Align align)
+{
+    Button *b = Object_instance(self);
+    Widget_setAlign(b->label, align);
 }
 
 void Button_setMinWidth(void *self, uint16_t width)
