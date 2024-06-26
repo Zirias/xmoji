@@ -9,6 +9,7 @@ xmoji_MODULES=		button \
 			menu \
 			nanosvg \
 			object \
+			pixmap \
 			scrollbox \
 			svghooks \
 			textbox \
@@ -40,6 +41,7 @@ xmoji_PKGDEPS=		fontconfig \
 			posercore \
 			xcb \
 			xcb-cursor \
+			xcb-image \
 			xcb-render \
 			xcb-xkb \
 			xkbcommon \
