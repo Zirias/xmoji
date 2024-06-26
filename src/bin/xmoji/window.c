@@ -882,6 +882,27 @@ Window *Window_createBase(void *derived, const char *name,
 	CHECK(xcb_change_property(c, XCB_PROP_MODE_REPLACE, self->w,
 		    A(_NET_WM_WINDOW_TYPE), XCB_ATOM_ATOM, 32, 1, &wmtype),
 		"Cannot set window type for 0x%x", (unsigned)self->w);
+	MwmHints mwmhints = {
+	    .flags = MWM_HINTS_FUNCTIONS | MWM_HINTS_DECORATIONS,
+	    .functions = MWM_FUNC_ANY,
+	    .decorations = MWM_DECOR_ANY,
+	    .input_mode = 0,
+	    .status = 0
+	};
+	if (wtype == WF_WINDOW_DIALOG)
+	{
+	    mwmhints.functions &= ~(MWM_FUNC_MINIMIZE | MWM_FUNC_CLOSE);
+	    mwmhints.decorations &= ~(MWM_DECOR_MINIMIZE);
+	}
+	if (flags & WF_FIXED_SIZE)
+	{
+	    mwmhints.functions &= ~(MWM_FUNC_RESIZE | MWM_FUNC_MAXIMIZE);
+	    mwmhints.decorations &= ~(MWM_DECOR_RESIZEH | MWM_DECOR_MAXIMIZE);
+	}
+	CHECK(xcb_change_property(c, XCB_PROP_MODE_REPLACE, self->w,
+		    A(_MOTIF_WM_HINTS), A(_MOTIF_WM_HINTS), 32,
+		    sizeof mwmhints >> 2, &mwmhints),
+		"Cannot set MWM hints on 0x%x", (unsigned)self->w);
 	Widget_setBackground(self, 1, COLOR_BG_NORMAL);
     }
     if (wtype != WF_WINDOW_TOOLTIP)

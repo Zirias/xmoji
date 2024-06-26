@@ -31,6 +31,7 @@ typedef enum XGlitch
     X(WM_DELETE_WINDOW) \
     X(WM_PROTOCOLS) \
     X(WM_STATE) \
+    X(_MOTIF_WM_HINTS) \
     X(_NET_WM_ICON) \
     X(_NET_WM_ICON_NAME) \
     X(_NET_WM_NAME) \
@@ -103,6 +104,38 @@ typedef struct WMSizeHints
     int32_t base_width, base_height;
     uint32_t win_gravity;
 } WMSizeHints;
+
+typedef enum MwmHintFlags
+{
+    MWM_HINTS_FUNCTIONS		= 1 << 0,
+    MWM_HINTS_DECORATIONS	= 1 << 1,
+
+    MWM_FUNC_ALL		= 1 << 0,
+    MWM_FUNC_RESIZE		= 1 << 1,
+    MWM_FUNC_MOVE		= 1 << 2,
+    MWM_FUNC_MINIMIZE		= 1 << 3,
+    MWM_FUNC_MAXIMIZE		= 1 << 4,
+    MWM_FUNC_CLOSE		= 1 << 5,
+    MWM_FUNC_ANY		= (1 << 6) - 2,
+
+    MWM_DECOR_ALL		= 1 << 0,
+    MWM_DECOR_BORDER		= 1 << 1,
+    MWM_DECOR_RESIZEH		= 1 << 2,
+    MWM_DECOR_TITLE		= 1 << 3,
+    MWM_DECOR_MENU		= 1 << 4,
+    MWM_DECOR_MINIMIZE		= 1 << 5,
+    MWM_DECOR_MAXIMIZE		= 1 << 6,
+    MWM_DECOR_ANY		= (1 << 7) - 2
+} MwmHintFlags;
+
+typedef struct MwmHints
+{
+    uint32_t flags;
+    uint32_t functions;
+    uint32_t decorations;
+    int32_t input_mode;
+    uint32_t status;
+} MwmHints;
 
 typedef enum XkbModifier
 {
