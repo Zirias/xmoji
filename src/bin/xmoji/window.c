@@ -43,7 +43,6 @@ struct Window
     void *focusWidget;
     void *hoverWidget;
     Window *tooltipWindow;
-    Window *parent;
     WindowFlags flags;
     Pos absMouse;
     Pos mouse;
@@ -68,23 +67,30 @@ struct Window
     uint16_t tmpProperties;
 };
 
+static Window *getParent(Window *self)
+{
+    Widget *parentWidget = Widget_container(self);
+    return parentWidget ? Window_fromWidget(parentWidget) : 0;
+}
+
 static void map(Window *self)
 {
     xcb_connection_t *c = X11Adapter_connection();
     WindowFlags wtype = self->flags & WF_WINDOW_TYPE;
     if (wtype == WF_WINDOW_TOOLTIP || wtype == WF_WINDOW_MENU)
     {
+	Window *parent = getParent(self);
 	Size size = Widget_minSize(self->mainWidget);
 	size.width += 2;
 	size.height += 2;
 	xcb_screen_t *s = X11Adapter_screen();
-	int16_t x = self->parent->absMouse.x - (size.width / 2);
+	int16_t x = parent->absMouse.x - (size.width / 2);
 	if (x + size.width > s->width_in_pixels)
 	{
 	    x = s->width_in_pixels - size.width;
 	}
 	if (x < 0) x = 0;
-	int16_t y = self->parent->absMouse.y - 16;
+	int16_t y = parent->absMouse.y - 16;
 	if (wtype == WF_WINDOW_TOOLTIP) y -= size.height;
 	if (wtype == WF_WINDOW_MENU && y + size.height > s->height_in_pixels)
 	{
@@ -93,14 +99,15 @@ static void map(Window *self)
 	if (y < 0)
 	{
 	    if (wtype == WF_WINDOW_TOOLTIP
-		    && self->parent->absMouse.y + 16 < s->height_in_pixels
-		    && self->parent->absMouse.y + 16 >= 0)
+		    && parent->absMouse.y + 16 < s->height_in_pixels
+		    && parent->absMouse.y + 16 >= 0)
 	    {
-		y = self->parent->absMouse.y + 16;
+		y = parent->absMouse.y + 16;
 	    }
 	    else y = 0;
 	}
-	self->absMouse = self->parent->absMouse;
+	self->absMouse = parent->absMouse;
+	self->mouse = (Pos){-1, -1};
 	self->mouseUpdate.x = self->absMouse.x - x;
 	self->mouseUpdate.y = self->absMouse.y - y;
 	CHECK(xcb_configure_window(c, self->w, XCB_CONFIG_WINDOW_X |
@@ -677,6 +684,12 @@ static void sizeRequested(void *receiver, void *sender, void *args)
 	.min_width = minSize.width,
 	.min_height = minSize.height
     };
+    if (self->flags & WF_FIXED_SIZE)
+    {
+	hints.flags |= WM_SIZE_HINT_P_MAX_SIZE;
+	hints.max_width = minSize.width;
+	hints.max_height = minSize.height;
+    }
     CHECK(xcb_change_property(X11Adapter_connection(), XCB_PROP_MODE_REPLACE,
 		self->w, XCB_ATOM_WM_NORMAL_HINTS, XCB_ATOM_WM_SIZE_HINTS,
 		32, sizeof hints >> 2, &hints),
@@ -788,10 +801,11 @@ Window *Window_createBase(void *derived, const char *name,
     self->anchorPos = (Pos){-1, -1};
     self->hideState = WS_MINIMIZED;
     Widget *parentWidget = parent ? Widget_tryCast(parent) : 0;
+    Window *parentWin = 0;
     if (parentWidget)
     {
 	Widget_setContainer(self, parentWidget);
-	self->parent = Window_fromWidget(parentWidget);
+	parentWin = Window_fromWidget(parentWidget);
     }
 
     xcb_connection_t *c = X11Adapter_connection();
@@ -825,11 +839,11 @@ Window *Window_createBase(void *derived, const char *name,
 		0, 0, 1, 1, 2, XCB_WINDOW_CLASS_INPUT_OUTPUT,
 		s->root_visual, mask, values),
 	    "Cannot create window 0x%x", (unsigned)self->w);
-    if (self->parent && wtype != WF_WINDOW_MENU)
+    if (parentWin && wtype != WF_WINDOW_MENU)
     {
 	CHECK(xcb_change_property(c, XCB_PROP_MODE_REPLACE, self->w,
 		    XCB_ATOM_WM_TRANSIENT_FOR, XCB_ATOM_WINDOW,
-		    32, 1, &self->parent->w),
+		    32, 1, &parentWin->w),
 		"Cannot set transient state for 0x%x", (unsigned)self->w);
     }
     if (wtype == WF_WINDOW_NORMAL || wtype == WF_WINDOW_DIALOG)
