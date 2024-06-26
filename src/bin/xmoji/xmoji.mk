@@ -6,6 +6,7 @@ xmoji_MODULES=		button \
 			command \
 			font \
 			hbox \
+			icon \
 			icons \
 			imagelabel \
 			menu \

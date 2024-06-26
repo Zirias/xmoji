@@ -59,6 +59,12 @@ Size Pixmap_size(const Pixmap *self)
     return self->size;
 }
 
+const unsigned char *Pixmap_bitmap(const Pixmap *self, size_t *size)
+{
+    if (size) *size = self->datasz;
+    return self->data;
+}
+
 void Pixmap_render(Pixmap *self, xcb_render_picture_t picture, Pos pos)
 {
     xcb_connection_t *c = X11Adapter_connection();

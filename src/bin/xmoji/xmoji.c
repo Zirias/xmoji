@@ -1,6 +1,7 @@
 #include "button.h"
 #include "command.h"
 #include "hbox.h"
+#include "icon.h"
 #include "icons.h"
 #include "imagelabel.h"
 #include "menu.h"
@@ -88,10 +89,22 @@ static int startup(void *app)
     Menu_addItem(menu, hideCommand);
     Menu_addItem(menu, quitCommand);
 
+    Icon *appIcon = Icon_create();
+    Pixmap *pm = Pixmap_createFromPng(icon48, icon48sz);
+    Icon_add(appIcon, pm);
+    Pixmap_destroy(pm);
+    pm = Pixmap_createFromPng(icon32, icon32sz);
+    Icon_add(appIcon, pm);
+    Pixmap_destroy(pm);
+    pm = Pixmap_createFromPng(icon16, icon16sz);
+    Icon_add(appIcon, pm);
+    Pixmap_destroy(pm);
+
     Window *win = Window_create("mainWindow", 0, self);
     self->mainWindow = win;
     Window_setTitle(win, "Xmoji 😀 äöüß");
     Widget_setContextMenu(win, menu);
+    Icon_apply(appIcon, win);
 
     ScrollBox *scroll = ScrollBox_create("mainScrollBox", win);
     VBox *box = VBox_create(scroll);
@@ -153,6 +166,7 @@ static int startup(void *app)
     Window *aboutDlg = Window_create("aboutDialog",
 	    WF_WINDOW_DIALOG|WF_FIXED_SIZE, win);
     Window_setTitle(aboutDlg, "About Xmoji");
+    Icon_apply(appIcon, aboutDlg);
     Widget_setFontResName(aboutDlg, 0, 0, 0);
     Font *deffont = Widget_font(aboutDlg);
     HBox *hbox = HBox_create(aboutDlg);
@@ -203,6 +217,7 @@ static int startup(void *app)
     Window_setMainWidget(aboutDlg, hbox);
     self->aboutDialog = aboutDlg;
 
+    Icon_destroy(appIcon);
     Widget_show(win);
     return 0;
 }
