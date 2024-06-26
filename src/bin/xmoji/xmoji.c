@@ -1,6 +1,10 @@
 #include "button.h"
 #include "command.h"
+#include "hbox.h"
+#include "icons.h"
+#include "imagelabel.h"
 #include "menu.h"
+#include "pixmap.h"
 #include "scrollbox.h"
 #include "textbox.h"
 #include "textlabel.h"
@@ -21,7 +25,26 @@ typedef struct Xmoji
 {
     Object base;
     Window *mainWindow;
+    Window *aboutDialog;
 } Xmoji;
+
+static void onabout(void *receiver, void *sender, void *args)
+{
+    (void)sender;
+    (void)args;
+
+    Xmoji *self = receiver;
+    Widget_show(self->aboutDialog);
+}
+
+static void onhide(void *receiver, void *sender, void *args)
+{
+    (void)sender;
+    (void)args;
+
+    Xmoji *self = receiver;
+    Widget_hide(self->mainWindow);
+}
 
 static void onquit(void *receiver, void *sender, void *args)
 {
@@ -32,31 +55,36 @@ static void onquit(void *receiver, void *sender, void *args)
     X11App_quit();
 }
 
-static void onhide(void *receiver, void *sender, void *args)
+static void onaboutok(void *receiver, void *sender, void *args)
 {
-    (void)receiver;
     (void)sender;
     (void)args;
 
     Xmoji *self = receiver;
-    Widget_hide(self->mainWindow);
+    Window_close(self->aboutDialog);
 }
 
 static int startup(void *app)
 {
     Xmoji *self = Object_instance(app);
 
-    UniStr(quit, "Quit");
-    UniStr(quitdesc, "Exit the application");
-    Command *quitCommand = Command_create(quit, quitdesc, self);
-    PSC_Event_register(Command_triggered(quitCommand), self, onquit, 0);
+    UniStr(about, "About");
+    UniStr(aboutdesc, "About Xmoji");
+    Command *aboutCommand = Command_create(about, aboutdesc, self);
+    PSC_Event_register(Command_triggered(aboutCommand), self, onabout, 0);
 
     UniStr(hide, "Hide");
     UniStr(hidedesc, "Minimize the application window");
     Command *hideCommand = Command_create(hide, hidedesc, self);
     PSC_Event_register(Command_triggered(hideCommand), self, onhide, 0);
 
+    UniStr(quit, "Quit");
+    UniStr(quitdesc, "Exit the application");
+    Command *quitCommand = Command_create(quit, quitdesc, self);
+    PSC_Event_register(Command_triggered(quitCommand), self, onquit, 0);
+
     Menu *menu = Menu_create("mainMenu", self);
+    Menu_addItem(menu, aboutCommand);
     Menu_addItem(menu, hideCommand);
     Menu_addItem(menu, quitCommand);
 
@@ -121,6 +149,59 @@ static int startup(void *app)
     Widget_show(scroll);
     Window_setMainWidget(win, scroll);
     Command_attach(quitCommand, win, Window_closed);
+
+    Window *aboutDlg = Window_create("aboutDialog",
+	    WF_WINDOW_DIALOG|WF_FIXED_SIZE, win);
+    Window_setTitle(aboutDlg, "About Xmoji");
+    Widget_setFontResName(aboutDlg, 0, 0, 0);
+    Font *deffont = Widget_font(aboutDlg);
+    HBox *hbox = HBox_create(aboutDlg);
+    HBox_setSpacing(hbox, 0);
+    Widget_setPadding(hbox, (Box){0, 0, 0, 0});
+    Pixmap *logo = Pixmap_createFromPng(icon256, icon256sz);
+    ImageLabel *img = ImageLabel_create("logoLabel", hbox);
+    ImageLabel_setPixmap(img, logo);
+    Pixmap_destroy(logo);
+    Widget_setPadding(img, (Box){0, 0, 0, 0});
+    Widget_show(img);
+    HBox_addWidget(hbox, img);
+
+    box = VBox_create(hbox);
+    Widget_setPadding(box, (Box){12, 6, 6, 6});
+    UniStr(heading, "Xmoji v0.0α");
+    label = TextLabel_create("aboutHeading", box);
+    TextLabel_setText(label, heading);
+    Font *hfont = Font_createVariant(deffont, Font_pixelsize(deffont) * 2,
+	    FS_BOLD, 0);
+    Widget_setFont(label, hfont);
+    Font_destroy(hfont);
+    Widget_setAlign(label, AV_MIDDLE);
+    Widget_show(label);
+    VBox_addWidget(box, label);
+    UniStr(abouttxt, "X11 Emoji Keyboard\n\n"
+	    "License: BSD 2-clause\n"
+	    "Author: Felix Palmen <felix@palmen-it.de>\n"
+	    "WWW: https://github.com/Zirias/xmoji");
+    label = TextLabel_create("aboutText", box);
+    TextLabel_setText(label, abouttxt);
+    Widget_setAlign(label, AV_MIDDLE);
+    Widget_show(label);
+    VBox_addWidget(box, label);
+
+    button = Button_create("okButton", box);
+    UniStr(ok, "OK");
+    Button_setText(button, ok);
+    Widget_setAlign(button, AH_RIGHT|AV_BOTTOM);
+    Widget_show(button);
+    PSC_Event_register(Button_clicked(button), self, onaboutok, 0);
+    VBox_addWidget(box, button);
+
+    Widget_show(box);
+    HBox_addWidget(hbox, box);
+
+    Widget_show(hbox);
+    Window_setMainWidget(aboutDlg, hbox);
+    self->aboutDialog = aboutDlg;
 
     Widget_show(win);
     return 0;
