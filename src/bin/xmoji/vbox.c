@@ -168,7 +168,7 @@ static int clicked(void *obj, const ClickEvent *event)
     return handled;
 }
 
-void layout(VBox *self, int updateMinSize)
+static void layout(VBox *self, int updateMinSize)
 {
     PSC_ListIterator *i = PSC_List_iterator(self->items);
 
@@ -206,8 +206,23 @@ void layout(VBox *self, int updateMinSize)
 	Widget_setSize(item->widget, itemSize);
 	Size realSize = Widget_size(item->widget);
 	Pos itemPos = contentOrigin;
-	itemPos.x += (itemSize.width - realSize.width) / 2;
-	itemPos.y += (itemSize.height - realSize.height) / 2;
+	Align itemAlign = Widget_align(item->widget);
+	if (itemAlign & AH_CENTER)
+	{
+	    itemPos.x += (itemSize.width - realSize.width) / 2;
+	}
+	else if (itemAlign & AH_RIGHT)
+	{
+	    itemPos.x += itemSize.width - realSize.width;
+	}
+	if (itemAlign & AV_MIDDLE)
+	{
+	    itemPos.y += (itemSize.height - realSize.height) / 2;
+	}
+	else if (itemAlign & AV_BOTTOM)
+	{
+	    itemPos.y += itemSize.height - realSize.height;
+	}
 	Widget_setOrigin(item->widget, itemPos);
 	contentOrigin.y += itemSize.height + self->spacing;
     }
