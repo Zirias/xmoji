@@ -293,7 +293,7 @@ void VBox_setSpacing(void *self, uint16_t spacing)
     if (spacing != b->spacing)
     {
 	b->spacing = spacing;
-	layout(self, 1);
+	if (PSC_List_size(b->items)) layout(b, 1);
     }
 }
 
