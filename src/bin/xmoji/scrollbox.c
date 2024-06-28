@@ -122,7 +122,7 @@ static int draw(void *obj, xcb_render_picture_t picture)
     {
 	xcb_connection_t *c = X11Adapter_connection();
 	Pos origin = Widget_origin(self);
-	Color bgcol = Widget_color(self, COLOR_BG_BELOW);
+	Color bgcol = Widget_color(self, COLOR_BG_LOWEST);
 	xcb_rectangle_t rect = {
 	    origin.x + size.width - self->scrollBar.size.width - 2, origin.y,
 	    self->scrollBar.size.width + 2, size.height };

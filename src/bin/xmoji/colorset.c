@@ -36,6 +36,8 @@ static const char *reskeys[COLOR_NUMROLES][2] = {
     { "Background", "aboveBackground" },
     { "Foreground", "belowForeground" },
     { "Background", "belowBackground" },
+    { "Foreground", "lowestForeground" },
+    { "Background", "lowestBackground" },
     { "Foreground", "activeForeground" },
     { "Background", "activeBackground" },
     { "Foreground", "disabledForeground" },
@@ -59,6 +61,8 @@ static const ColorSet defcolors = {
 	0xd3d3d3ff,	// BG_ABOVE	    light gray
 	0x000000ff,	// BELOW	    black
 	0xa9a9a9ff,	// BG_BELOW	    dark gray
+	0x000000ff,	// LOWEST	    black
+	0x808080ff,	// BG_LOWEST	    web gray
 	0x2f4f4fff,	// ACTIVE	    dark slate gray
 	0xadd8e6ff,	// BG_ACTIVE	    light blue
 	0x696969ff,	// DISABLED	    dim gray

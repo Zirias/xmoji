@@ -99,6 +99,7 @@ static void layout(TabBox *self)
 	Widget_setOrigin(tab->buttonWidget, buttonPos);
 	buttonSize.height += 2;
 	tab->tabGeom = (Rect){buttonOrigin, buttonSize};
+	++tab->tabGeom.size.height;
 	buttonOrigin.x += buttonSize.width + 1;
 	Widget_setSize(tab->contentWidget, realSize);
 	Widget_setOrigin(tab->contentWidget, contentOrigin);
@@ -155,16 +156,10 @@ static int draw(void *obj, xcb_render_picture_t picture)
 	barPos.y += padding.top;
 	Color color = Widget_color(self, COLOR_BG_BELOW);
 	xcb_rectangle_t rect = { barPos.x, barPos.y, tabGeom.size.width,
-	    tabGeom.pos.y - barPos.y - 1 };
+	    tabGeom.pos.y - barPos.y };
 	CHECK(xcb_render_fill_rectangles(c, XCB_RENDER_PICT_OP_OVER,
 		    picture, Color_xcb(color), 1, &rect),
 		"Cannot draw tab bar background on 0x%x", (unsigned)picture);
-	rect.y += rect.height;
-	rect.height = 1;
-	color = Widget_color(self, COLOR_DISABLED);
-	CHECK(xcb_render_fill_rectangles(c, XCB_RENDER_PICT_OP_OVER,
-		    picture, Color_xcb(color), 1, &rect),
-		"Cannot draw tab bar separator on 0x%x", (unsigned)picture);
     }
     PSC_ListIterator *i = PSC_List_iterator(self->tabs);
     while (PSC_ListIterator_moveNext(i))
@@ -172,7 +167,7 @@ static int draw(void *obj, xcb_render_picture_t picture)
 	Tab *tab = PSC_ListIterator_current(i);
 	if (picture)
 	{
-	    Color color = Widget_color(self, COLOR_BG_NORMAL);
+	    Color color = Widget_color(self, COLOR_BG_ABOVE);
 	    xcb_rectangle_t rect = { tab->tabGeom.pos.x, tab->tabGeom.pos.y,
 		tab->tabGeom.size.width, tab->tabGeom.size.height };
 	    if (tab->index == self->hoverIndex)
@@ -181,12 +176,12 @@ static int draw(void *obj, xcb_render_picture_t picture)
 	    }
 	    else if (tab->index == self->currentIndex)
 	    {
-		color = Widget_color(self, COLOR_BG_ABOVE);
+		color = Widget_color(self, COLOR_BG_NORMAL);
 	    }
 	    else
 	    {
 		rect.y += 2;
-		rect.height -= 2;
+		rect.height -= 3;
 	    }
 	    CHECK(xcb_render_fill_rectangles(c, XCB_RENDER_PICT_OP_OVER,
 			picture, Color_xcb(color), 1, &rect),
