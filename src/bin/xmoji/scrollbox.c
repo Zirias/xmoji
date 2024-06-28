@@ -61,6 +61,7 @@ static void updateScrollbar(ScrollBox *self, Size size)
 done:
     geom.pos.y -= self->scrollPos;
     Widget_setOrigin(self->widget, geom.pos);
+    Widget_setClip(self->widget, Widget_geometry(self));
     Window *win = Window_fromWidget(self);
     if (win) Window_invalidateHover(win);
 }

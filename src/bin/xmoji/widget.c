@@ -41,6 +41,7 @@ struct Widget
     Widget *container;
     ColorSet *colorSet;
     Rect geometry;
+    Rect clipGeometry;
     Rect damages[MAXDAMAGES];
     Box padding;
     Size maxSize;
@@ -292,9 +293,42 @@ void Widget_setContainer(void *self, void *container)
     }
 }
 
+static Rect getClipRect(Widget *self, int pad)
+{
+    Box clipBox = Box_fromRect((pad
+		? Rect_pad(self->geometry, self->padding)
+		: self->geometry));
+    Window *win = Window_fromWidget(self);
+    Widget *winw = win ? Widget_cast(win) : 0;
+    Widget *w = self;
+    while (w && w != winw)
+    {
+	if (w->clipGeometry.size.width)
+	{
+	    Box parentBox = Box_fromRect(w->clipGeometry);
+	    if (parentBox.left > clipBox.left)
+		clipBox.left = parentBox.left;
+	    if (parentBox.right < clipBox.right)
+		clipBox.right = parentBox.right;
+	    if (parentBox.top > clipBox.top)
+		clipBox.top = parentBox.top;
+	    if (parentBox.bottom < clipBox.bottom)
+		clipBox.bottom = parentBox.bottom;
+	}
+	w = w->container;
+    }
+    return (Rect){
+	{ clipBox.left, clipBox.top },
+	{ clipBox.right > clipBox.left ?
+	    clipBox.right - clipBox.left : 0,
+	    clipBox.bottom > clipBox.top ?
+	    clipBox.bottom - clipBox.top : 0 }};
+
+}
+
 static void setContentClipArea(Widget *self, xcb_connection_t *c)
 {
-    Rect contentArea = Rect_pad(self->geometry, self->padding);
+    Rect contentArea = getClipRect(self, 1);
     if (self->ndamages < 0)
     {
 	xcb_rectangle_t cliprect = {
@@ -349,8 +383,8 @@ int Widget_draw(void *self)
     xcb_connection_t *c = X11Adapter_connection();
     if (w->drawBackground)
     {
-	xcb_rectangle_t clip = {w->geometry.pos.x, w->geometry.pos.y,
-	    w->geometry.size.width, w->geometry.size.height};
+	Rect r = getClipRect(w, 0);
+	xcb_rectangle_t clip = {r.pos.x, r.pos.y, r.size.width, r.size.height};
 	CHECK(xcb_render_set_picture_clip_rectangles(c,
 		    w->picture, 0, 0, 1, &clip),
 		"Cannot set clipping region on 0x%x",
@@ -820,6 +854,12 @@ void Widget_showWindow(void *self)
 void Widget_hideWindow(void *self)
 {
     dohide(Object_instance(self), 1);
+}
+
+void Widget_setClip(void *self, Rect clip)
+{
+    Widget *w = Object_instance(self);
+    w->clipGeometry = clip;
 }
 
 void Widget_offerFont(void *self, Font *font)
