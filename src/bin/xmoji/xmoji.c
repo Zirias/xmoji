@@ -7,6 +7,7 @@
 #include "menu.h"
 #include "pixmap.h"
 #include "scrollbox.h"
+#include "tabbox.h"
 #include "textbox.h"
 #include "textlabel.h"
 #include "unistr.h"
@@ -106,7 +107,10 @@ static int startup(void *app)
     Widget_setContextMenu(win, menu);
     Icon_apply(appIcon, win);
 
-    ScrollBox *scroll = ScrollBox_create("mainScrollBox", win);
+    TabBox *tabs = TabBox_create("mainTabBox", win);
+    Widget_setPadding(tabs, (Box){0, 0, 0, 0});
+
+    ScrollBox *scroll = ScrollBox_create("mainScrollBox", tabs);
     VBox *box = VBox_create(scroll);
 
     TextLabel *label = TextLabel_create("helloLabel", box);
@@ -127,22 +131,6 @@ static int startup(void *app)
     Widget_show(input);
     VBox_addWidget(box, input);
 
-    Button *button = Button_create("hideButton", box);
-    Button_attachCommand(button, hideCommand);
-    Widget_setAlign(button, AH_CENTER);
-    Widget_show(button);
-    VBox_addWidget(box, button);
-
-    label = TextLabel_create("emojiLabel", box);
-    Widget_setFontResName(label, "emojiFont", "emoji", 0);
-    UniStr(emojis, "😀🤡🇩🇪👺🧩🔮🐅🍻🧑🏾‍🤝‍🧑🏻");
-    UniStr(emojitip, "These emojis are picked randomly ;)");
-    TextLabel_setText(label, emojis);
-    Widget_setTooltip(label, emojitip, 0);
-    Widget_setAlign(label, AH_CENTER|AV_MIDDLE);
-    Widget_show(label);
-    VBox_addWidget(box, label);
-
     input = TextBox_create("lowerBox", box);
     TextBox_setPlaceholder(input, clickhere);
     UniStr(prefilled, "This textbox is prefilled!");
@@ -150,17 +138,58 @@ static int startup(void *app)
     Widget_show(input);
     VBox_addWidget(box, input);
 
-    button = Button_create("quitButton", box);
-    Button_attachCommand(button, quitCommand);
-    Widget_setAlign(button, AH_CENTER);
-    Widget_show(button);
-    VBox_addWidget(box, button);
-
     Widget_show(box);
     ScrollBox_setWidget(scroll, box);
 
     Widget_show(scroll);
-    Window_setMainWidget(win, scroll);
+    TextLabel *tablabel = TextLabel_create("startTab", tabs);
+    UniStr(start, "Start");
+    TextLabel_setText(tablabel, start);
+    Widget_show(tablabel);
+
+    Widget_show(scroll);
+    TabBox_addTab(tabs, tablabel, scroll);
+
+    label = TextLabel_create("emojiLabel", tabs);
+    Widget_setFontResName(label, "emojiFont", "emoji", 0);
+    UniStr(emojis, "😀🤡🇩🇪👺🧩🔮🐅🍻🧑🏾‍🤝‍🧑🏻");
+    UniStr(emojitip, "These emojis are picked randomly ;)");
+    TextLabel_setText(label, emojis);
+    Widget_setTooltip(label, emojitip, 0);
+    Widget_setAlign(label, AH_CENTER|AV_MIDDLE);
+    Widget_show(label);
+
+    tablabel = TextLabel_create("emojiTab", tabs);
+    UniStr(emojitab, "Emojis");
+    TextLabel_setText(tablabel, emojitab);
+    Widget_show(tablabel);
+
+    TabBox_addTab(tabs, tablabel, label);
+
+    box = VBox_create(tabs);
+
+    Button *button = Button_create("hideButton", box);
+    Button_attachCommand(button, hideCommand);
+    Widget_setAlign(button, AH_CENTER|AV_MIDDLE);
+    Widget_show(button);
+    VBox_addWidget(box, button);
+
+    button = Button_create("quitButton", box);
+    Button_attachCommand(button, quitCommand);
+    Widget_setAlign(button, AH_CENTER|AV_MIDDLE);
+    Widget_show(button);
+    VBox_addWidget(box, button);
+
+    tablabel = TextLabel_create("functionsTab", tabs);
+    UniStr(functions, "Functions");
+    TextLabel_setText(tablabel, functions);
+    Widget_show(tablabel);
+
+    Widget_show(box);
+    TabBox_addTab(tabs, tablabel, box);
+
+    Widget_show(tabs);
+    Window_setMainWidget(win, tabs);
     Command_attach(quitCommand, win, Window_closed);
 
     Window *aboutDlg = Window_create("aboutDialog",

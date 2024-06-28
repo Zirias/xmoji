@@ -66,6 +66,9 @@ typedef struct Rect
 	&& r2.size.width + (r2.pos.x - r1.pos.x) <= r1.size.width \
 	&& r2.size.height + (r2.pos.y - r1.pos.y) <= r1.size.height)
 
+#define Rect_containsPos(r,p) (p.x >= r.pos.x && p.x < r.pos.x + r.size.width \
+	&& p.y >= r.pos.y && p.y < r.pos.y + r.size.height)
+
 typedef struct Box
 {
     int16_t left;

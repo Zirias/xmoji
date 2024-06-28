@@ -15,6 +15,7 @@ xmoji_MODULES=		button \
 			pixmap \
 			scrollbox \
 			svghooks \
+			tabbox \
 			textbox \
 			textlabel \
 			textrenderer \
