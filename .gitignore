@@ -28,6 +28,7 @@ defaults.mk
 /tools/*/test/
 /tools/*/dist/
 /tools/bin/
+emojidata.h
 icon256.h
 icon48.h
 icon32.h
