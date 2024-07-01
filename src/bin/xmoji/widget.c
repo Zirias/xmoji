@@ -374,6 +374,8 @@ int Widget_draw(void *self)
     if (!Widget_drawable(self)) return -1;
     Widget *w = Object_instance(self);
     if (!ColorSet_valid(w->colorSet) || !Widget_visible(w)) return 0;
+    Rect r = getClipRect(w, 0);
+    if (!Rect_overlaps(r, w->geometry)) return 0;
     int rc = -1;
     if (!w->ndamages)
     {
@@ -383,7 +385,6 @@ int Widget_draw(void *self)
     xcb_connection_t *c = X11Adapter_connection();
     if (w->drawBackground)
     {
-	Rect r = getClipRect(w, 0);
 	xcb_rectangle_t clip = {r.pos.x, r.pos.y, r.size.width, r.size.height};
 	CHECK(xcb_render_set_picture_clip_rectangles(c,
 		    w->picture, 0, 0, 1, &clip),
