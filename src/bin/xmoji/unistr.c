@@ -235,7 +235,7 @@ PSC_List *UniStr_splitByUtf32(const UniStr *self, const char32_t *delim)
     size_t start = 0;
     while (pos + delimlen <= self->len)
     {
-	if (!memcmp(self->str + pos, delim, delimlen))
+	if (!memcmp(self->str + pos, delim, delimlen * sizeof *self->str))
 	{
 	    if (pos == start) PSC_List_append(split, create(0, 0), destroy);
 	    else
