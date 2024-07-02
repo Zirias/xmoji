@@ -79,12 +79,16 @@ typedef struct Box
 
 #define Rect_pad(r,b) ((Rect){ \
 	.pos = { \
-	    .x = r.pos.x + b.left, \
-	    .y = r.pos.y + b.top \
+	    .x = (b.left + b.right > r.size.width) \
+		    ? r.pos.x : r.pos.x + b.left, \
+	    .y = (b.top + b.bottom > r.size.height) \
+		    ? r.pos.y : r.pos.y + b.top \
 	}, \
 	.size = { \
-	    .width = r.size.width - b.left - b.right, \
-	    .height = r.size.height - b.top - b.bottom \
+	    .width = (b.left + b.right > r.size.width) \
+		    ? r.size.width : r.size.width - b.left - b.right, \
+	    .height = (b.top + b.bottom > r.size.height) \
+		    ? r.size.height : r.size.height - b.top - b.bottom \
 	} \
     })
 
