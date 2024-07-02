@@ -1,5 +1,7 @@
 #include "button.h"
 #include "command.h"
+#include "emoji.h"
+#include "flowgrid.h"
 #include "hbox.h"
 #include "icon.h"
 #include "icons.h"
@@ -110,83 +112,41 @@ static int startup(void *app)
     TabBox *tabs = TabBox_create("mainTabBox", win);
     Widget_setPadding(tabs, (Box){0, 0, 0, 0});
 
-    ScrollBox *scroll = ScrollBox_create("mainScrollBox", tabs);
-    VBox *box = VBox_create(scroll);
+    size_t groups = EmojiGroup_numGroups();
+    for (size_t groupidx = 0; groupidx < groups; ++groupidx)
+    {
+	const EmojiGroup *group = EmojiGroup_at(groupidx);
+	TextLabel *groupLabel = TextLabel_create(0, tabs);
+	TextLabel_setText(groupLabel, Emoji_str(EmojiGroup_emojiAt(group, 0)));
+	Widget_setTooltip(groupLabel, EmojiGroup_name(group), 0);
+	Widget_setFontResName(groupLabel, "emojiFont", "emoji", 0);
+	Widget_show(groupLabel);
 
-    TextLabel *label = TextLabel_create("helloLabel", box);
-    UniStr(hello, "Hello, World!\n\n"
-	    "This is just a quick little\n"
-	    "text rendering test.\n\n"
-	    "The quick brown fox jumps over the lazy dog");
-    TextLabel_setText(label, hello);
-    Widget_setAlign(label, AH_CENTER|AV_MIDDLE);
-    Widget_show(label);
-    VBox_addWidget(box, label);
+	ScrollBox *scroll = ScrollBox_create(0, tabs);
+	FlowGrid *grid = FlowGrid_create(scroll);
+	FlowGrid_setSpacing(grid, (Size){0, 0});
+	Widget_setPadding(grid, (Box){0, 0, 0, 0});
+	Widget_setFontResName(grid, "emojiFont", "emoji", 0);
+	size_t emojis = EmojiGroup_len(group);
+	for (size_t idx = 0; idx < emojis; ++idx)
+	{
+	    const Emoji *emoji= EmojiGroup_emojiAt(group, idx);
+	    Button *emojiButton = Button_create(0, grid);
+	    Button_setText(emojiButton, Emoji_str(emoji));
+	    Button_setBorderWidth(emojiButton, 0);
+	    Button_setLabelPadding(emojiButton, (Box){0, 0, 0, 0});
+	    Button_setMinWidth(emojiButton, 0);
+	    Button_setColors(emojiButton, COLOR_BG_NORMAL, COLOR_BG_ACTIVE);
+	    Widget_setTooltip(emojiButton, Emoji_name(emoji), 0);
+	    Widget_show(emojiButton);
+	    FlowGrid_addWidget(grid, emojiButton);
+	}
+	Widget_show(grid);
+	ScrollBox_setWidget(scroll, grid);
+	Widget_show(scroll);
 
-    TextBox *input = TextBox_create("upperBox", box);
-    UniStr(clickhere, "Click here to type ...");
-    UniStr(tip, "Tip: Click in the box to type");
-    TextBox_setPlaceholder(input, clickhere);
-    Widget_setTooltip(input, tip, 0);
-    Widget_show(input);
-    VBox_addWidget(box, input);
-
-    input = TextBox_create("lowerBox", box);
-    TextBox_setPlaceholder(input, clickhere);
-    UniStr(prefilled, "This textbox is prefilled!");
-    TextBox_setText(input, prefilled);
-    Widget_show(input);
-    VBox_addWidget(box, input);
-
-    Widget_show(box);
-    ScrollBox_setWidget(scroll, box);
-
-    Widget_show(scroll);
-    TextLabel *tablabel = TextLabel_create("startTab", tabs);
-    UniStr(start, "Start");
-    TextLabel_setText(tablabel, start);
-    Widget_show(tablabel);
-
-    Widget_show(scroll);
-    TabBox_addTab(tabs, tablabel, scroll);
-
-    label = TextLabel_create("emojiLabel", tabs);
-    Widget_setFontResName(label, "emojiFont", "emoji", 0);
-    UniStr(emojis, "😀🤡🇩🇪👺🧩🔮🐅🍻🧑🏾‍🤝‍🧑🏻");
-    UniStr(emojitip, "These emojis are picked randomly ;)");
-    TextLabel_setText(label, emojis);
-    Widget_setTooltip(label, emojitip, 0);
-    Widget_setAlign(label, AH_CENTER|AV_MIDDLE);
-    Widget_show(label);
-
-    tablabel = TextLabel_create("emojiTab", tabs);
-    UniStr(emojitab, "Emojis");
-    TextLabel_setText(tablabel, emojitab);
-    Widget_show(tablabel);
-
-    TabBox_addTab(tabs, tablabel, label);
-
-    box = VBox_create(tabs);
-
-    Button *button = Button_create("hideButton", box);
-    Button_attachCommand(button, hideCommand);
-    Widget_setAlign(button, AH_CENTER|AV_MIDDLE);
-    Widget_show(button);
-    VBox_addWidget(box, button);
-
-    button = Button_create("quitButton", box);
-    Button_attachCommand(button, quitCommand);
-    Widget_setAlign(button, AH_CENTER|AV_MIDDLE);
-    Widget_show(button);
-    VBox_addWidget(box, button);
-
-    tablabel = TextLabel_create("functionsTab", tabs);
-    UniStr(functions, "Functions");
-    TextLabel_setText(tablabel, functions);
-    Widget_show(tablabel);
-
-    Widget_show(box);
-    TabBox_addTab(tabs, tablabel, box);
+	TabBox_addTab(tabs, groupLabel, scroll);
+    }
 
     Widget_show(tabs);
     Window_setMainWidget(win, tabs);
@@ -209,10 +169,10 @@ static int startup(void *app)
     Widget_show(img);
     HBox_addWidget(hbox, img);
 
-    box = VBox_create(hbox);
+    VBox *box = VBox_create(hbox);
     Widget_setPadding(box, (Box){12, 6, 6, 6});
     UniStr(heading, "Xmoji v0.0α");
-    label = TextLabel_create("aboutHeading", box);
+    TextLabel *label = TextLabel_create("aboutHeading", box);
     TextLabel_setText(label, heading);
     Font *hfont = Font_createVariant(deffont, Font_pixelsize(deffont) * 2,
 	    FS_BOLD, 0);
@@ -231,7 +191,7 @@ static int startup(void *app)
     Widget_show(label);
     VBox_addWidget(box, label);
 
-    button = Button_create("okButton", box);
+    Button *button = Button_create("okButton", box);
     UniStr(ok, "OK");
     Button_setText(button, ok);
     Widget_setAlign(button, AH_RIGHT|AV_BOTTOM);
