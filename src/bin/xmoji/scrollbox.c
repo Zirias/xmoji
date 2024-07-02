@@ -290,16 +290,20 @@ static void sizeRequested(void *receiver, void *sender, void *args)
     (void)args;
 
     ScrollBox *self = receiver;
-    self->scrollSize = Widget_minSize(sender);
+    Size scrollSize = Widget_minSize(sender);
     Size curSize = Widget_size(sender);
-    if (self->scrollSize.height > curSize.height)
+    if (scrollSize.height > curSize.height)
     {
-	curSize.height = self->scrollSize.height;
+	curSize.height = scrollSize.height;
 	Widget_setSize(sender, curSize);
     }
-    self->minSize.width = self->scrollSize.width
-	+ self->scrollBar.size.width + 2;
+    self->minSize.width = scrollSize.width + self->scrollBar.size.width + 2;
     Widget_requestSize(self);
+    if (memcmp(&self->scrollSize, &scrollSize, sizeof self->scrollSize))
+    {
+	self->scrollSize = scrollSize;
+	updateScrollbar(self, Widget_size(self));
+    }
 }
 
 ScrollBox *ScrollBox_createBase(void *derived, const char *name, void *parent)
