@@ -48,6 +48,7 @@ struct Window
     Pos mouse;
     Pos mouseUpdate;
     Pos anchorPos;
+    Size newSize;
     Rect damages[MAXDAMAGES];
     MouseButton anchorButton;
     WindowState state;
@@ -395,13 +396,7 @@ static void configureNotify(void *receiver, void *sender, void *args)
 
     Window *self = receiver;
     xcb_configure_notify_event_t *ev = args;
-    Size oldsz = Widget_size(self);
-    Size newsz = (Size){ ev->width, ev->height };
-
-    if (memcmp(&oldsz, &newsz, sizeof oldsz))
-    {
-	Widget_setWindowSize(self, newsz);
-    }
+    self->newSize = (Size){ ev->width, ev->height };
 }
 
 static void motionNotify(void *receiver, void *sender, void *args)
@@ -547,6 +542,15 @@ static void doupdates(void *receiver, void *sender, void *args)
     (void)args;
 
     Window *self = receiver;
+    if (self->newSize.width && self->newSize.height)
+    {
+	Size oldsz = Widget_size(self);
+	if (memcmp(&oldsz, &self->newSize, sizeof oldsz))
+	{
+	    Widget_setWindowSize(self, self->newSize);
+	}
+	self->newSize = (Size){0, 0};
+    }
     if (!self->mainWidget || !self->mapped) return;
     if (memcmp(&self->mouse, &self->mouseUpdate, sizeof self->mouse))
     {
@@ -636,7 +640,6 @@ static void sizeChanged(void *receiver, void *sender, void *args)
 		    self->w, mask, values),
 		"Cannot configure window 0x%x", (unsigned)self->w);
     }
-    if (self->mainWidget) Widget_setSize(self->mainWidget, ea->newSize);
     if (self->p && (ea->newSize.width > ea->oldSize.width
 		|| ea->newSize.height > ea->oldSize.height))
     {
@@ -655,6 +658,7 @@ static void sizeChanged(void *receiver, void *sender, void *args)
 		(unsigned)self->w);
 	Widget_setDrawable(self, self->p);
     }
+    if (self->mainWidget) Widget_setSize(self->mainWidget, ea->newSize);
 }
 
 static void sizeRequested(void *receiver, void *sender, void *args)
