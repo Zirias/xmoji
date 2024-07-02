@@ -812,6 +812,27 @@ void Widget_invalidateRegion(void *self, Rect region)
     Widget *w = Object_instance(self);
     if (w->ndamages < 0) return;
     if (!Rect_overlaps(region, w->geometry)) return;
+    Rect r = getClipRect(w, 0);
+    if (!Rect_overlaps(region, r)) return;
+    Rect tmp = region;
+    if (tmp.pos.x < r.pos.x)
+    {
+	region.pos.x = r.pos.x;
+	region.size.width -= r.pos.x - tmp.pos.x;
+    }
+    if (tmp.pos.y < r.pos.y)
+    {
+	region.pos.y = r.pos.y;
+	region.size.height -= r.pos.y - tmp.pos.y;
+    }
+    if (tmp.pos.x + tmp.size.width > r.pos.x + r.size.width)
+    {
+	region.size.width = tmp.pos.x + tmp.size.width - region.pos.x;
+    }
+    if (tmp.pos.y + tmp.size.height > r.pos.y + r.size.height)
+    {
+	region.size.height = tmp.pos.y + tmp.size.height - region.pos.y;
+    }
     if (hasDamage(w, region)) return;
     if (!w->explicitDrawable && w->container
 	    && !hasDamage(w->container, region))
