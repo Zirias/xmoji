@@ -7,6 +7,8 @@
 static void destroy(void *obj);
 static void expose(void *obj, Rect region);
 static int draw(void *obj, xcb_render_picture_t picture);
+static int show(void *obj);
+static int hide(void *obj);
 static Size minSize(const void *obj);
 static void leave(void *obj);
 static void unselect(void *obj);
@@ -15,7 +17,7 @@ static Widget *childAt(void *obj, Pos pos);
 static int clicked(void *obj, const ClickEvent *event);
 
 static MetaTabBox mo = MetaTabBox_init(
-	expose, draw, 0, 0,
+	expose, draw, show, hide,
 	0, 0, 0, leave, 0, 0, 0, unselect, setFont, childAt,
 	minSize, 0, clicked, 0,
 	"TabBox", destroy);
@@ -39,6 +41,7 @@ struct TabBox
     Size minSize;
     int currentIndex;
     int hoverIndex;
+    int shown;
 };
 
 static void destroy(void *obj)
@@ -50,6 +53,7 @@ static void destroy(void *obj)
 
 static void layout(TabBox *self)
 {
+    if (!self->shown) return;
     PSC_ListIterator *i = PSC_List_iterator(self->tabs);
     Size barSize = (Size){0, 0};
     Size contentSize = (Size){0, 0};
@@ -101,10 +105,11 @@ static void layout(TabBox *self)
 	tab->tabGeom = (Rect){buttonOrigin, buttonSize};
 	++tab->tabGeom.size.height;
 	buttonOrigin.x += buttonSize.width + 1;
-	Widget_setSize(tab->contentWidget, realSize);
 	Widget_setOrigin(tab->contentWidget, contentOrigin);
     }
     PSC_ListIterator_destroy(i);
+    Tab *tab = PSC_List_at(self->tabs, self->currentIndex);
+    Widget_setSize(tab->contentWidget, realSize);
     Widget_invalidate(self);
 }
 
@@ -197,6 +202,25 @@ static int draw(void *obj, xcb_render_picture_t picture)
     return rc;
 }
 
+static int show(void *obj)
+{
+    TabBox *self = Object_instance(obj);
+    self->shown = 1;
+    layout(self);
+    int rc = 1;
+    Object_bcall(rc, Widget, show, self);
+    return rc;
+}
+
+static int hide(void *obj)
+{
+    TabBox *self = Object_instance(obj);
+    self->shown = 0;
+    int rc = 1;
+    Object_bcall(rc, Widget, hide, self);
+    return rc;
+}
+
 static Size minSize(const void *obj)
 {
     const TabBox *self = Object_instance(obj);
@@ -275,6 +299,7 @@ static Widget *childAt(void *obj, Pos pos)
 		break;
 	    }
 	}
+	PSC_ListIterator_destroy(i);
 	if (tabHovered) Widget_setCursor(self, XC_HAND);
 	else
 	{
@@ -360,6 +385,7 @@ TabBox *TabBox_createBase(void *derived, const char *name, void *parent)
     self->minSize = (Size){0, 0};
     self->currentIndex = -1;
     self->hoverIndex = -1;
+    self->shown = 0;
 
     PSC_Event_register(Widget_sizeChanged(self), self, sizeChanged, 0);
     return self;
@@ -399,4 +425,5 @@ void TabBox_addTab(void *self, void *buttonWidget, void *contentWidget)
     Widget_setContainer(tab->contentWidget, b);
     PSC_List_append(b->tabs, tab, destroyTab);
     if (b->currentIndex < 0) b->currentIndex = 0;
+    layout(self);
 }
