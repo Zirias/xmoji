@@ -126,6 +126,12 @@ static void expose(void *obj, Rect region)
 {
     Window *self = Object_instance(obj);
     if (self->mainWidget) Widget_invalidateRegion(self->mainWidget, region);
+    if (self->p)
+    {
+	if (self->ndamages < 0) return;
+	if (self->ndamages == MAXDAMAGES) self->ndamages = -1;
+	else self->damages[self->ndamages++] = region;
+    }
 }
 
 static int draw(void *obj, xcb_render_picture_t picture)
@@ -137,10 +143,7 @@ static int draw(void *obj, xcb_render_picture_t picture)
     int rc = Widget_draw(self->mainWidget);
     if (self->p)
     {
-	int num = self->ndamages;
-	const Rect *damages = self->damages;
-	if (!num) damages = Widget_damages(self, &num);
-	if (num < 0)
+	if (self->ndamages < 0)
 	{
 	    Size size = Widget_size(self->mainWidget);
 	    CHECK(xcb_render_composite(X11Adapter_connection(),
@@ -149,13 +152,14 @@ static int draw(void *obj, xcb_render_picture_t picture)
 		    "Cannot composite from backing store for 0x%x",
 		    (unsigned)self->w);
 	}
-	else if (num > 0) for (int i = 0; i < num; ++i)
+	else if (self->ndamages > 0) for (int i = 0; i < self->ndamages; ++i)
 	{
 	    CHECK(xcb_render_composite(X11Adapter_connection(),
 			XCB_RENDER_PICT_OP_SRC, self->src, 0, self->dst,
-			damages[i].pos.x, damages[i].pos.y, 0, 0,
-			damages[i].pos.x, damages[i].pos.y,
-			damages[i].size.width, damages[i].size.height),
+			self->damages[i].pos.x, self->damages[i].pos.y, 0, 0,
+			self->damages[i].pos.x, self->damages[i].pos.y,
+			self->damages[i].size.width,
+			self->damages[i].size.height),
 		    "Cannot composite from backing store for 0x%x",
 		    (unsigned)self->w);
 	}
