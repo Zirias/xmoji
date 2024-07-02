@@ -16,8 +16,8 @@ ENDSUPPRESS
 #include <xkbcommon/xkbcommon-compose.h>
 #include <xkbcommon/xkbcommon-x11.h>
 
-#define MAXWAITING 256
-#define SYNCTHRESH 192
+#define MAXWAITING 16384
+#define SYNCTHRESH 8192
 #define MAXCOLORS 64
 
 #define RQ_AWAIT_REPLY 1
