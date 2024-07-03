@@ -55,8 +55,9 @@ static void updateScrollbar(ScrollBox *self, Size size)
     if (hmin > geom.size.height / 2) hmin = geom.size.height / 2;
     if (self->scrollBar.size.height < hmin) self->scrollBar.size.height = hmin;
     uint32_t scrollHeight = (self->scrollSize.height - size.height) << 6;
-    uint32_t scrollTop = ((size.height - self->scrollBar.size.height - 2) << 6)
-	* (self->scrollPos << 6) / scrollHeight;
+    uint32_t scrollTop =
+	((uint64_t)(size.height - self->scrollBar.size.height - 2) << 6)
+	* (uint64_t)(self->scrollPos << 6) / scrollHeight;
     self->scrollBar.pos.y = (scrollTop + 0x20) >> 6;
 done:
     geom.pos.y -= self->scrollPos;
@@ -259,7 +260,8 @@ static void dragged(void *obj, const DragEvent *event)
     if (ypos > ymax) ypos = ymax;
     self->scrollBar.pos.y = ypos;
     uint32_t scrollHeight = (self->scrollSize.height - geom.size.height) << 6;
-    uint32_t scrollPos = ((uint16_t)ypos << 6) * scrollHeight / (ymax << 6);
+    uint32_t scrollPos = ((uint64_t)ypos << 6) * (uint64_t)scrollHeight
+	/ (ymax << 6);
     self->scrollPos = (scrollPos + 0x20) >> 6;
     Pos origin = geom.pos;
     origin.y -= self->scrollPos;
