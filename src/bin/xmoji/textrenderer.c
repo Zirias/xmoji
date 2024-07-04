@@ -165,7 +165,9 @@ int TextRenderer_setText(TextRenderer *self, const UniStr *text)
 	width = Font_maxWidth(self->font);
     }
     self->size.width = (width + 0x3fU) >> 6;
+    if (!self->size.width) self->size.width = 1;
     self->size.height = (height + 0x3fU) >> 6;
+    if (!self->size.height) self->size.height = 1;
     xcb_connection_t *c = X11Adapter_connection();
     if (self->tpic)
     {
