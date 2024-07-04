@@ -49,8 +49,14 @@ static char *copystr(const char *str, size_t *len)
 {
     size_t slen = strlen(str);
     char *s = xmalloc(slen+1);
-    memcpy(s, str, slen+1);
-    if (len) *len = slen;
+    size_t clen = 0;
+    for (char *w = s; *str; ++w, ++str)
+    {
+	if ((*str & 0xc0) != 0x80) ++clen;
+	*w = *str;
+    }
+    s[slen] = 0;
+    if (len) *len = clen;
     return s;
 }
 
