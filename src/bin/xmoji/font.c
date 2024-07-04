@@ -650,12 +650,14 @@ int Font_uploadGlyphs(Font *self, uint32_t ownerid,
 	glyphs[i].y = Font_scale(self, slot->bitmap_top);
 	unsigned stride = (glyphs[i].width * pixelsize + 3) & ~3;
 	size_t bitmapsz = stride * glyphs[i].height;
+	if (glyphs[i].height == 0) bitmapsz = (pixelsize + 3) & ~3;
 	unsigned maskstride = 0;
 	size_t masksz = 0;
 	if (self->glyphtype == FGT_BITMAP_BGRA)
 	{
 	    maskstride = (glyphs[i].width + 3) & ~3;
 	    masksz = maskstride * glyphs[i].height;
+	    if (glyphs[i].height == 0) masksz = 4;
 	}
 	if (sizeof (xcb_render_add_glyphs_request_t)
 		+ (i - firstglyph) * (sizeof *glyphids + sizeof *glyphs)
@@ -698,7 +700,12 @@ int Font_uploadGlyphs(Font *self, uint32_t ownerid,
 	    memset(maskdata + maskdatapos, 0, masksz);
 	    maskdatasz = maskdatapos + masksz;
 	}
-	if (self->glyphtype != FGT_OUTLINE)
+	if (glyphs[i].height == 0)
+	{
+	    glyphs[i].height = 1;
+	    glyphs[i].width = 1;
+	}
+	else if (self->glyphtype != FGT_OUTLINE)
 	{
 	    double scale;
 	    if (self->fixedpixelsize)
