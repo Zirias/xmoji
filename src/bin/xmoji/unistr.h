@@ -17,16 +17,15 @@ typedef struct UniStr
 
 /* static const initialization
  *
- * USAGE: UniStr(name, "value");
+ * USAGE: UniStr(name, U"value");
  * declares 'static const *UniStr name' and initializes it to "value".
  */
 
-#define priv_UniStrLit(n,x) static const UniStr n ## _v = { \
+#define UniStr(n,x) static const UniStr n ## _v = { \
 	.len = (sizeof x >> 2) - 1, \
 	.str = (char32_t *)x, \
 	.refcnt = -1 }; \
 	static const UniStr *n = & n ## _v
-#define UniStr(n,x) priv_UniStrLit(n,U32LIT(x))
 
 /* constructor */
 
@@ -60,28 +59,24 @@ const char32_t *UniStr_str(const UniStr *self)
 /* mutators, ceating new instances */
 
 #define UniStr_append(s,x) _Generic(&x, \
-	U8LPT(x): UniStr_appendUtf32, \
-	const U8LPT(x): UniStr_appendUtf32, \
 	U32LPT(x): UniStr_appendUtf32, \
 	const U32LPT(x): UniStr_appendUtf32, \
 	char **: UniStr_appendUtf8, \
 	const char **: UniStr_appendUtf8, \
 	char32_t **: UniStr_appendUtf32, \
-	const char32_t **: UniStr_appendUtf32)(s, U32LIT(x))
+	const char32_t **: UniStr_appendUtf32)(s, x)
 UniStr *UniStr_appendUtf8(const UniStr *self, const char *utf8)
     CMETHOD ATTR_NONNULL((2)) ATTR_RETNONNULL;
 UniStr *UniStr_appendUtf32(const UniStr *self, const char32_t *utf32)
     CMETHOD ATTR_NONNULL((2)) ATTR_RETNONNULL;
 
 #define UniStr_split(s,x) _Generic(&x, \
-	U8LPT(x): UniStr_splitByUtf32, \
-	const U8LPT(x): UniStr_splitByUtf32, \
 	U32LPT(x): UniStr_splitByUtf32, \
 	const U32LPT(x): UniStr_splitByUtf32, \
 	char **: UniStr_splitByUtf8, \
 	const char **: UniStr_splitByUtf8, \
 	char32_t **: UniStr_splitByUtf32, \
-	const char32_t **: UniStr_splitByUtf32)(s, U32LIT(x))
+	const char32_t **: UniStr_splitByUtf32)(s, x)
 PSC_List *UniStr_splitByUtf8(const UniStr *self, const char *delim)
     CMETHOD ATTR_NONNULL((2)) ATTR_RETNONNULL;
 PSC_List *UniStr_splitByUtf32(const UniStr *self, const char32_t *delim)

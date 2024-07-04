@@ -179,6 +179,12 @@ PSC_Event *Button_clicked(void *self)
     return b->clicked;
 }
 
+TextLabel *Button_label(void *self)
+{
+    Button *b = Object_instance(self);
+    return b->label;
+}
+
 const UniStr *Button_text(const void *self)
 {
     const Button *b = Object_instance(self);

@@ -2,6 +2,7 @@
 #include "command.h"
 #include "emoji.h"
 #include "flowgrid.h"
+#include "font.h"
 #include "hbox.h"
 #include "icon.h"
 #include "icons.h"
@@ -12,6 +13,7 @@
 #include "tabbox.h"
 #include "textbox.h"
 #include "textlabel.h"
+#include "textrenderer.h"
 #include "unistr.h"
 #include "valuetypes.h"
 #include "vbox.h"
@@ -68,22 +70,37 @@ static void onaboutok(void *receiver, void *sender, void *args)
     Window_close(self->aboutDialog);
 }
 
+static void renderCallback(void *ctx, TextRenderer *renderer)
+{
+    (void)ctx;
+
+    UniStr(repl, U"\xfffd");
+    if (TextRenderer_nglyphs(renderer) != 1
+	    || !TextRenderer_glyphIdAt(renderer, 0))
+    {
+	Font *deffont = Font_create(0, 0);
+	TextRenderer_setFont(renderer, deffont);
+	TextRenderer_setText(renderer, repl);
+	Font_destroy(deffont);
+    }
+}
+
 static int startup(void *app)
 {
     Xmoji *self = Object_instance(app);
 
-    UniStr(about, "About");
-    UniStr(aboutdesc, "About Xmoji");
+    UniStr(about, U"About");
+    UniStr(aboutdesc, U"About Xmoji");
     Command *aboutCommand = Command_create(about, aboutdesc, self);
     PSC_Event_register(Command_triggered(aboutCommand), self, onabout, 0);
 
-    UniStr(hide, "Hide");
-    UniStr(hidedesc, "Minimize the application window");
+    UniStr(hide, U"Hide");
+    UniStr(hidedesc, U"Minimize the application window");
     Command *hideCommand = Command_create(hide, hidedesc, self);
     PSC_Event_register(Command_triggered(hideCommand), self, onhide, 0);
 
-    UniStr(quit, "Quit");
-    UniStr(quitdesc, "Exit the application");
+    UniStr(quit, U"Quit");
+    UniStr(quitdesc, U"Exit the application");
     Command *quitCommand = Command_create(quit, quitdesc, self);
     PSC_Event_register(Command_triggered(quitCommand), self, onquit, 0);
 
@@ -132,11 +149,14 @@ static int startup(void *app)
 	{
 	    const Emoji *emoji= EmojiGroup_emojiAt(group, idx);
 	    Button *emojiButton = Button_create(0, grid);
+	    TextLabel_setRenderCallback(Button_label(emojiButton),
+		    0, renderCallback);
 	    Button_setText(emojiButton, Emoji_str(emoji));
 	    Button_setBorderWidth(emojiButton, 0);
 	    Button_setLabelPadding(emojiButton, (Box){0, 0, 0, 0});
 	    Button_setMinWidth(emojiButton, 0);
 	    Button_setColors(emojiButton, COLOR_BG_NORMAL, COLOR_BG_ACTIVE);
+	    Widget_setExpand(emojiButton, EXPAND_X|EXPAND_Y);
 	    Widget_setTooltip(emojiButton, Emoji_name(emoji), 0);
 	    Widget_show(emojiButton);
 	    FlowGrid_addWidget(grid, emojiButton);
@@ -171,7 +191,7 @@ static int startup(void *app)
 
     VBox *box = VBox_create(hbox);
     Widget_setPadding(box, (Box){12, 6, 6, 6});
-    UniStr(heading, "Xmoji v0.0α");
+    UniStr(heading, U"Xmoji v0.0α");
     TextLabel *label = TextLabel_create("aboutHeading", box);
     TextLabel_setText(label, heading);
     Font *hfont = Font_createVariant(deffont, Font_pixelsize(deffont) * 2,
@@ -181,7 +201,7 @@ static int startup(void *app)
     Widget_setAlign(label, AV_MIDDLE);
     Widget_show(label);
     VBox_addWidget(box, label);
-    UniStr(abouttxt, "X11 Emoji Keyboard\n\n"
+    UniStr(abouttxt, U"X11 Emoji Keyboard\n\n"
 	    "License: BSD 2-clause\n"
 	    "Author: Felix Palmen <felix@palmen-it.de>\n"
 	    "WWW: https://github.com/Zirias/xmoji");
@@ -192,7 +212,7 @@ static int startup(void *app)
     VBox_addWidget(box, label);
 
     Button *button = Button_create("okButton", box);
-    UniStr(ok, "OK");
+    UniStr(ok, U"OK");
     Button_setText(button, ok);
     Widget_setAlign(button, AH_RIGHT|AV_BOTTOM);
     Widget_show(button);

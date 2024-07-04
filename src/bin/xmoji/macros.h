@@ -9,9 +9,5 @@
 
 #define U8LPT(x) char(*)[sizeof x]
 #define U32LPT(x) char32_t(*)[sizeof x >> 2 ? sizeof x >> 2 : 1]
-#define U32LIT(x) _Generic(&x, \
-	U8LPT(x): U ## x, \
-	const U8LPT(x): U ## x, \
-	default: x)
 
 #endif

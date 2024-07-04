@@ -23,6 +23,8 @@ struct TextLabel
     Object base;
     UniStr *text;
     PSC_List *renderers;
+    RenderCallback callback;
+    void *renderctx;
     Size minSize;
     ColorRole color;
 };
@@ -40,7 +42,7 @@ static void update(TextLabel *self, Font *font)
     if (self->text)
     {
 	self->renderers = PSC_List_create();
-	PSC_List *lines = UniStr_split(self->text, "\n");
+	PSC_List *lines = UniStr_split(self->text, U"\n");
 	PSC_ListIterator *i = PSC_List_iterator(lines);
 	while (PSC_ListIterator_moveNext(i))
 	{
@@ -51,6 +53,7 @@ static void update(TextLabel *self, Font *font)
 		TextRenderer_setFont(renderer, font);
 		PSC_List_append(self->renderers, renderer, freerenderer);
 		TextRenderer_setText(renderer, line);
+		if (self->callback) self->callback(self->renderctx, renderer);
 		Size linesize = TextRenderer_size(renderer);
 		if (!self->minSize.height)
 		{
@@ -130,6 +133,8 @@ TextLabel *TextLabel_createBase(void *derived, const char *name, void *parent)
     CREATEBASE(Widget, name, parent);
     self->text = 0;
     self->renderers = PSC_List_create();
+    self->callback = 0;
+    self->renderctx = 0;
     self->minSize = (Size){0, 0};
     self->color = COLOR_NORMAL;
 
@@ -159,5 +164,13 @@ void TextLabel_setColor(void *self, ColorRole color)
 	l->color = color;
 	Widget_invalidate(l);
     }
+}
+
+void TextLabel_setRenderCallback(void *self, void *ctx,
+	RenderCallback callback)
+{
+    TextLabel *l = Object_instance(self);
+    l->callback = callback;
+    l->renderctx = ctx;
 }
 

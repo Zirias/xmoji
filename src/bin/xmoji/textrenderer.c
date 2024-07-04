@@ -88,6 +88,11 @@ void TextRenderer_setFont(TextRenderer *self, Font *font)
     self->hbfont = hb_ft_font_create_referenced(Font_face(font));
 }
 
+Font *TextRenderer_font(TextRenderer *self)
+{
+    return self->font;
+}
+
 static void createTmpPicture(TextRenderer *self, xcb_connection_t *c)
 {
     xcb_render_picture_t ownerpic = Widget_picture(self->owner);
@@ -209,6 +214,17 @@ int TextRenderer_setText(TextRenderer *self, const UniStr *text)
     }
     self->uploaded = 0;
     return 0;
+}
+
+unsigned TextRenderer_nglyphs(const TextRenderer *self)
+{
+    return self->hblen;
+}
+
+uint32_t TextRenderer_glyphIdAt(const TextRenderer *self, unsigned index)
+{
+    if (index >= self->hblen) return 0;
+    return self->hbglyphs[index].codepoint;
 }
 
 unsigned TextRenderer_glyphLen(const TextRenderer *self, unsigned index)

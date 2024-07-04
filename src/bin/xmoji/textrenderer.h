@@ -18,7 +18,13 @@ Size TextRenderer_size(const TextRenderer *self)
 void TextRenderer_setNoLigatures(TextRenderer *self, int noLigatures)
     CMETHOD;
 void TextRenderer_setFont(TextRenderer *self, Font *font);
+Font *TextRenderer_font(TextRenderer *self)
+    CMETHOD;
 int TextRenderer_setText(TextRenderer *self, const UniStr *text)
+    CMETHOD;
+unsigned TextRenderer_nglyphs(const TextRenderer *self)
+    CMETHOD;
+uint32_t TextRenderer_glyphIdAt(const TextRenderer *self, unsigned index)
     CMETHOD;
 unsigned TextRenderer_glyphLen(const TextRenderer *self, unsigned index)
     CMETHOD;
