@@ -52,11 +52,13 @@ void Object_destroy(void *self);
 #define CREATEBASE(...) do { \
     if (!derived) derived = self; \
     self->base.type = MetaObject_register(&mo); \
+    self->base.base = 0; \
     self->base.base = priv_MO_basector(derived, __VA_ARGS__); \
 } while (0)
 
 #define CREATEFINALBASE(...) do { \
     self->base.type = MetaObject_register(&mo); \
+    self->base.base = 0; \
     self->base.base = priv_MO_basector(self, __VA_ARGS__); \
 } while (0)
 

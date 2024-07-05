@@ -74,11 +74,17 @@ void Object_own(void *self, void *obj)
 
 void *Object_instanceOf(void *self, uint32_t type, int mustMatch)
 {
-    Object *obj = type ? Object_mostDerived(self) : self;
+    int fromderived = !!type;
+    Object *obj = fromderived ? Object_mostDerived(self) : self;
     while (obj)
     {
 	if (obj->type == type) return obj;
 	obj = obj->base;
+	if (!obj && fromderived)
+	{
+	    fromderived = 0;
+	    obj = self;
+	}
     }
     if (!mustMatch) return 0;
     PSC_Service_panic("Bug: type error!");
