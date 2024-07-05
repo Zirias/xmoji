@@ -1,0 +1,181 @@
+#include "keyinjector.h"
+
+#include "timer.h"
+#include "unistr.h"
+#include "x11adapter.h"
+
+#include <poser/core.h>
+#include <stdlib.h>
+#include <string.h>
+#include <xcb/xtest.h>
+
+#define MAXQUEUELEN 64
+
+typedef struct InjectJob
+{
+    UniStr *str;
+    xcb_keysym_t *orig;
+    unsigned len;
+    unsigned symspercode;
+} InjectJob;
+
+static Timer *timer;
+static unsigned resetms;
+static InjectorFlags injectflags;
+
+static InjectJob queue[MAXQUEUELEN];
+static unsigned queuelen;
+static unsigned queuefront;
+static unsigned queueback;
+
+static void finish(void);
+static void resetkmap(void *receiver, void *sender, void *args);
+static void doinject(void *obj, unsigned sequence,
+	void *reply, xcb_generic_error_t *error);
+static void injectnext(void);
+
+static void finish(void)
+{
+    if (++queuefront == MAXQUEUELEN) queuefront = 0;
+    --queuelen;
+    injectnext();
+}
+
+static void resetkmap(void *receiver, void *sender, void *args)
+{
+    (void)receiver;
+    (void)sender;
+    (void)args;
+
+    Timer_stop(timer);
+    xcb_connection_t *c = X11Adapter_connection();
+    const xcb_setup_t *setup = xcb_get_setup(c);
+    CHECK(xcb_change_keyboard_mapping(c, queue[queuefront].len,
+		setup->min_keycode, queue[queuefront].symspercode,
+		queue[queuefront].orig),
+	    "KeyInjector: Cannot change keymap", 0);
+    free(queue[queuefront].orig);
+    finish();
+}
+
+static void doinject(void *obj, unsigned sequence,
+	void *reply, xcb_generic_error_t *error)
+{
+    (void)obj;
+    (void)sequence;
+
+    if (!reply || error)
+    {
+	finish();
+	return;
+    }
+
+    xcb_get_keyboard_mapping_reply_t *kmap = reply;
+    size_t len = UniStr_len(queue[queuefront].str);
+    const char32_t *codepoints = UniStr_str(queue[queuefront].str);
+    int zwj = 0;
+    unsigned prelen = 0;
+    unsigned postlen = 0;
+    if (injectflags & IF_EXTRAZWJ)
+    {
+	for (unsigned x = 0; x < len; ++x)
+	{
+	    if (codepoints[x] == 0x200d)
+	    {
+		zwj = 1;
+		break;
+	    }
+	}
+	if (zwj)
+	{
+	    len += 2;
+	    ++prelen;
+	    if (!(injectflags & (IF_ADDSPACE|IF_ADDZWSPACE))) ++prelen;
+	}
+    }
+    if (injectflags & (IF_ADDSPACE|IF_ADDZWSPACE))
+    {
+	++postlen;
+	if (!zwj) ++len;
+    }
+
+    queue[queuefront].orig = PSC_malloc(len
+	    * kmap->keysyms_per_keycode * sizeof *queue[queuefront].orig);
+    memcpy(queue[queuefront].orig, xcb_get_keyboard_mapping_keysyms(kmap),
+	    len * kmap->keysyms_per_keycode * sizeof *queue[queuefront].orig);
+    xcb_keysym_t *syms = PSC_malloc(len
+	    * kmap->keysyms_per_keycode * sizeof *syms);
+    unsigned z = 0;
+    static const char32_t zw[] = { 0x200b, 0x200d };
+    for (unsigned x = 0; x < len; ++x)
+    {
+	char32_t codepoint;
+	if (x < prelen) codepoint = *(zw + x + (2 - prelen));
+	else if (x < len - postlen) codepoint = codepoints[x-prelen];
+	else codepoint = (injectflags & IF_ADDSPACE) ? 0x20 : *zw;
+	for (size_t y = 0; y < kmap->keysyms_per_keycode; ++y)
+	{
+	    syms[z++] = 0x1000000U + codepoint;
+	}
+    }
+
+    xcb_connection_t *c = X11Adapter_connection();
+    const xcb_setup_t *setup = xcb_get_setup(c);
+    CHECK(xcb_change_keyboard_mapping(c, len, setup->min_keycode,
+		kmap->keysyms_per_keycode, syms),
+	    "KeyInjector: Cannot change keymap", 0);
+    free(syms);
+    UniStr_destroy(queue[queuefront].str);
+
+    for (unsigned x = 0; x < len; ++x)
+    {
+	CHECK(xcb_test_fake_input(c, XCB_KEY_PRESS, setup->min_keycode + x,
+		    XCB_CURRENT_TIME, XCB_NONE, 0, 0, 0),
+		"KeyInjector: Cannot inject fake key press event", 0);
+	CHECK(xcb_test_fake_input(c, XCB_KEY_RELEASE, setup->min_keycode + x,
+		    XCB_CURRENT_TIME, XCB_NONE, 0, 0, 0),
+		"KeyInjector: Cannot inject fake key release event", 0);
+    }
+
+    queue[queuefront].len = len;
+    queue[queuefront].symspercode = kmap->keysyms_per_keycode;
+    Timer_start(timer, resetms);
+}
+
+static void injectnext(void)
+{
+    if (!queuelen) return;
+
+    xcb_connection_t *c = X11Adapter_connection();
+    const xcb_setup_t *setup = xcb_get_setup(c);
+    AWAIT(xcb_get_keyboard_mapping(c, setup->min_keycode,
+		setup->max_keycode - setup->min_keycode + 1),
+	    0, doinject);
+}
+
+void KeyInjector_init(unsigned ms, InjectorFlags flags)
+{
+    if (!timer)
+    {
+	timer = Timer_create();
+	PSC_Event_register(Timer_expired(timer), 0, resetkmap, 0);
+    }
+    resetms = ms;
+    injectflags = flags;
+}
+
+void KeyInjector_inject(const UniStr *str)
+{
+    if (queuelen == MAXQUEUELEN) return;
+    queue[queueback].str = UniStr_ref(str);
+    if (++queueback == MAXQUEUELEN) queueback = 0;
+    if (!queuelen++) injectnext();
+}
+
+void KeyInjector_done(void)
+{
+    if (!timer) return;
+    Timer_destroy(timer);
+    timer = 0;
+}
+

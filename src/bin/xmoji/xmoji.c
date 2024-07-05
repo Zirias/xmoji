@@ -7,6 +7,7 @@
 #include "icon.h"
 #include "icons.h"
 #include "imagelabel.h"
+#include "keyinjector.h"
 #include "menu.h"
 #include "pixmap.h"
 #include "scrollbox.h"
@@ -58,6 +59,7 @@ static void onquit(void *receiver, void *sender, void *args)
     (void)sender;
     (void)args;
 
+    KeyInjector_done();
     X11App_quit();
 }
 
@@ -68,6 +70,15 @@ static void onaboutok(void *receiver, void *sender, void *args)
 
     Xmoji *self = receiver;
     Window_close(self->aboutDialog);
+}
+
+static void kbinject(void *receiver, void *sender, void *args)
+{
+    (void)receiver;
+    (void)args;
+
+    Button *b = sender;
+    KeyInjector_inject(Button_text(b));
 }
 
 static void renderCallback(void *ctx, TextRenderer *renderer)
@@ -120,7 +131,7 @@ static int startup(void *app)
     Icon_add(appIcon, pm);
     Pixmap_destroy(pm);
 
-    Window *win = Window_create("mainWindow", 0, self);
+    Window *win = Window_create("mainWindow", WF_REJECT_FOCUS, self);
     self->mainWindow = win;
     Window_setTitle(win, "Xmoji 😀 äöüß");
     Widget_setContextMenu(win, menu);
@@ -128,6 +139,8 @@ static int startup(void *app)
 
     TabBox *tabs = TabBox_create("mainTabBox", win);
     Widget_setPadding(tabs, (Box){0, 0, 0, 0});
+
+    KeyInjector_init(100, IF_ADDZWSPACE|IF_EXTRAZWJ);
 
     size_t groups = EmojiGroup_numGroups();
     for (size_t groupidx = 0; groupidx < groups; ++groupidx)
@@ -159,6 +172,7 @@ static int startup(void *app)
 	    Widget_setExpand(emojiButton, EXPAND_X|EXPAND_Y);
 	    Widget_setTooltip(emojiButton, Emoji_name(emoji), 0);
 	    Widget_show(emojiButton);
+	    PSC_Event_register(Button_clicked(emojiButton), 0, kbinject, 0);
 	    FlowGrid_addWidget(grid, emojiButton);
 	}
 	Widget_show(grid);

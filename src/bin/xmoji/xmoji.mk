@@ -12,6 +12,7 @@ xmoji_MODULES=		button \
 			icon \
 			icons \
 			imagelabel \
+			keyinjector \
 			menu \
 			nanosvg \
 			object \
@@ -52,6 +53,7 @@ xmoji_PKGDEPS=		fontconfig \
 			xcb-image \
 			xcb-render \
 			xcb-xkb \
+			xcb-xtest \
 			xkbcommon \
 			xkbcommon-x11
 

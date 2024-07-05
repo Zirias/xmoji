@@ -860,7 +860,7 @@ Window *Window_createBase(void *derived, const char *name,
 		X11Adapter_kbdcompose(), XKB_COMPOSE_STATE_NO_FLAGS);
 	WMHints hints = {
 	    .flags = WM_HINT_INPUT | WM_HINT_STATE,
-	    .input = 1,
+	    .input = !(flags & WF_REJECT_FOCUS),
 	    .state = WM_STATE_NORMAL
 	};
 	CHECK(xcb_change_property(c, XCB_PROP_MODE_REPLACE, self->w,
