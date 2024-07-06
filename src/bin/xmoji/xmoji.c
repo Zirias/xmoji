@@ -1,8 +1,8 @@
 #include "button.h"
 #include "command.h"
 #include "emoji.h"
+#include "emojibutton.h"
 #include "flowgrid.h"
-#include "font.h"
 #include "hbox.h"
 #include "icon.h"
 #include "icons.h"
@@ -14,7 +14,6 @@
 #include "tabbox.h"
 #include "textbox.h"
 #include "textlabel.h"
-#include "textrenderer.h"
 #include "unistr.h"
 #include "valuetypes.h"
 #include "vbox.h"
@@ -33,6 +32,7 @@ typedef struct Xmoji
     Object base;
     Window *mainWindow;
     Window *aboutDialog;
+    TabBox *tabs;
 } Xmoji;
 
 static void onabout(void *receiver, void *sender, void *args)
@@ -74,26 +74,12 @@ static void onaboutok(void *receiver, void *sender, void *args)
 
 static void kbinject(void *receiver, void *sender, void *args)
 {
-    (void)receiver;
     (void)args;
 
+    Xmoji *self = receiver;
     Button *b = sender;
     KeyInjector_inject(Button_text(b));
-}
-
-static void renderCallback(void *ctx, TextRenderer *renderer)
-{
-    (void)ctx;
-
-    UniStr(repl, U"\xfffd");
-    if (TextRenderer_nglyphs(renderer) != 1
-	    || !TextRenderer_glyphIdAt(renderer, 0))
-    {
-	Font *deffont = Font_create(0, 0);
-	TextRenderer_setFont(renderer, deffont);
-	TextRenderer_setText(renderer, repl);
-	Font_destroy(deffont);
-    }
+    Widget_unselect(self->tabs);
 }
 
 static int startup(void *app)
@@ -161,18 +147,11 @@ static int startup(void *app)
 	for (size_t idx = 0; idx < emojis; ++idx)
 	{
 	    const Emoji *emoji= EmojiGroup_emojiAt(group, idx);
-	    Button *emojiButton = Button_create(0, grid);
-	    TextLabel_setRenderCallback(Button_label(emojiButton),
-		    0, renderCallback);
+	    EmojiButton *emojiButton = EmojiButton_create(0, grid);
 	    Button_setText(emojiButton, Emoji_str(emoji));
-	    Button_setBorderWidth(emojiButton, 0);
-	    Button_setLabelPadding(emojiButton, (Box){0, 0, 0, 0});
-	    Button_setMinWidth(emojiButton, 0);
-	    Button_setColors(emojiButton, COLOR_BG_NORMAL, COLOR_BG_ACTIVE);
-	    Widget_setExpand(emojiButton, EXPAND_X|EXPAND_Y);
 	    Widget_setTooltip(emojiButton, Emoji_name(emoji), 0);
 	    Widget_show(emojiButton);
-	    PSC_Event_register(Button_clicked(emojiButton), 0, kbinject, 0);
+	    PSC_Event_register(Button_clicked(emojiButton), self, kbinject, 0);
 	    FlowGrid_addWidget(grid, emojiButton);
 	}
 	Widget_show(grid);
@@ -182,6 +161,7 @@ static int startup(void *app)
 	TabBox_addTab(tabs, groupLabel, scroll);
     }
 
+    self->tabs = tabs;
     Widget_show(tabs);
     Window_setMainWidget(win, tabs);
     Command_attach(quitCommand, win, Window_closed);

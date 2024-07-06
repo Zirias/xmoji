@@ -6,6 +6,7 @@ xmoji_MODULES=		button \
 			colorset \
 			command \
 			emoji \
+			emojibutton \
 			flowgrid \
 			font \
 			hbox \
