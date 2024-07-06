@@ -862,6 +862,7 @@ void Widget_invalidateRegion(void *self, Rect region)
     if (w->ndamages == MAXDAMAGES || Rect_contains(region, w->geometry))
     {
 	w->ndamages = -1;
+	region = w->geometry;
     }
     else
     {
