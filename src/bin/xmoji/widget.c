@@ -59,6 +59,7 @@ struct Widget
     int entered;
     int canfocus;
     int focused;
+    int localUnselect;
 };
 
 static void destroy(void *obj)
@@ -519,6 +520,18 @@ int Widget_focused(const void *self)
 void Widget_unselect(void *self)
 {
     Object_vcallv(Widget, unselect, self);
+}
+
+int Widget_localUnselect(const void *self)
+{
+    const Widget *w = Object_instance(self);
+    return w->localUnselect;
+}
+
+void Widget_setLocalUnselect(void *self, int localUnselect)
+{
+    Widget *w = Object_instance(self);
+    w->localUnselect = !!localUnselect;
 }
 
 static void setSize(Widget *self, int external, Size size)

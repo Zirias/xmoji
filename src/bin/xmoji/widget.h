@@ -149,6 +149,8 @@ void Widget_focus(void *self) CMETHOD;
 void Widget_unfocus(void *self) CMETHOD;
 int Widget_focused(const void *self) CMETHOD;
 void Widget_unselect(void *self) CMETHOD;
+int Widget_localUnselect(const void *self) CMETHOD;
+void Widget_setLocalUnselect(void *self, int localUnselect) CMETHOD;
 void Widget_setSize(void *self, Size size) CMETHOD;
 void Widget_setMaxSize(void *self, Size maxSize) CMETHOD;
 Size Widget_minSize(const void *self) CMETHOD;

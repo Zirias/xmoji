@@ -936,6 +936,11 @@ void XSelection_publish(XSelection *self, Widget *owner,
     }
     self->newOwner = owner;
     self->newContent.type = content.type;
+    if (self->owner && self->owner != owner
+	    && Widget_localUnselect(self->owner))
+    {
+	Widget_unselect(self->owner);
+    }
     if (!self->owner || owner != self->owner
 	    || content.type != self->content.type)
     {
