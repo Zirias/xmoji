@@ -604,6 +604,7 @@ static void flushandsync(void *receiver, void *sender, void *args)
     if (!syncseq && (waitingNoreply || waitingNum >= SYNCTHRESH))
     {
 	syncseq = AWAIT(xcb_get_input_focus(c), 0, sync_cb);
+	xcb_flush(c);
     }
 }
 
