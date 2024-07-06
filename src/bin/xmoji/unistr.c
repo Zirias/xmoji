@@ -30,7 +30,7 @@ static size_t toutf8(char **utf8, size_t pos,
 	    (*utf8)[pos + utf8len++] = 0xc0U | (b[1] << 2) | (b[0] >> 6);
 	    goto follow2;
 	}
-	if (c < 0x8000U)
+	if (c < 0x10000U)
 	{
 	    (*utf8)[pos + utf8len++] = 0xe0U | (b[1] >> 4);
 	    goto follow1;
