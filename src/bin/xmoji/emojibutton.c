@@ -65,6 +65,7 @@ static void renderCallback(void *ctx, TextRenderer *renderer)
 static void unselect(void *obj)
 {
     EmojiButton *self = Object_instance(obj);
+    if (!self->selected) return;
     self->selected = 0;
     Button_setColors(self, COLOR_BG_NORMAL, COLOR_BG_ACTIVE);
     Widget_invalidate(self);
