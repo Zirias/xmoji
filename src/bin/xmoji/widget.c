@@ -898,6 +898,18 @@ void Widget_setClip(void *self, Rect clip)
     w->clipGeometry = clip;
 }
 
+int Widget_isDamaged(void *self, Rect region)
+{
+    Widget *w = Object_instance(self);
+    if (!w->ndamages) return 0;
+    if (w->ndamages < 0) return Rect_overlaps(region, w->geometry);
+    for (int d = 0; d < w->ndamages; ++d)
+    {
+	if (Rect_overlaps(region, w->damages[d])) return 1;
+    }
+    return 0;
+}
+
 void Widget_offerFont(void *self, Font *font)
 {
     Widget *w = Object_instance(self);

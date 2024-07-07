@@ -188,6 +188,7 @@ void Widget_setWindowSize(void *self, Size size) CMETHOD;
 void Widget_showWindow(void *self) CMETHOD;
 void Widget_hideWindow(void *self) CMETHOD;
 void Widget_setClip(void *self, Rect clip) CMETHOD;
+int Widget_isDamaged(void *self, Rect region) CMETHOD;
 void Widget_offerFont(void *self, Font *font) CMETHOD ATTR_NONNULL((2));
 void Widget_requestPaste(void *self, XSelectionName name,
 	XSelectionType type) CMETHOD;

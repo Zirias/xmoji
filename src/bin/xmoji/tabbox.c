@@ -162,9 +162,14 @@ static int draw(void *obj, xcb_render_picture_t picture)
 	Color color = Widget_color(self, COLOR_BG_BELOW);
 	xcb_rectangle_t rect = { barPos.x, barPos.y, tabGeom.size.width,
 	    tabGeom.pos.y - barPos.y };
-	CHECK(xcb_render_fill_rectangles(c, XCB_RENDER_PICT_OP_OVER,
-		    picture, Color_xcb(color), 1, &rect),
-		"Cannot draw tab bar background on 0x%x", (unsigned)picture);
+	if (Widget_isDamaged(self, (Rect){{rect.x, rect.y},
+		    {rect.width, rect.height}}))
+	{
+	    CHECK(xcb_render_fill_rectangles(c, XCB_RENDER_PICT_OP_OVER,
+			picture, Color_xcb(color), 1, &rect),
+		    "Cannot draw tab bar background on 0x%x",
+		    (unsigned)picture);
+	}
     }
     PSC_ListIterator *i = PSC_List_iterator(self->tabs);
     while (PSC_ListIterator_moveNext(i))
@@ -188,9 +193,14 @@ static int draw(void *obj, xcb_render_picture_t picture)
 		rect.y += 2;
 		rect.height -= 3;
 	    }
-	    CHECK(xcb_render_fill_rectangles(c, XCB_RENDER_PICT_OP_OVER,
-			picture, Color_xcb(color), 1, &rect),
-		    "Cannot draw tab background on 0x%x", (unsigned)picture);
+	    if (Widget_isDamaged(self, (Rect){{rect.x, rect.y},
+			{rect.width, rect.height}}))
+	    {
+		CHECK(xcb_render_fill_rectangles(c, XCB_RENDER_PICT_OP_OVER,
+			    picture, Color_xcb(color), 1, &rect),
+			"Cannot draw tab background on 0x%x",
+			(unsigned)picture);
+	    }
 	}
 	if (Widget_draw(tab->buttonWidget) < 0) rc = -1;
 	if (tab->index == self->currentIndex)
