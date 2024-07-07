@@ -164,6 +164,7 @@ static X11ReplyHandlerRecord waitingReplies[MAXWAITING];
 static unsigned waitingFront;
 static unsigned waitingBack;
 static unsigned waitingNum;
+static unsigned newWaiting;
 static unsigned syncseq;
 static int waitingNoreply;
 
@@ -190,6 +191,7 @@ static int enqueueWaiting(X11RequestId reqid, int replytype, void *ctx,
     waitingReplies[waitingBack].uarg = uarg;
     if (++waitingBack == MAXWAITING) waitingBack = 0;
     ++waitingNum;
+    ++newWaiting;
     if (replytype == RQ_AWAIT_NOREPLY) waitingNoreply = 1;
     else if (replytype == RQ_AWAIT_REPLY) waitingNoreply = 0;
     return 0;
@@ -557,8 +559,7 @@ static void readX11Input(void *receiver, void *sender, void *args)
 	    ev = xcb_poll_for_queued_event(c);
 	}
 
-	/* Flush and check whether we read new data */
-	if (waitingNum) xcb_flush(c);
+	/* Check whether we read new data */
 	newrdpos = xcb_total_read(c);
 
     } while (newrdpos != rdpos); /* repeat as long as new input was read */
@@ -587,17 +588,15 @@ static void flushandsync(void *receiver, void *sender, void *args)
     (void)sender;
     (void)args;
 
-    /* Trigger event for end of event-loop iteration and flush
-     * xcb connection */
+    /* Trigger event for end of event-loop iteration */
     PSC_Event_raise(eventsDone, 0, 0);
-    if (waitingNum) xcb_flush(c);
 
-    /* Repeat this until it did not trigger reading more data */
+    /* Repeat this reading new input until it did not trigger reading
+     * more data */
     while (xcb_total_read(c) != rdpos)
     {
 	readX11Input(0, 0, 0);
 	PSC_Event_raise(eventsDone, 0, 0);
-	if (waitingNum) xcb_flush(c);
     }
 
     /* Finally check whether a sync is needed */
@@ -605,6 +604,11 @@ static void flushandsync(void *receiver, void *sender, void *args)
     {
 	syncseq = AWAIT(xcb_get_input_focus(c), 0, sync_cb);
 	xcb_flush(c);
+    }
+    else if (newWaiting)
+    {
+	xcb_flush(c);
+	newWaiting = 0;
     }
 }
 
