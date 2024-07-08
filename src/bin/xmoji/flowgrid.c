@@ -290,7 +290,7 @@ FlowGrid *FlowGrid_createBase(void *derived, void *parent)
     CREATEBASE(Widget, 0, parent);
     self->items = PSC_List_create();
     self->spacing = (Size){3, 3};
-    self->minCols = 8;
+    self->minCols = 6;
 
     PSC_Event_register(Widget_sizeChanged(self), self, layoutChanged, 0);
     PSC_Event_register(Widget_originChanged(self), self, layoutChanged, 0);
