@@ -9,21 +9,31 @@
 #include <poser/core.h>
 #include <stdlib.h>
 
+static void destroy(void *obj);
+static int draw(void *obj, xcb_render_picture_t picture);
 static void unselect(void *obj);
 static int clicked(void *obj, const ClickEvent *event);
 
 static MetaEmojiButton mo = MetaEmojiButton_init(
-	0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, unselect, 0,
+	0, draw, 0, 0, 0, 0, 0, 0, 0, 0, 0, unselect, 0,
 	0, 0, 0, clicked, 0,
-	"EmojiButton", free);
+	"EmojiButton", destroy);
 
 struct EmojiButton
 {
     Object base;
     FlowGrid *flowgrid;
     Flyout *flyout;
+    xcb_render_picture_t pen;
     int selected;
 };
+
+static void destroy(void *obj)
+{
+    EmojiButton *self = obj;
+    if (self->pen) xcb_render_free_picture(X11Adapter_connection(), self->pen);
+    free(self);
+}
 
 static void renderCallback(void *ctx, TextRenderer *renderer)
 {
@@ -66,6 +76,47 @@ static void renderCallback(void *ctx, TextRenderer *renderer)
     }
 }
 
+static int draw(void *obj, xcb_render_picture_t picture)
+{
+    EmojiButton *self = Object_instance(obj);
+    int rc = 0;
+    Object_bcall(rc, Widget, draw, self, picture);
+    if (rc == 0 && picture && self->flyout)
+    {
+	xcb_connection_t *c = X11Adapter_connection();
+	if (!self->pen)
+	{
+	    xcb_pixmap_t p = xcb_generate_id(c);
+	    CHECK(xcb_create_pixmap(c, 24, p, X11Adapter_screen()->root, 1, 1),
+		    "Cannot create pen pixmap for 0x%x", (unsigned)picture);
+	    self->pen = xcb_generate_id(c);
+	    uint32_t repeat = XCB_RENDER_REPEAT_NORMAL;
+	    CHECK(xcb_render_create_picture(c, self->pen, p,
+			X11Adapter_rgbformat(), XCB_RENDER_CP_REPEAT, &repeat),
+		    "Cannot create pen for 0x%x", (unsigned)picture);
+	    Color pencol = Widget_color(self, COLOR_ACTIVE);
+	    xcb_rectangle_t rect = {0, 0, 1, 1};
+	    CHECK(xcb_render_fill_rectangles(c, XCB_RENDER_PICT_OP_OVER,
+			self->pen, Color_xcb(pencol), 1, &rect),
+		    "Canot colorize pen for 0x%x", (unsigned)picture);
+	    xcb_free_pixmap(c, p);
+	}
+	Rect geom = Widget_geometry(self);
+	uint32_t x = (geom.pos.x + geom.size.width) << 16;
+	uint32_t y = (geom.pos.y + geom.size.height) << 16;
+	xcb_render_triangle_t triangle = {
+	    { x - (geom.size.width << 14), y },
+	    { x, y },
+	    { x, y - (geom.size.height << 14) }
+	};
+	CHECK(xcb_render_triangles(c, XCB_RENDER_PICT_OP_OVER,
+		    self->pen, picture, X11Adapter_alphaformat(),
+		    0, 0, 1, &triangle),
+		"Cannot render fly-out indicator on 0x%x", (unsigned)picture);
+    }
+    return rc;
+}
+
 static void unselect(void *obj)
 {
     EmojiButton *self = Object_instance(obj);
@@ -105,6 +156,7 @@ EmojiButton *EmojiButton_createBase(void *derived,
     CREATEBASE(Button, name, parent);
     self->flowgrid = 0;
     self->flyout = 0;
+    self->pen = 0;
     self->selected = 0;
 
     Button_setBorderWidth(self, 0);
