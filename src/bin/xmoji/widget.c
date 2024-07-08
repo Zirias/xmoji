@@ -945,6 +945,10 @@ void Widget_setSelection(void *self, XSelectionName name,
 {
     Window *win = Window_fromWidget(self);
     if (!win) return;
+    Widget *parent = 0;
+    Window *pwin = 0;
+    while ((parent = ((Widget *)Object_instance(win))->container)
+	    && (pwin = Window_fromWidget(parent))) win = pwin;
     XSelection *selection;
     switch (name)
     {
