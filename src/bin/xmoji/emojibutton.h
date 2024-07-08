@@ -17,5 +17,7 @@ C_CLASS_DECL(EmojiButton);
 EmojiButton *EmojiButton_createBase(void *derived,
 	const char *name, void *parent);
 #define EmojiButton_create(...) EmojiButton_createBase(0, __VA_ARGS__)
+void EmojiButton_addVariant(void *self, EmojiButton *variant)
+    CMETHOD ATTR_NONNULL((2));
 
 #endif

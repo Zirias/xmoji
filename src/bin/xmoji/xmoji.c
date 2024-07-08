@@ -144,16 +144,31 @@ static int startup(void *app)
 	Widget_setPadding(grid, (Box){0, 0, 0, 0});
 	Widget_setFontResName(grid, "emojiFont", "emoji", 0);
 	size_t emojis = EmojiGroup_len(group);
+	EmojiButton *neutral = 0;
 	for (size_t idx = 0; idx < emojis; ++idx)
 	{
-	    const Emoji *emoji= EmojiGroup_emojiAt(group, idx);
-	    if (!Emoji_variants(emoji)) continue;
-	    EmojiButton *emojiButton = EmojiButton_create(0, grid);
-	    Button_setText(emojiButton, Emoji_str(emoji));
-	    Widget_setTooltip(emojiButton, Emoji_name(emoji), 0);
-	    Widget_show(emojiButton);
-	    PSC_Event_register(Button_clicked(emojiButton), self, kbinject, 0);
-	    FlowGrid_addWidget(grid, emojiButton);
+	    const Emoji *emoji = EmojiGroup_emojiAt(group, idx);
+	    if (Emoji_variants(emoji))
+	    {
+		EmojiButton *emojiButton = EmojiButton_create(0, grid);
+		Button_setText(emojiButton, Emoji_str(emoji));
+		Widget_setTooltip(emojiButton, Emoji_name(emoji), 0);
+		Widget_show(emojiButton);
+		PSC_Event_register(Button_clicked(emojiButton), self,
+			kbinject, 0);
+		FlowGrid_addWidget(grid, emojiButton);
+		neutral = emojiButton;
+	    }
+	    if (Emoji_variants(emoji) != 1 && neutral)
+	    {
+		EmojiButton *emojiButton = EmojiButton_create(0, neutral);
+		Button_setText(emojiButton, Emoji_str(emoji));
+		Widget_setTooltip(emojiButton, Emoji_name(emoji), 0);
+		Widget_show(emojiButton);
+		PSC_Event_register(Button_clicked(emojiButton), self,
+			kbinject, 0);
+		EmojiButton_addVariant(neutral, emojiButton);
+	    }
 	}
 	Widget_show(grid);
 	ScrollBox_setWidget(scroll, grid);

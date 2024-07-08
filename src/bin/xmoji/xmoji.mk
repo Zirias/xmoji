@@ -8,6 +8,7 @@ xmoji_MODULES=		button \
 			emoji \
 			emojibutton \
 			flowgrid \
+			flyout \
 			font \
 			hbox \
 			icon \

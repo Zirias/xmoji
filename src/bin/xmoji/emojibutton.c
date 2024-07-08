@@ -1,5 +1,7 @@
 #include "emojibutton.h"
 
+#include "flowgrid.h"
+#include "flyout.h"
 #include "textlabel.h"
 #include "textrenderer.h"
 #include "unistr.h"
@@ -18,6 +20,8 @@ static MetaEmojiButton mo = MetaEmojiButton_init(
 struct EmojiButton
 {
     Object base;
+    FlowGrid *flowgrid;
+    Flyout *flyout;
     int selected;
 };
 
@@ -83,6 +87,12 @@ static int clicked(void *obj, const ClickEvent *event)
 	Widget_invalidate(self);
 	return 1;
     }
+    if (self->flyout && event->button == MB_RIGHT)
+    {
+	Widget_show(self->flowgrid);
+	Flyout_popup(self->flyout, self);
+	return 1;
+    }
     int rc = 0;
     Object_bcall(rc, Widget, clicked, self, event);
     return rc;
@@ -93,15 +103,34 @@ EmojiButton *EmojiButton_createBase(void *derived,
 {
     EmojiButton *self = PSC_malloc(sizeof *self);
     CREATEBASE(Button, name, parent);
+    self->flowgrid = 0;
+    self->flyout = 0;
     self->selected = 0;
 
     Button_setBorderWidth(self, 0);
     Button_setLabelPadding(self, (Box){0, 0, 0, 0});
     Button_setMinWidth(self, 0);
     Button_setColors(self, COLOR_BG_NORMAL, COLOR_BG_ACTIVE);
+    Widget_setPadding(self, (Box){0, 0, 0, 0});
     Widget_setExpand(self, EXPAND_X|EXPAND_Y);
     Widget_setLocalUnselect(self, 1);
     TextLabel_setRenderCallback(Button_label(self), self, renderCallback);
 
     return self;
+}
+
+void EmojiButton_addVariant(void *self, EmojiButton *variant)
+{
+    EmojiButton *b = Object_instance(self);
+    if (!b->flyout)
+    {
+	b->flyout = Flyout_create(0, b);
+	b->flowgrid = FlowGrid_create(b);
+	FlowGrid_setSpacing(b->flowgrid, (Size){0, 0});
+	Widget_setPadding(b->flowgrid, (Box){0, 0, 0, 0});
+	Widget_setFont(b->flowgrid, Widget_font(b));
+	Widget_setBackground(b->flowgrid, 1, COLOR_BG_NORMAL);
+	Flyout_setWidget(b->flyout, b->flowgrid);
+    }
+    FlowGrid_addWidget(b->flowgrid, variant);
 }
