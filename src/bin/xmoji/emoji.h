@@ -20,5 +20,6 @@ const Emoji *Emoji_at(size_t index) ATTR_PURE;
 const EmojiGroup *Emoji_group(const Emoji *self) CMETHOD ATTR_PURE;
 const UniStr *Emoji_str(const Emoji *self) CMETHOD ATTR_PURE;
 const UniStr *Emoji_name(const Emoji *self) CMETHOD ATTR_PURE;
+unsigned Emoji_variants(const Emoji *self) CMETHOD ATTR_PURE;
 
 #endif

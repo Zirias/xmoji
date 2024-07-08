@@ -147,6 +147,7 @@ static int startup(void *app)
 	for (size_t idx = 0; idx < emojis; ++idx)
 	{
 	    const Emoji *emoji= EmojiGroup_emojiAt(group, idx);
+	    if (!Emoji_variants(emoji)) continue;
 	    EmojiButton *emojiButton = EmojiButton_create(0, grid);
 	    Button_setText(emojiButton, Emoji_str(emoji));
 	    Widget_setTooltip(emojiButton, Emoji_name(emoji), 0);

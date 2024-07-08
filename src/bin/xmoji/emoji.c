@@ -10,6 +10,7 @@ struct Emoji
     const EmojiGroup *group;
     const UniStr str;
     const UniStr name;
+    const unsigned variants;
 };
 
 struct EmojiGroup
@@ -69,5 +70,10 @@ const UniStr *Emoji_str(const Emoji *self)
 const UniStr *Emoji_name(const Emoji *self)
 {
     return &self->name;
+}
+
+unsigned Emoji_variants(const Emoji *self)
+{
+    return self->variants;
 }
 

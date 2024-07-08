@@ -14,6 +14,7 @@ struct Emoji
     size_t len;
     size_t namelen;
     size_t groupno;
+    unsigned variants;
 };
 
 struct EmojiGroup
@@ -25,6 +26,7 @@ struct EmojiGroup
 };
 
 static Emoji *emojis;
+static Emoji *neutralskin;
 static EmojiGroup *groups;
 static size_t emojisize;
 static size_t emojicapa;
@@ -128,6 +130,16 @@ static void parseemoji(size_t groupno)
     emoji->name = copystr(c, &emoji->namelen);
     emoji->len = ncodepoints;
     emoji->groupno = groupno;
+    emoji->variants = 1;
+    if (strstr(emoji->name, "skin tone"))
+    {
+	if (neutralskin)
+	{
+	    emoji->variants = 0;
+	    ++neutralskin->variants;
+	}
+    }
+    else neutralskin = emoji;
 }
 
 int main(void)
@@ -172,8 +184,8 @@ int main(void)
 	    printf("\\x%x", emoji->codepoints[j]);
 	}
 	printf("\", .refcnt = -1 }, "
-		"{ .len = %zu, .str = U\"%s\", .refcnt = -1 } }",
-		emoji->namelen, emoji->name);
+		"{ .len = %zu, .str = U\"%s\", .refcnt = -1 }, %u }",
+		emoji->namelen, emoji->name, emoji->variants);
     }
     puts("\n};\n"
 	    "static const EmojiGroup groups[] = {");
