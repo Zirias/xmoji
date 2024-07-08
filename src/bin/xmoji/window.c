@@ -86,14 +86,21 @@ static void map(Window *self)
 	size.height += 2;
 	xcb_screen_t *s = X11Adapter_screen();
 	int16_t x = parent->absMouse.x - (size.width / 2);
+	int16_t y = parent->absMouse.y - 16;
+	if (self->flags & WF_POS_PARENTWIDGET)
+	{
+	    Pos parentpos = Widget_origin(Widget_container(self));
+	    x = parentpos.x + (parent->absMouse.x - parent->mouse.x - 1);
+	    y = parentpos.y + (parent->absMouse.y - parent->mouse.y - 1);
+	}
 	if (x + size.width > s->width_in_pixels)
 	{
 	    x = s->width_in_pixels - size.width;
 	}
 	if (x < 0) x = 0;
-	int16_t y = parent->absMouse.y - 16;
 	if (wtype == WF_WINDOW_TOOLTIP) y -= size.height;
-	if (wtype == WF_WINDOW_MENU && y + size.height > s->height_in_pixels)
+	if (wtype == WF_WINDOW_MENU
+		&& y + size.height > s->height_in_pixels)
 	{
 	    y = s->height_in_pixels - size.height;
 	}
@@ -1121,7 +1128,8 @@ void Window_setMainWidget(void *self, void *widget)
 		X11Adapter_unmapColor(w->borderpixel);
 		w->borderpixel = (uint32_t)-1;
 	    }
-	    Color bc = Widget_color(widget, wtype == WF_WINDOW_TOOLTIP ?
+	    Color bc = Widget_color(widget, w->flags & WF_POS_PARENTWIDGET ?
+		    COLOR_ACTIVE : wtype == WF_WINDOW_TOOLTIP ?
 		    COLOR_BORDER_TOOLTIP : COLOR_BORDER);
 	    X11Adapter_mapColor(self, setBorderColor, bc);
 	}
