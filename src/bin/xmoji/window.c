@@ -1129,6 +1129,8 @@ void Window_setMainWidget(void *self, void *widget)
 	if (!font) Widget_setFontResName(w, 0, 0, 0);
 	else Widget_offerFont(widget, font);
 	PSC_Event_register(Widget_sizeRequested(widget), w, sizeRequested, 0);
+	w->haveMinSize = 0;
+	Widget_setSize(w, (Size){1, 1});
 	sizeRequested(w, 0, 0);
     }
 }
