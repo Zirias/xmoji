@@ -1,5 +1,6 @@
 #include "scrollbox.h"
 
+#include "surface.h"
 #include "window.h"
 #include "xrdb.h"
 
@@ -30,6 +31,7 @@ struct ScrollBox
     Size minSize;
     Size scrollSize;
     Rect scrollBar;
+    int backingstore;
     int hoverBar;
     uint16_t scrollPos;
     int16_t dragAnchor;
@@ -61,8 +63,15 @@ static void updateScrollbar(ScrollBox *self, Size size)
     self->scrollBar.pos.y = (scrollTop + 0x20) >> 6;
 done:
     geom.pos.y -= self->scrollPos;
-    Widget_setOrigin(self->widget, geom.pos);
-    Widget_setClip(self->widget, Widget_geometry(self));
+    if (self->backingstore)
+    {
+	Widget_setOffset(self->widget, geom.pos);
+    }
+    else
+    {
+	Widget_setOrigin(self->widget, geom.pos);
+	Widget_setClip(self->widget, Widget_geometry(self));
+    }
     Window *win = Window_fromWidget(self);
     if (win) Window_invalidateHover(win);
 }
@@ -103,14 +112,14 @@ static void updateHover(ScrollBox *self, Pos pos)
 static void destroy(void *obj)
 {
     ScrollBox *self = obj;
-    Object_destroy(self->widget);
+    if (!self->backingstore) Object_destroy(self->widget);
     free(self);
 }
 
 static void expose(void *obj, Rect region)
 {
     ScrollBox *self = Object_instance(obj);
-    if (!self->widget) return;
+    if (self->backingstore || !self->widget) return;
     Widget_invalidateRegion(self->widget, region);
 }
 
@@ -119,10 +128,10 @@ static int draw(void *obj, xcb_render_picture_t picture)
     ScrollBox *self = Object_instance(obj);
     if (!self->widget) return 0;
     Size size = Widget_size(self);
+    Pos origin = Widget_origin(self);
     if (picture && self->scrollSize.height > size.height)
     {
 	xcb_connection_t *c = X11Adapter_connection();
-	Pos origin = Widget_origin(self);
 	Color bgcol = Widget_color(self, COLOR_BG_LOWEST);
 	xcb_rectangle_t rect = {
 	    origin.x + size.width - self->scrollBar.size.width - 2, origin.y,
@@ -143,7 +152,18 @@ static int draw(void *obj, xcb_render_picture_t picture)
 		    Color_xcb(barcol), 1, &rect),
 		"Cannot draw scrollbar on 0x%x", (unsigned)picture);
     }
-    return Widget_draw(self->widget);
+    int rc = Widget_draw(self->widget);
+    if (picture && self->backingstore)
+    {
+	Pos offset = Widget_offset(self->widget);
+	Size ssz = Widget_size(self->widget);
+	Rect rect = {
+	    { origin.x - offset.x, origin.y - offset.y },
+	    { ssz.width, ssz.height }
+	};
+	Surface_render(self->widget, picture, origin, rect);
+    }
+    return rc;
 }
 
 static Size minSize(const void *obj)
@@ -265,7 +285,8 @@ static void dragged(void *obj, const DragEvent *event)
     self->scrollPos = (scrollPos + 0x20) >> 6;
     Pos origin = geom.pos;
     origin.y -= self->scrollPos;
-    Widget_setOrigin(self->widget, origin);
+    if (self->backingstore) Widget_setOffset(self->widget, origin);
+    else Widget_setOrigin(self->widget, origin);
     Widget_invalidate(self);
 }
 
@@ -314,7 +335,6 @@ ScrollBox *ScrollBox_createBase(void *derived, const char *name, void *parent)
     CREATEBASE(Widget, name, parent);
     XRdb *rdb = X11Adapter_resources();
     const char *resname = Widget_resname(self);
-    self->widget = 0;
     self->minSize = (Size){0, 100};
     self->scrollSize = (Size){0, 0};
     self->scrollBar = (Rect){{0, 0},
@@ -326,6 +346,17 @@ ScrollBox *ScrollBox_createBase(void *derived, const char *name, void *parent)
     self->minBarHeight = XRdb_int(rdb, XRdbKey(resname, "scrollBarMinHeight"),
 	    XRQF_OVERRIDES, 16, 2, 256);
 
+    if ((self->backingstore = XRdb_bool(rdb,
+		    XRdbKey(resname, "backingStore"), XRQF_OVERRIDES, 1)))
+    {
+	self->widget = Widget_cast(Surface_create(self));
+	Widget_setContainer(self->widget, self);
+	PSC_Event_register(Widget_sizeRequested(self->widget), self,
+		sizeRequested, 0);
+	Widget_show(self->widget);
+    }
+    else self->widget = 0;
+
     Widget_setPadding(self, (Box){0, 0, 0, 0});
     PSC_Event_register(Widget_sizeChanged(self), self, sizeChanged, 0);
 
@@ -335,6 +366,11 @@ ScrollBox *ScrollBox_createBase(void *derived, const char *name, void *parent)
 void ScrollBox_setWidget(void *self, void *widget)
 {
     ScrollBox *b = Object_instance(self);
+    if (b->backingstore)
+    {
+	Surface_setWidget(b->widget, widget);
+	return;
+    }
     if (b->widget)
     {
 	Widget_setContainer(b->widget, 0);
