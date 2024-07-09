@@ -24,6 +24,9 @@ struct EmojiButton
     Object base;
     FlowGrid *flowgrid;
     Flyout *flyout;
+    Size lastSize;
+    xcb_pixmap_t pixmap;
+    xcb_render_picture_t pic;
     xcb_render_picture_t pen;
     int selected;
 };
@@ -31,7 +34,13 @@ struct EmojiButton
 static void destroy(void *obj)
 {
     EmojiButton *self = obj;
-    if (self->pen) xcb_render_free_picture(X11Adapter_connection(), self->pen);
+    if (self->pen)
+    {
+	xcb_connection_t *c = X11Adapter_connection();
+	xcb_render_free_picture(c, self->pen);
+	xcb_render_free_picture(c, self->pic);
+	xcb_free_pixmap(c, self->pixmap);
+    }
     free(self);
 }
 
@@ -102,17 +111,51 @@ static int draw(void *obj, xcb_render_picture_t picture)
 	    xcb_free_pixmap(c, p);
 	}
 	Rect geom = Widget_geometry(self);
-	uint32_t x = (geom.pos.x + geom.size.width) << 16;
-	uint32_t y = (geom.pos.y + geom.size.height) << 16;
-	xcb_render_triangle_t triangle = {
-	    { x - (geom.size.width << 14), y },
-	    { x, y },
-	    { x, y - (geom.size.height << 14) }
-	};
-	CHECK(xcb_render_triangles(c, XCB_RENDER_PICT_OP_OVER,
-		    self->pen, picture, X11Adapter_alphaformat(),
-		    0, 0, 1, &triangle),
-		"Cannot render fly-out indicator on 0x%x", (unsigned)picture);
+	if (memcmp(&geom.size, &self->lastSize, sizeof geom.size))
+	{
+	    self->lastSize = geom.size;
+	    if (self->pic)
+	    {
+		xcb_render_free_picture(c, self->pic);
+		xcb_free_pixmap(c, self->pixmap);
+	    }
+	    self->pic = 0;
+	}
+	if (!self->pic)
+	{
+	    self->pixmap = xcb_generate_id(c);
+	    CHECK(xcb_create_pixmap(c, 8, self->pixmap,
+			X11Adapter_screen()->root,
+			geom.size.width, geom.size.height),
+		    "Cannot create triangle pixmap for 0x%x",
+		    (unsigned)picture);
+	    self->pic = xcb_generate_id(c);
+	    CHECK(xcb_render_create_picture(c, self->pic, self->pixmap,
+			X11Adapter_alphaformat(), 0, 0),
+		    "Cannot create triangle picture for 0x%x",
+		    (unsigned)picture);
+	    Color clear = 0;
+	    xcb_rectangle_t rect = { 0, 0, geom.size.width, geom.size.height };
+	    CHECK(xcb_render_fill_rectangles(c, XCB_RENDER_PICT_OP_SRC,
+			self->pic, Color_xcb(clear), 1, &rect),
+		    "Cannot clear triangle picture for 0x%x",
+		    (unsigned)picture);
+	    uint32_t x = geom.size.width << 16;
+	    uint32_t y = geom.size.height << 16;
+	    xcb_render_triangle_t triangle = {
+		{ x - (geom.size.width << 14), y },
+		{ x, y },
+		{ x, y - (geom.size.height << 14) }
+	    };
+	    CHECK(xcb_render_triangles(c, XCB_RENDER_PICT_OP_OVER,
+			self->pen, self->pic, 0, 0, 0, 1, &triangle),
+		"Cannot render fly-out indicator for 0x%x", (unsigned)picture);
+	}
+	CHECK(xcb_render_composite(c, XCB_RENDER_PICT_OP_OVER, self->pen,
+		    self->pic, picture, 0, 0, 0, 0,
+		    geom.pos.x, geom.pos.y, geom.size.width, geom.size.height),
+		"Cannot composite fly-out indicator on 0x%x",
+		(unsigned)picture);
     }
     return rc;
 }
@@ -156,6 +199,9 @@ EmojiButton *EmojiButton_createBase(void *derived,
     CREATEBASE(Button, name, parent);
     self->flowgrid = 0;
     self->flyout = 0;
+    self->lastSize = (Size){ 0, 0 };
+    self->pixmap = 0;
+    self->pic = 0;
     self->pen = 0;
     self->selected = 0;
 
