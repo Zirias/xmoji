@@ -20,6 +20,7 @@ xmoji_MODULES=		button \
 			object \
 			pixmap \
 			scrollbox \
+			surface \
 			svghooks \
 			tabbox \
 			textbox \
