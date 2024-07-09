@@ -90,8 +90,8 @@ static void map(Window *self)
 	if (self->flags & WF_POS_PARENTWIDGET)
 	{
 	    Pos parentpos = Widget_origin(Widget_container(self));
-	    x = parentpos.x + (parent->absMouse.x - parent->mouse.x - 1);
-	    y = parentpos.y + (parent->absMouse.y - parent->mouse.y - 1);
+	    x = parentpos.x + (parent->absMouse.x - parent->mouseUpdate.x - 1);
+	    y = parentpos.y + (parent->absMouse.y - parent->mouseUpdate.y - 1);
 	}
 	if (x + size.width > s->width_in_pixels)
 	{
