@@ -89,7 +89,17 @@ static void map(Window *self)
 	int16_t y = parent->absMouse.y - 16;
 	if (self->flags & WF_POS_PARENTWIDGET)
 	{
-	    Pos parentpos = Widget_origin(Widget_container(self));
+	    Widget *pw = Widget_container(self);
+	    Pos parentpos = Widget_origin(pw);
+	    Pos offset = Widget_offset(pw);
+	    parentpos.x += offset.x;
+	    parentpos.y += offset.y;
+	    while ((pw = Widget_container(pw)))
+	    {
+		offset = Widget_offset(pw);
+		parentpos.x += offset.x;
+		parentpos.y += offset.y;
+	    }
 	    x = parentpos.x + (parent->absMouse.x - parent->mouseUpdate.x - 1);
 	    y = parentpos.y + (parent->absMouse.y - parent->mouseUpdate.y - 1);
 	}

@@ -167,6 +167,8 @@ void Widget_setOrigin(void *self, Pos origin) CMETHOD;
 Rect Widget_geometry(const void *self) CMETHOD;
 Pos Widget_origin(const void *self) CMETHOD;
 Pos Widget_contentOrigin(const void *self, Size contentSize) CMETHOD;
+void Widget_setOffset(void *self, Pos offset) CMETHOD;
+Pos Widget_offset(const void *self) CMETHOD;
 const ColorSet *Widget_colorSet(const void *self) CMETHOD;
 Color Widget_color(const void *self, ColorRole role) CMETHOD;
 void Widget_setColor(void *self, ColorRole role, Color color) CMETHOD;

@@ -45,6 +45,7 @@ struct Widget
     Rect damages[MAXDAMAGES];
     Box padding;
     Size maxSize;
+    Pos offset;
     xcb_drawable_t drawable;
     xcb_drawable_t explicitDrawable;
     xcb_render_picture_t picture;
@@ -299,10 +300,8 @@ static Rect getClipRect(Widget *self, int pad)
     Box clipBox = Box_fromRect((pad
 		? Rect_pad(self->geometry, self->padding)
 		: self->geometry));
-    Window *win = Window_fromWidget(self);
-    Widget *winw = win ? Widget_cast(win) : 0;
     Widget *w = self;
-    while (w && w != winw)
+    while (w && !w->explicitDrawable)
     {
 	if (w->clipGeometry.size.width)
 	{
@@ -327,9 +326,9 @@ static Rect getClipRect(Widget *self, int pad)
 
 }
 
-static void setContentClipArea(Widget *self, xcb_connection_t *c)
+static void setContentClipArea(Widget *self, xcb_connection_t *c, int pad)
 {
-    Rect contentArea = getClipRect(self, 1);
+    Rect contentArea = getClipRect(self, pad);
     if (self->ndamages < 0)
     {
 	xcb_rectangle_t cliprect = {
@@ -411,7 +410,7 @@ int Widget_draw(void *self)
 		    (unsigned)w->picture);
 	}
     }
-    setContentClipArea(w, c);
+    setContentClipArea(w, c, 1);
     Object_vcall(rc, Widget, draw, self, w->picture);
     w->ndamages = 0;
     return rc;
@@ -467,6 +466,8 @@ Widget *Widget_enterAt(void *self, Pos pos)
 	Object_vcallv(Widget, enter, w);
     }
     Widget *child = w;
+    pos.x -= w->offset.x;
+    pos.y -= w->offset.y;
     Object_vcall(child, Widget, childAt, self, pos);
     if (w->tooltip) Tooltip_activate(w->tooltip, Window_fromWidget(w));
     return child;
@@ -699,6 +700,18 @@ Pos Widget_contentOrigin(const void *self, Size contentSize)
     return contentPos;
 }
 
+void Widget_setOffset(void *self, Pos offset)
+{
+    Widget *w = Object_instance(self);
+    w->offset = offset;
+}
+
+Pos Widget_offset(const void *self)
+{
+    const Widget *w = Object_instance(self);
+    return w->offset;
+}
+
 Color Widget_color(const void *self, ColorRole role)
 {
     Widget *w = Object_instance(self);
@@ -775,7 +788,7 @@ int Widget_visible(const void *self)
 {
     const Widget *w = Object_instance(self);
     if (!w->visible) return 0;
-    if (!w->container) return 1;
+    if (w->explicitDrawable || !w->container) return 1;
     return Widget_visible(w->container);
 }
 
@@ -789,7 +802,10 @@ int Widget_clicked(void *self, const ClickEvent *event)
     Widget *w = Object_instance(self);
     if (w->tooltip) Tooltip_cancel(w->tooltip);
     int handled = 0;
-    Object_vcall(handled, Widget, clicked, w, event);
+    ClickEvent cev = { event->button, event->pos, event->dblclick };
+    cev.pos.x -= w->offset.x;
+    cev.pos.y -= w->offset.y;
+    Object_vcall(handled, Widget, clicked, w, &cev);
     if (!handled && w->menu && event->button == MB_RIGHT)
     {
 	Menu_popup(w->menu, w);
@@ -800,7 +816,13 @@ int Widget_clicked(void *self, const ClickEvent *event)
 
 void Widget_dragged(void *self, const DragEvent *event)
 {
-    Object_vcallv(Widget, dragged, self, event);
+    Widget *w = Object_instance(self);
+    DragEvent dev = { event->button, event->from, event->to };
+    dev.from.x -= w->offset.x;
+    dev.from.y -= w->offset.y;
+    dev.to.x -= w->offset.x;
+    dev.to.y -= w->offset.y;
+    Object_vcallv(Widget, dragged, self, &dev);
 }
 
 void Widget_requestSize(void *self)
