@@ -147,7 +147,7 @@ static int startup(void *app)
 
     Window *win = Window_create("mainWindow", WF_REJECT_FOCUS, self);
     self->mainWindow = win;
-    Window_setTitle(win, "Xmoji 😀 äöüß");
+    Window_setTitle(win, "Xmoji");
     Widget_setContextMenu(win, menu);
     Icon_apply(appIcon, win);
 
@@ -268,7 +268,7 @@ static int startup(void *app)
 
     box = VBox_create(hbox);
     Widget_setPadding(box, (Box){12, 6, 6, 6});
-    UniStr(heading, U"Xmoji v0.0α");
+    UniStr(heading, U"Xmoji v" VERSION);
     TextLabel *label = TextLabel_create("aboutHeading", box);
     TextLabel_setText(label, heading);
     Font *hfont = Font_createVariant(deffont, Font_pixelsize(deffont) * 2,
