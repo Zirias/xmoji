@@ -20,6 +20,8 @@ EMOJIGEN_CLEANGOAL=	distclean
 
 DISTCLEANDIRS=		tools/bin
 
+NODIST=			poser/zimk
+
 include zimk/zimk.mk
 
 ifeq ($(BUNDLED_POSER),1)
