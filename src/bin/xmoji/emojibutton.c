@@ -227,7 +227,7 @@ EmojiButton *EmojiButton_createBase(void *derived,
     self->selected = 0;
 
     Button_setBorderWidth(self, 0);
-    Button_setLabelPadding(self, (Box){0, 0, 0, 0});
+    Button_setLabelPadding(self, (Box){1, 1, 1, 1});
     Button_setMinWidth(self, 0);
     Button_setColors(self, COLOR_BG_NORMAL, COLOR_BG_ACTIVE);
     Widget_setPadding(self, (Box){0, 0, 0, 0});
