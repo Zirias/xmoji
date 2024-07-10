@@ -808,12 +808,12 @@ int X11Adapter_init(int argc, char **argv, const char *locale,
     size_t pos = len + 1;
     if (pos > sizeof wmclass / 2) pos = sizeof wmclass / 2;
     int len2 = snprintf(wmclass+pos, sizeof wmclass / 2, "%s", cnm);
+    PSC_Log_fmt(PSC_L_INFO,
+	    "starting with window class \"%s\", \"%s\"", nm, classname);
     free(cnm);
     free(nm);
     wmclasssz = pos + len2 + 1;
     if (wmclasssz > sizeof wmclass) wmclasssz = sizeof wmclass;
-    PSC_Log_fmt(PSC_L_INFO,
-	    "starting with window class \"%s\", \"%s\"", nm, classname);
     xcb_generic_error_t *rqerr = xcb_request_check(c, xkbeventscookie);
     if (rqerr)
     {
