@@ -1,0 +1,26 @@
+name: CI
+
+on:
+  push:
+    branches: [ "master" ]
+  pull_request:
+    branches: [ "master" ]
+
+env:
+  CI_CFLAGS: -O2 -Wall -Wextra -Wshadow -Werror -pedantic
+  CI_DEPS: |
+    libfontconfig1-dev libfreetype-dev libharfbuzz-dev libxcb-cursor-dev
+    libxcb-image0-dev libxcb-xkb-dev libxcb-xtest0-dev libxkbcommon-x11-dev
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: recursive
+    - name: build-depends
+      run: sudo apt-get -y install ${CI_DEPS}
+    - name: build
+      run: make -j4 CFLAGS="${CI_CFLAGS}"
+
