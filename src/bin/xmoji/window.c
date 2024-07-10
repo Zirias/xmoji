@@ -91,6 +91,7 @@ static void map(Window *self)
 	{
 	    Widget *pw = Widget_container(self);
 	    Pos parentpos = Widget_origin(pw);
+	    Size parentsize = Widget_size(pw);
 	    Pos offset = Widget_offset(pw);
 	    parentpos.x += offset.x;
 	    parentpos.y += offset.y;
@@ -102,6 +103,10 @@ static void map(Window *self)
 	    }
 	    x = parentpos.x + (parent->absMouse.x - parent->mouseUpdate.x - 1);
 	    y = parentpos.y + (parent->absMouse.y - parent->mouseUpdate.y - 1);
+	    Size sz = Widget_size(self);
+	    if (sz.width < parentsize.width) sz.width = parentsize.width;
+	    if (sz.height < parentsize.height) sz.height = parentsize.height;
+	    Widget_setSize(self, sz);
 	}
 	if (x + size.width > s->width_in_pixels)
 	{
