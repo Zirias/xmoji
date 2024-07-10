@@ -24,10 +24,10 @@ struct EmojiButton
     Object base;
     FlowGrid *flowgrid;
     Flyout *flyout;
-    Size lastSize;
     xcb_pixmap_t pixmap;
     xcb_render_picture_t pic;
     xcb_render_picture_t pen;
+    Color pencolor;
     int selected;
 };
 
@@ -85,6 +85,64 @@ static void renderCallback(void *ctx, TextRenderer *renderer)
     }
 }
 
+static void prerender(EmojiButton *self, Size newSize)
+{
+    if (!self->flyout) return;
+
+    xcb_connection_t *c = X11Adapter_connection();
+    xcb_render_picture_t picture = Widget_picture(self);
+
+    if (!self->pen)
+    {
+	xcb_pixmap_t p = xcb_generate_id(c);
+	CHECK(xcb_create_pixmap(c, 24, p, X11Adapter_screen()->root, 1, 1),
+		"Cannot create pen pixmap for 0x%x", (unsigned)picture);
+	self->pen = xcb_generate_id(c);
+	uint32_t repeat = XCB_RENDER_REPEAT_NORMAL;
+	CHECK(xcb_render_create_picture(c, self->pen, p,
+		    X11Adapter_rgbformat(), XCB_RENDER_CP_REPEAT, &repeat),
+		"Cannot create pen for 0x%x", (unsigned)picture);
+	Color fill = 0xffffffff;
+	xcb_rectangle_t rect = {0, 0, 1, 1};
+	CHECK(xcb_render_fill_rectangles(c, XCB_RENDER_PICT_OP_OVER,
+		    self->pen, Color_xcb(fill), 1, &rect),
+		"Canot colorize pen for 0x%x", (unsigned)picture);
+	xcb_free_pixmap(c, p);
+    }
+    if (self->pic)
+    {
+	xcb_render_free_picture(c, self->pic);
+	xcb_free_pixmap(c, self->pixmap);
+    }
+    self->pixmap = xcb_generate_id(c);
+    CHECK(xcb_create_pixmap(c, 8, self->pixmap,
+		X11Adapter_screen()->root,
+		newSize.width, newSize.height),
+	    "Cannot create triangle pixmap for 0x%x",
+	    (unsigned)picture);
+    self->pic = xcb_generate_id(c);
+    CHECK(xcb_render_create_picture(c, self->pic, self->pixmap,
+		X11Adapter_alphaformat(), 0, 0),
+	    "Cannot create triangle picture for 0x%x",
+	    (unsigned)picture);
+    Color clear = 0;
+    xcb_rectangle_t rect = { 0, 0, newSize.width, newSize.height };
+    CHECK(xcb_render_fill_rectangles(c, XCB_RENDER_PICT_OP_SRC,
+		self->pic, Color_xcb(clear), 1, &rect),
+	    "Cannot clear triangle picture for 0x%x",
+	    (unsigned)picture);
+    uint32_t x = newSize.width << 16;
+    uint32_t y = newSize.height << 16;
+    xcb_render_triangle_t triangle = {
+	{ x - (newSize.width << 14), y },
+	{ x, y },
+	{ x, y - (newSize.height << 14) }
+    };
+    CHECK(xcb_render_triangles(c, XCB_RENDER_PICT_OP_OVER,
+		self->pen, self->pic, 0, 0, 0, 1, &triangle),
+	"Cannot render fly-out indicator for 0x%x", (unsigned)picture);
+}
+
 static int draw(void *obj, xcb_render_picture_t picture)
 {
     EmojiButton *self = Object_instance(obj);
@@ -93,63 +151,16 @@ static int draw(void *obj, xcb_render_picture_t picture)
     if (rc == 0 && picture && self->flyout)
     {
 	xcb_connection_t *c = X11Adapter_connection();
-	if (!self->pen)
+	Rect geom = Widget_geometry(self);
+	if (!self->pencolor) prerender(self, geom.size);
+	Color pencolor = Widget_color(self, COLOR_ACTIVE);
+	if (pencolor != self->pencolor)
 	{
-	    xcb_pixmap_t p = xcb_generate_id(c);
-	    CHECK(xcb_create_pixmap(c, 24, p, X11Adapter_screen()->root, 1, 1),
-		    "Cannot create pen pixmap for 0x%x", (unsigned)picture);
-	    self->pen = xcb_generate_id(c);
-	    uint32_t repeat = XCB_RENDER_REPEAT_NORMAL;
-	    CHECK(xcb_render_create_picture(c, self->pen, p,
-			X11Adapter_rgbformat(), XCB_RENDER_CP_REPEAT, &repeat),
-		    "Cannot create pen for 0x%x", (unsigned)picture);
-	    Color pencol = Widget_color(self, COLOR_ACTIVE);
+	    self->pencolor = pencolor;
 	    xcb_rectangle_t rect = {0, 0, 1, 1};
 	    CHECK(xcb_render_fill_rectangles(c, XCB_RENDER_PICT_OP_OVER,
-			self->pen, Color_xcb(pencol), 1, &rect),
+			self->pen, Color_xcb(pencolor), 1, &rect),
 		    "Canot colorize pen for 0x%x", (unsigned)picture);
-	    xcb_free_pixmap(c, p);
-	}
-	Rect geom = Widget_geometry(self);
-	if (memcmp(&geom.size, &self->lastSize, sizeof geom.size))
-	{
-	    self->lastSize = geom.size;
-	    if (self->pic)
-	    {
-		xcb_render_free_picture(c, self->pic);
-		xcb_free_pixmap(c, self->pixmap);
-	    }
-	    self->pic = 0;
-	}
-	if (!self->pic)
-	{
-	    self->pixmap = xcb_generate_id(c);
-	    CHECK(xcb_create_pixmap(c, 8, self->pixmap,
-			X11Adapter_screen()->root,
-			geom.size.width, geom.size.height),
-		    "Cannot create triangle pixmap for 0x%x",
-		    (unsigned)picture);
-	    self->pic = xcb_generate_id(c);
-	    CHECK(xcb_render_create_picture(c, self->pic, self->pixmap,
-			X11Adapter_alphaformat(), 0, 0),
-		    "Cannot create triangle picture for 0x%x",
-		    (unsigned)picture);
-	    Color clear = 0;
-	    xcb_rectangle_t rect = { 0, 0, geom.size.width, geom.size.height };
-	    CHECK(xcb_render_fill_rectangles(c, XCB_RENDER_PICT_OP_SRC,
-			self->pic, Color_xcb(clear), 1, &rect),
-		    "Cannot clear triangle picture for 0x%x",
-		    (unsigned)picture);
-	    uint32_t x = geom.size.width << 16;
-	    uint32_t y = geom.size.height << 16;
-	    xcb_render_triangle_t triangle = {
-		{ x - (geom.size.width << 14), y },
-		{ x, y },
-		{ x, y - (geom.size.height << 14) }
-	    };
-	    CHECK(xcb_render_triangles(c, XCB_RENDER_PICT_OP_OVER,
-			self->pen, self->pic, 0, 0, 0, 1, &triangle),
-		"Cannot render fly-out indicator for 0x%x", (unsigned)picture);
 	}
 	CHECK(xcb_render_composite(c, XCB_RENDER_PICT_OP_OVER, self->pen,
 		    self->pic, picture, 0, 0, 0, 0,
@@ -192,6 +203,16 @@ static int clicked(void *obj, const ClickEvent *event)
     return rc;
 }
 
+static void sizeChanged(void *receiver, void *sender, void *args)
+{
+    (void)sender;
+
+    EmojiButton *self = receiver;
+    SizeChangedEventArgs *ea = args;
+
+    if (ea->newSize.width && ea->newSize.height) prerender(self, ea->newSize);
+}
+
 EmojiButton *EmojiButton_createBase(void *derived,
 	const char *name, void *parent)
 {
@@ -199,10 +220,10 @@ EmojiButton *EmojiButton_createBase(void *derived,
     CREATEBASE(Button, name, parent);
     self->flowgrid = 0;
     self->flyout = 0;
-    self->lastSize = (Size){ 0, 0 };
     self->pixmap = 0;
     self->pic = 0;
     self->pen = 0;
+    self->pencolor = 0;
     self->selected = 0;
 
     Button_setBorderWidth(self, 0);
@@ -213,6 +234,8 @@ EmojiButton *EmojiButton_createBase(void *derived,
     Widget_setExpand(self, EXPAND_X|EXPAND_Y);
     Widget_setLocalUnselect(self, 1);
     TextLabel_setRenderCallback(Button_label(self), self, renderCallback);
+
+    PSC_Event_register(Widget_sizeChanged(self), self, sizeChanged, 0);
 
     return self;
 }
