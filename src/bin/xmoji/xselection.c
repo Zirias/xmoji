@@ -613,7 +613,7 @@ static void doOwnSelection(void *receiver, void *sender, void *args)
 
 static void XSelectionConvert_done(XSelectionConvert *self, int destroy)
 {
-    XSelectionConvert *parent;
+    XSelectionConvert *parent = 0;
     if (destroy)
     {
 	if (!self) return;
