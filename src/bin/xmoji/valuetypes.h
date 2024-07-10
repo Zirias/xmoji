@@ -5,17 +5,11 @@
 
 typedef uint32_t Color;
 
-#define priv_Color_xcbr(x) (x)->red
-#define priv_Color_xcbg(x) (x)->green
-#define priv_Color_xcbb(x) (x)->blue
-#define priv_Color_xcba(x) (x)->alpha
-#define priv_Color_comp(c,a,s) _Generic(c, \
-	Color *: ((*(c) >> s) & 0xffU), \
-	xcb_render_color_t *: ((a((xcb_render_color_t *)c) + 0x80U) >> 8))
-#define Color_red(c) priv_Color_comp(&(c), priv_Color_xcbr, 24)
-#define Color_green(c) priv_Color_comp(&(c), priv_Color_xcbg, 16)
-#define Color_blue(c) priv_Color_comp(&(c), priv_Color_xcbb, 8)
-#define Color_alpha(c) priv_Color_comp(&(c), priv_Color_xcba, 0)
+#define priv_Color_comp(c,s) (((c) >> s) & 0xffU)
+#define Color_red(c) priv_Color_comp(c, 24)
+#define Color_green(c) priv_Color_comp(c, 16)
+#define Color_blue(c) priv_Color_comp(c, 8)
+#define Color_alpha(c) priv_Color_comp(c, 0)
 
 #define priv_Color_16(c) ((c) << 8 | (c))
 #define Color_red16(c) priv_Color_16(Color_red(c))

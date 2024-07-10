@@ -170,8 +170,8 @@ int main(void)
     if (!groupsize || !emojisize) goto done;
     group->len = emojisize - group->start;
 
-    puts("static const EmojiGroup groups[];\n"
-	    "static const Emoji emojis[] = {");
+    printf("static const EmojiGroup groups[%zu];\n"
+	    "static const Emoji emojis[] = {\n", groupsize);
 
     for (size_t i = 0; i < emojisize; ++i)
     {
