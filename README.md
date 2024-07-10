@@ -38,9 +38,10 @@ Dependencies:
   (GNU GCC and LLVM clang work fine)
 * GNU make
 * fontconfig
-* freetype
+* freetype ( >= 2.12 )
 * harfbuzz
-* xcb libs: libxcb-cursor, libxcb-image, libxcb-xkb and libxcb-xtest
+* libpng ( >= 1.6 )
+* libxcb, libxcb-cursor, libxcb-image, libxcb-xkb and libxcb-xtest
 * xkbcommon and xkbcommon-x11
 
 For example, on a Debian or Ubuntu system, you would install these packages:
