@@ -2,6 +2,8 @@
 
 #include "timer.h"
 
+#include "suppress.h"
+
 #include <fcntl.h>
 #include <poser/core.h>
 #include <signal.h>
@@ -34,7 +36,9 @@ static void expirefunc(union sigval sv)
 {
     Timer *self = sv.sival_ptr;
     static const char dummy = 0;
+SUPPRESS(unused-result)
     write(self->pipe[1], &dummy, 1);
+ENDSUPPRESS
 }
 
 Timer *Timer_create(void)
