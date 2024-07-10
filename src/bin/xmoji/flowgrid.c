@@ -124,15 +124,14 @@ static void layout(FlowGrid *self, int updateMinSize)
     uint16_t rows = 0;
     while (PSC_ListIterator_moveNext(i))
     {
-	if (!rows) rows = 1;
 	FlowGridItem *item = PSC_ListIterator_current(i);
 	if (!Widget_isShown(item->widget)) continue;
 	Widget_setSize(item->widget, self->itemMinSize);
 	Widget_setOrigin(item->widget, colOrigin);
+	if (!col) ++rows;
 	if (++col == cols)
 	{
 	    col = 0;
-	    ++rows;
 	    rowOrigin.y += self->itemMinSize.height + self->spacing.height;
 	    colOrigin = rowOrigin;
 	}
@@ -141,9 +140,10 @@ static void layout(FlowGrid *self, int updateMinSize)
 	    colOrigin.x += self->itemMinSize.width + self->spacing.width;
 	}
     }
-    Size minSz = (Size){self->minCols * self->itemMinSize.width
-	+ (self->minCols - 1) * self->spacing.width,
-	rows * self->itemMinSize.height + (rows-1) * self->spacing.height};
+    Size minSz = rows ? (Size){self->minCols * self->itemMinSize.width
+	    + (self->minCols - 1) * self->spacing.width,
+	    rows * self->itemMinSize.height + (rows-1) * self->spacing.height}
+	: (Size){0, 0};
     if (memcmp(&self->minSize, &minSz, sizeof self->minSize))
     {
 	self->minSize = minSz;
