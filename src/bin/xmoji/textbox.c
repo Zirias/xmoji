@@ -4,6 +4,7 @@
 #include "textrenderer.h"
 #include "unistr.h"
 #include "unistrbuilder.h"
+#include "window.h"
 
 #include <poser/core.h>
 #include <stdlib.h>
@@ -37,12 +38,15 @@ struct TextBox
     UniStr *phtext;
     UniStr *selected;
     TextRenderer *placeholder;
+    PSC_Event *textChanged;
     Size minSize;
     Selection selection;
     unsigned cursor;
     unsigned scrollpos;
     unsigned dragAnchor;
     int cursorvisible;
+    int grab;
+    int grabbed;
 };
 
 static void updateSelected(TextBox *self)
@@ -77,6 +81,7 @@ static void destroy(void *obj)
 {
     TextBox *self = obj;
     PSC_Event_unregister(PSC_Service_tick(), self, blink, 0);
+    PSC_Event_destroy(self->textChanged);
     TextRenderer_destroy(self->placeholder);
     UniStr_destroy(self->phtext);
     UniStr_destroy(self->selected);
@@ -152,6 +157,19 @@ static int draw(void *obj, xcb_render_picture_t picture)
     return rc;
 }
 
+static void keyboardGrabbed(void *obj, unsigned sequence,
+	void *reply, xcb_generic_error_t *error)
+{
+    (void)sequence;
+
+    TextBox *self = obj;
+    if (reply && !error)
+    {
+	self->grabbed = 1;
+    }
+    else Widget_deactivate(self);
+}
+
 static int activate(void *obj)
 {
     TextBox *self = Object_instance(obj);
@@ -160,6 +178,13 @@ static int activate(void *obj)
     self->cursorvisible = 1;
     Widget_setBackground(self, 1, COLOR_BG_ACTIVE);
     Widget_invalidate(self);
+    if (self->grab && !self->grabbed)
+    {
+	AWAIT(xcb_grab_keyboard(X11Adapter_connection(), 1,
+		    Window_id(Window_fromWidget(self)), XCB_CURRENT_TIME,
+		    XCB_GRAB_MODE_ASYNC, XCB_GRAB_MODE_ASYNC),
+		self, keyboardGrabbed);
+    }
     return 1;
 }
 
@@ -173,6 +198,13 @@ static int deactivate(void *obj)
     }
     Widget_setBackground(self, 1, COLOR_BG_BELOW);
     Widget_invalidate(self);
+    if (self->grabbed)
+    {
+	CHECK(xcb_ungrab_keyboard(X11Adapter_connection(), XCB_CURRENT_TIME),
+		"Cannot ungrab keyboard for 0x%x",
+		(unsigned)Widget_picture(self));
+	self->grabbed = 0;
+    }
     return 1;
 }
 
@@ -184,10 +216,12 @@ static void enter(void *obj)
 
 static void leave(void *obj)
 {
-    if (!Widget_active(obj))
+    TextBox *self = Object_instance(obj);
+    if (self->grab) Widget_unfocus(self);
+    if (!Widget_active(self))
     {
 	Widget_setBackground(obj, 1, COLOR_BG_BELOW);
-	Widget_invalidate(obj);
+	Widget_invalidate(self);
     }
 }
 
@@ -360,6 +394,7 @@ static void keyPressed(void *obj, const KeyEvent *event)
 	    break;
     }
     TextRenderer_setText(self->renderer, str);
+    PSC_Event_raise(self->textChanged, 0, (void *)str);
 cursoronly:
     PSC_Service_setTickInterval(600);
     self->cursorvisible = 1;
@@ -378,7 +413,9 @@ static void paste(void *obj, XSelectionContent content)
     UniStrBuilder_insertStr(self->text, self->cursor,
 	    UniStr_str(content.data));
     self->cursor += UniStr_len(content.data);
-    TextRenderer_setText(self->renderer, UniStrBuilder_stringView(self->text));
+    const UniStr *str = UniStrBuilder_stringView(self->text);
+    TextRenderer_setText(self->renderer, str);
+    PSC_Event_raise(self->textChanged, 0, (void *)str);
     Widget_invalidate(self);
 }
 
@@ -522,12 +559,15 @@ TextBox *TextBox_createBase(void *derived, const char *name, void *parent)
     TextRenderer_setNoLigatures(self->renderer, 1);
     self->phtext = 0;
     self->placeholder = 0;
+    self->textChanged = PSC_Event_create(self);
     self->selected = 0;
     self->minSize = (Size){ 120, 12 };
     self->selection = (Selection){ 0, 0 };
     self->cursor = 0;
     self->scrollpos = 0;
     self->cursorvisible = 0;
+    self->grab = 0;
+    self->grabbed = 0;
 
     Widget_setBackground(self, 1, COLOR_BG_BELOW);
     Widget_setExpand(self, EXPAND_X);
@@ -539,8 +579,14 @@ TextBox *TextBox_createBase(void *derived, const char *name, void *parent)
 
 const UniStr *TextBox_text(const void *self)
 {
-    TextBox *l = Object_instance(self);
-    return UniStrBuilder_stringView(l->text);
+    const TextBox *b = Object_instance(self);
+    return UniStrBuilder_stringView(b->text);
+}
+
+PSC_Event *TextBox_textChanged(void *self)
+{
+    TextBox *b = Object_instance(self);
+    return b->textChanged;
 }
 
 void TextBox_setText(void *self, const UniStr *text)
@@ -579,5 +625,11 @@ void TextBox_setPlaceholder(void *self, const UniStr *text)
     {
 	Widget_invalidate(b);
     }
+}
+
+void TextBox_setGrab(void *self, int grab)
+{
+    TextBox *b = Object_instance(self);
+    b->grab = grab;
 }
 

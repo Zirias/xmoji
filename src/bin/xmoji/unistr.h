@@ -104,5 +104,6 @@ size_t UniStr_utf32len(const char32_t *s)
     ATTR_NONNULL((1));
 
 int UniStr_equals(const UniStr *str, const UniStr *other);
+int UniStr_containslc(const UniStr *big, const UniStr *little);
 
 #endif

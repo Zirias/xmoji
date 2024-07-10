@@ -17,6 +17,7 @@ C_CLASS_DECL(FlowGrid);
 FlowGrid *FlowGrid_createBase(void *derived, void *parent);
 #define FlowGrid_create(...) FlowGrid_createBase(0, __VA_ARGS__)
 void FlowGrid_addWidget(void *self, void *widget) CMETHOD;
+void *FlowGrid_widgetAt(void *self, size_t index) CMETHOD;
 Size FlowGrid_spacing(const void *self) CMETHOD;
 void FlowGrid_setSpacing(void *self, Size spacing) CMETHOD;
 

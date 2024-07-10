@@ -118,26 +118,21 @@ static void layout(FlowGrid *self, int updateMinSize)
     uint16_t cols = (contentGeom.size.width + self->spacing.width)
 	/ (self->itemMinSize.width + self->spacing.width);
     if (cols < self->minCols) cols = self->minCols;
-    uint16_t rows = (PSC_List_size(self->items) + cols - 1) / cols;
-    Size minSz = (Size){self->minCols * self->itemMinSize.width
-	+ (self->minCols - 1) * self->spacing.width,
-	rows * self->itemMinSize.height + (rows-1) * self->spacing.height};
-    if (memcmp(&self->minSize, &minSz, sizeof self->minSize))
-    {
-	self->minSize = minSz;
-	Widget_requestSize(self);
-    }
     Pos rowOrigin = contentGeom.pos;
     Pos colOrigin = rowOrigin;
     uint16_t col = 0;
+    uint16_t rows = 0;
     while (PSC_ListIterator_moveNext(i))
     {
+	if (!rows) rows = 1;
 	FlowGridItem *item = PSC_ListIterator_current(i);
+	if (!Widget_isShown(item->widget)) continue;
 	Widget_setSize(item->widget, self->itemMinSize);
 	Widget_setOrigin(item->widget, colOrigin);
 	if (++col == cols)
 	{
 	    col = 0;
+	    ++rows;
 	    rowOrigin.y += self->itemMinSize.height + self->spacing.height;
 	    colOrigin = rowOrigin;
 	}
@@ -145,6 +140,14 @@ static void layout(FlowGrid *self, int updateMinSize)
 	{
 	    colOrigin.x += self->itemMinSize.width + self->spacing.width;
 	}
+    }
+    Size minSz = (Size){self->minCols * self->itemMinSize.width
+	+ (self->minCols - 1) * self->spacing.width,
+	rows * self->itemMinSize.height + (rows-1) * self->spacing.height};
+    if (memcmp(&self->minSize, &minSz, sizeof self->minSize))
+    {
+	self->minSize = minSz;
+	Widget_requestSize(self);
     }
 
 done:
@@ -218,6 +221,7 @@ static Widget *childAt(void *obj, Pos pos)
     while (PSC_ListIterator_moveNext(i))
     {
 	FlowGridItem *item = PSC_ListIterator_current(i);
+	if (!Widget_isShown(item->widget)) continue;
 	Rect rect = Widget_geometry(item->widget);
 	if (Rect_containsPos(rect, pos))
 	{
@@ -273,12 +277,27 @@ static void sizeRequested(void *receiver, void *sender, void *args)
     }
 }
 
+static void shownChanged(void *receiver, void *sender, void *args)
+{
+    (void)sender;
+    (void)args;
+
+    FlowGrid *self = receiver;
+    layout(self, 0);
+    Widget_requestSize(self);
+    Widget_invalidate(self);
+}
+
 static void destroyItem(void *obj)
 {
     if (!obj) return;
     FlowGridItem *item = obj;
     PSC_Event_unregister(Widget_sizeRequested(item->widget), item,
 	    sizeRequested, 0);
+    PSC_Event_unregister(Widget_shown(item->widget), item->grid,
+	    shownChanged, 0);
+    PSC_Event_unregister(Widget_hidden(item->widget), item->grid,
+	    shownChanged, 0);
     Object_destroy(item->widget);
     free(item);
 }
@@ -310,7 +329,16 @@ void FlowGrid_addWidget(void *self, void *widget)
     if (font) Widget_offerFont(widget, font);
     item->minSize = Widget_minSize(widget);
     PSC_Event_register(Widget_sizeRequested(widget), item, sizeRequested, 0);
+    PSC_Event_register(Widget_shown(widget), g, shownChanged, 0);
+    PSC_Event_register(Widget_hidden(widget), g, shownChanged, 0);
     layout(g, 1);
+}
+
+void *FlowGrid_widgetAt(void *self, size_t index)
+{
+    FlowGrid *g = Object_instance(self);
+    FlowGridItem *item = PSC_List_at(g->items, index);
+    return item ? item->widget : 0;
 }
 
 Size FlowGrid_spacing(const void *self)

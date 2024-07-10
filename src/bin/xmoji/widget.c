@@ -784,6 +784,12 @@ void Widget_setDrawable(void *self, xcb_drawable_t drawable)
     w->explicitDrawable = drawable;
 }
 
+int Widget_isShown(const void *self)
+{
+    const Widget *w = Object_instance(self);
+    return w->visible;
+}
+
 int Widget_visible(const void *self)
 {
     const Widget *w = Object_instance(self);

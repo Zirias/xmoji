@@ -21,5 +21,7 @@ const EmojiGroup *Emoji_group(const Emoji *self) CMETHOD ATTR_PURE;
 const UniStr *Emoji_str(const Emoji *self) CMETHOD ATTR_PURE;
 const UniStr *Emoji_name(const Emoji *self) CMETHOD ATTR_PURE;
 unsigned Emoji_variants(const Emoji *self) CMETHOD ATTR_PURE;
+size_t Emoji_search(const Emoji **results, size_t maxresults,
+	const UniStr *pattern) ATTR_NONNULL((1)) ATTR_NONNULL((3));
 
 #endif

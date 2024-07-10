@@ -175,6 +175,7 @@ void Widget_setColor(void *self, ColorRole role, Color color) CMETHOD;
 void Widget_setBackground(void *self, int enabled, ColorRole role) CMETHOD;
 xcb_drawable_t Widget_drawable(void *self) CMETHOD;
 xcb_render_picture_t Widget_picture(const void *self) CMETHOD;
+int Widget_isShown(const void *self) CMETHOD;
 int Widget_visible(const void *self) CMETHOD;
 void Widget_keyPressed(void *self, const KeyEvent *event) CMETHOD;
 int Widget_clicked(void *self, const ClickEvent *event) CMETHOD;

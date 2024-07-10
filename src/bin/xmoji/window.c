@@ -397,9 +397,11 @@ static void keypress(void *receiver, void *sender, void *args)
 static void leave(void *receiver, void *sender, void *args)
 {
     (void)sender;
-    (void)args;
 
     Window *self = receiver;
+    xcb_leave_notify_event_t *ev = args;
+    if (ev->mode == XCB_NOTIFY_MODE_GRAB
+	    || ev->mode == XCB_NOTIFY_MODE_UNGRAB) return;
     if ((int)self->anchorButton <= 0)
     {
 	self->mouseUpdate.x = -1;

@@ -23,6 +23,8 @@
 #include <poser/core.h>
 #include <stdlib.h>
 
+#define MAXSEARCHRESULTS 64
+
 static int startup(void *app);
 
 static MetaX11App mo = MetaX11App_init(startup, 0, "Xmoji", free);
@@ -33,6 +35,7 @@ typedef struct Xmoji
     Window *mainWindow;
     Window *aboutDialog;
     TabBox *tabs;
+    FlowGrid *searchGrid;
 } Xmoji;
 
 static void onabout(void *receiver, void *sender, void *args)
@@ -82,6 +85,31 @@ static void kbinject(void *receiver, void *sender, void *args)
     Widget_unselect(self->tabs);
 }
 
+static void onsearch(void *receiver, void *sender, void *args)
+{
+    (void)sender;
+
+    Xmoji *self = receiver;
+    const UniStr *str = args;
+    size_t nresults = 0;
+    const Emoji *results[MAXSEARCHRESULTS];
+    if (str && UniStr_len(str) >= 3)
+    {
+	nresults = Emoji_search(results, MAXSEARCHRESULTS, str);
+    }
+    for (size_t i = 0; i < MAXSEARCHRESULTS; ++i)
+    {
+	void *button = FlowGrid_widgetAt(self->searchGrid, i);
+	if (i < nresults)
+	{
+	    Button_setText(button, Emoji_str(results[i]));
+	    Widget_setTooltip(button, Emoji_name(results[i]), 0);
+	    Widget_show(button);
+	}
+	else Widget_hide(button);
+    }
+}
+
 static int startup(void *app)
 {
     Xmoji *self = Object_instance(app);
@@ -128,18 +156,55 @@ static int startup(void *app)
 
     KeyInjector_init(100, IF_ADDZWSPACE|IF_EXTRAZWJ);
 
+    TextLabel *groupLabel = TextLabel_create(0, tabs);
+    UniStr(searchEmoji, U"\x1f50d");
+    UniStr(searchText, U"Search");
+    TextLabel_setText(groupLabel, searchEmoji);
+    Widget_setTooltip(groupLabel, searchText, 0);
+    Widget_setFontResName(groupLabel, "emojiFont", "emoji", 0);
+    Widget_show(groupLabel);
+
+    VBox *box = VBox_create(tabs);
+    Widget_setPadding(box, (Box){0, 0, 0, 0});
+    TextBox *search = TextBox_create("searchBox", box);
+    UniStr(clickToSearch, U"Click to type and search ...");
+    TextBox_setPlaceholder(search, clickToSearch);
+    TextBox_setGrab(search, 1);
+    PSC_Event_register(TextBox_textChanged(search), self, onsearch, 0);
+    Widget_show(search);
+    VBox_addWidget(box, search);
+    ScrollBox *scroll = ScrollBox_create(0, box);
+    FlowGrid *grid = FlowGrid_create(scroll);
+    FlowGrid_setSpacing(grid, (Size){0, 0});
+    Widget_setPadding(grid, (Box){0, 0, 0, 0});
+    Widget_setFontResName(grid, "emojiFont", "emoji", 0);
+    for (unsigned i = 0; i < MAXSEARCHRESULTS; ++i)
+    {
+	EmojiButton *emojiButton = EmojiButton_create(0, grid);
+	PSC_Event_register(Button_clicked(emojiButton), self,
+		kbinject, 0);
+	FlowGrid_addWidget(grid, emojiButton);
+    }
+    Widget_show(grid);
+    ScrollBox_setWidget(scroll, grid);
+    self->searchGrid = grid;
+    Widget_show(scroll);
+    VBox_addWidget(box, scroll);
+    Widget_show(box);
+    TabBox_addTab(tabs, groupLabel, box);
+
     size_t groups = EmojiGroup_numGroups();
     for (size_t groupidx = 0; groupidx < groups; ++groupidx)
     {
 	const EmojiGroup *group = EmojiGroup_at(groupidx);
-	TextLabel *groupLabel = TextLabel_create(0, tabs);
+	groupLabel = TextLabel_create(0, tabs);
 	TextLabel_setText(groupLabel, Emoji_str(EmojiGroup_emojiAt(group, 0)));
 	Widget_setTooltip(groupLabel, EmojiGroup_name(group), 0);
 	Widget_setFontResName(groupLabel, "emojiFont", "emoji", 0);
 	Widget_show(groupLabel);
 
-	ScrollBox *scroll = ScrollBox_create(0, tabs);
-	FlowGrid *grid = FlowGrid_create(scroll);
+	scroll = ScrollBox_create(0, tabs);
+	grid = FlowGrid_create(scroll);
 	FlowGrid_setSpacing(grid, (Size){0, 0});
 	Widget_setPadding(grid, (Box){0, 0, 0, 0});
 	Widget_setFontResName(grid, "emojiFont", "emoji", 0);
@@ -199,7 +264,7 @@ static int startup(void *app)
     Widget_show(img);
     HBox_addWidget(hbox, img);
 
-    VBox *box = VBox_create(hbox);
+    box = VBox_create(hbox);
     Widget_setPadding(box, (Box){12, 6, 6, 6});
     UniStr(heading, U"Xmoji v0.0α");
     TextLabel *label = TextLabel_create("aboutHeading", box);

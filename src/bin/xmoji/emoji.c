@@ -77,3 +77,18 @@ unsigned Emoji_variants(const Emoji *self)
     return self->variants;
 }
 
+size_t Emoji_search(const Emoji **results, size_t maxresults,
+	const UniStr *pattern)
+{
+    size_t nresults = 0;
+    for (size_t i = 0; nresults < maxresults
+	    && i < sizeof emojis / sizeof *emojis; ++i)
+    {
+	if (UniStr_containslc(&emojis[i].name, pattern))
+	{
+	    results[nresults++] = emojis + i;
+	}
+    }
+    return nresults;
+}
+

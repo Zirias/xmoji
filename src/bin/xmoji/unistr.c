@@ -322,3 +322,37 @@ int UniStr_equals(const UniStr *str, const UniStr *other)
     return !memcmp(str->str, other->str, str->len * sizeof *str->str);
 }
 
+static char32_t isolc(char32_t c)
+{
+    if ((c >= 0x41 && c <= 0x5a)
+	    || (c >= 0xc0 && c <= 0xd6)
+	    || (c >= 0xd8 && c <= 0xde)) return c + 0x20;
+    return c;
+}
+
+int UniStr_containslc(const UniStr *big, const UniStr *little)
+{
+    if (big == little) return 1;
+    if (!big || !big->len || !little || !little->len || little->len > big->len)
+    {
+	return 0;
+    }
+    size_t steps = big->len - little->len + 1;
+    for (size_t start = 0; start < steps; ++start)
+    {
+	int equals = 1;
+	for (size_t j = 0; j < little->len; ++j)
+	{
+	    char32_t a = isolc(big->str[start+j]);
+	    char32_t b = isolc(little->str[j]);
+	    if (a != b)
+	    {
+		equals = 0;
+		break;
+	    }
+	}
+	if (equals) return 1;
+    }
+    return 0;
+}
+

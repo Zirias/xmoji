@@ -153,7 +153,7 @@ static int draw(void *obj, xcb_render_picture_t picture)
 		"Cannot draw scrollbar on 0x%x", (unsigned)picture);
     }
     int rc = Widget_draw(self->widget);
-    if (picture && self->backingstore)
+    if (picture && self->backingstore && self->scrollSize.height)
     {
 	Pos offset = Widget_offset(self->widget);
 	Size ssz = Widget_size(self->widget);
@@ -317,8 +317,13 @@ static void sizeRequested(void *receiver, void *sender, void *args)
     Size curSize = Widget_size(sender);
     if (scrollSize.height > curSize.height)
     {
-	curSize.height = scrollSize.height;
-	Widget_setSize(sender, curSize);
+	curSize = Widget_size(self);
+	if (curSize.height && curSize.width)
+	{
+	    curSize.height = scrollSize.height;
+	    curSize.width -= self->scrollBar.size.width + 2;
+	    Widget_setSize(sender, curSize);
+	}
     }
     self->minSize.width = scrollSize.width + self->scrollBar.size.width + 2;
     Widget_requestSize(self);
@@ -326,6 +331,7 @@ static void sizeRequested(void *receiver, void *sender, void *args)
     {
 	self->scrollSize = scrollSize;
 	updateScrollbar(self, Widget_size(self));
+	Widget_invalidate(self);
     }
 }
 
