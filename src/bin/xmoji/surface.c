@@ -108,6 +108,7 @@ static void sizeChanged(void *receiver, void *sender, void *args)
     Surface *self = receiver;
     SizeChangedEventArgs *ea = args;
 
+    if (ea->newSize.width > 8192 || ea->newSize.height > 8192) return;
     xcb_connection_t *c = 0;
     if (ea->newSize.width > ea->oldSize.width
 	    || ea->newSize.height > ea->oldSize.height)
