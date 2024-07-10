@@ -26,6 +26,124 @@ This is currently work in progress and should become the successor of my
   versions.
 * There's also a search tab to find emojis by their name.
 
+## XResources
+
+Everything concerning appearance and rendering is configured in the
+traditional X11 way, using X resources. Xmoji only looks for them on the
+root window of the running X session, so make sure you upload them with
+the `xrdb` tool.
+
+The application class name is `Xmoji`, the instance name defaults to the
+name of the executable (`xmoji`), but can be overridden with the `-name`
+commandline argument. Most resources can also be overridden on the
+commandline by giving the instance name of their last component, so e.g.
+running `xmoji -emojiFont emoji-24` will set the emoji font to that
+font.
+
+### Fonts
+
+Fonts are given as search patterns for `fontconfig`, multiple patterns
+can be given separated by commas, for example `Noto
+Sans-14:bold,sans-14`. Fonts are global, so can't be scoped to
+individual widgets.
+
+* `font` (class `Font`): The font for display of normal text. Default:
+  `sans`.
+* `emojiFont` (class `Font`): The font for display of emojis. Default:
+  `emoji`.
+
+### Generic rendering options
+
+* `glitches` (no class): Enable workarounds for rendering glitches. This
+  is interpreted as a bit mask to enable individual workarounds for
+  rendering bugs. Default: `0`.
+
+  There's only one bit currently available:
+  - `1`: Use a transformation for compositing RGBA glyphs instead of a
+       simple offset. Enable this if you experience broken rendering of
+       emojis.
+* `backingStore` (no class): Use an offscreen pixmap for window contents
+  and contents of scrollable areas. Disable this to save X server memory
+  at the cost of visible flicker. Default: `1`.
+* `scrollBarWidth` (no class): Width in pixels for scroll bars.
+  Default: `10`.
+* `scrollBarMinHeight` (no class): Minimum height in pixels for scroll
+  bars. Default: `16`.
+
+### Colors
+
+Colors can be given in these formats:
+
+* A well-known X11 color name
+* RGB(A) values in simple hex notation: `#rgb`, `#rrggbb`, `#rrrgggbbb`,
+  `#rrrrggggbbbb`, `#rgba`, `#rrggbbaa`, `#rrrrggggbbbbaaaa`.
+* RGB(A) values in X11 notation `rgb:<r>/<g>/<b>`/`rgba:<r>/<g>/<b>/<a>`,
+  where each component can have 1 to 4 hex digits.
+* RGB(A) values in CSS notation `rgb(<r>,<g>,<b>)`/`rgba(<r>,<g>,<b>,<a>)`,
+  where each component is a decimal number between 0 and 255. The `rgb`
+  prefix can also be omitted.
+
+Colors can be scoped to individual widgets by their class and instance
+names. The following colors are available:
+
+* `foreground` (class `Foreground`): Normal foreground color. Default:
+  `black`.
+* `background` (class `Background`): Normal background color. Default:
+  `gray`.
+* `aboveForeground` (class `Foreground`): Foreground color for elemets
+  appearing above normal. Default: `black`.
+* `aboveBackground` (class `Background`): Background color for elements
+  appearing above normal. Default: `light gray`.
+* `belowForeground` (class `Foreground`): Foreground color for elements
+  appearing below normal. Default: `black`.
+* `belowBackground` (class `Background`): Background color for elements
+  appearing below normal. Default: `dark gray`.
+* `lowestForeground` (class `Foreground`): Foreground color for elements
+  appearing lowest. Default: `black`.
+* `lowestBackground` (class `Background`): Background color for elements
+  appearing lowest. Default: `web gray`.
+* `activeForeground` (class `Foreground`): Foreground color for active
+  elements. Default: `dark slate gray`.
+* `activeBackground` (class `Background`): Background color for active
+  elements. Default: `light blue`.
+* `disabledForeground` (class `Foreground`): Foreground color for
+  disabled elements. Default: `dim gray`.
+* `disabledBackground` (class `Background`): Background color for
+  disabled elements. Default: `silver`.
+* `selectedForeground` (class `Foreground`): Foreground color for
+  selected elements. Default: `light blue`.
+* `selectedBackground` (class `Background`): Background color for
+  selected elements. Default: `medium blue`.
+* `tooltipForeground` (class `Foreground`): Foreground color for
+  tooltips. Default: `black`.
+* `tooltipBackground` (class `Background`): Background color for
+  tooltips. Default: `navajo white`.
+* `border` (class `Border`): Color for borders. Default: `dark gray`.
+* `tooltipBorder` (class `Border`): Color for the border of tooltips.
+  Default: `black`.
+
+### Example
+
+The following X resources configure a larger default emoji font, a
+slightly larger scroll bar and a dark color scheme:
+
+    Xmoji*emojiFont: emoji:pixelsize=24
+    Xmoji*Foreground: #c8c6c5
+    Xmoji*Background: #211f1d
+    Xmoji*Border: #191210
+    Xmoji*belowBackground: #191210
+    Xmoji*lowestBackground: #120f0d
+    Xmoji*aboveBackground: #302a28
+    Xmoji*activeBackground: #403830
+    Xmoji*disabledForeground: #777777
+    Xmoji*selectedForeground: black
+    Xmoji*selectedBackground: #77ddff
+    Xmoji*tooltipForeground: light cyan
+    Xmoji*tooltipBackground: dark slate gray
+    Xmoji*tooltipBorder: light sea green
+    Xmoji*scrollBarWidth: 12
+    Xmoji*scrollBarMinHeight: 25
+
 ## Building
 
 To obtain the source from git, make sure to include submodules, e.g. with the
