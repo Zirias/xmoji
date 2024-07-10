@@ -166,7 +166,7 @@ static int startup(void *app)
 
     VBox *box = VBox_create(tabs);
     VBox_setSpacing(box, 0);
-    Widget_setPadding(box, (Box){0, 0, 0, 0});
+    Widget_setPadding(box, (Box){0, 2, 0, 0});
     TextBox *search = TextBox_create("searchBox", box);
     UniStr(clickToSearch, U"Click to type and search ...");
     TextBox_setPlaceholder(search, clickToSearch);
