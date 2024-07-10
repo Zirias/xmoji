@@ -31,6 +31,7 @@ struct VBox
     Object base;
     PSC_List *items;
     Size minSize;
+    unsigned nexpand;
     uint16_t spacing;
 };
 
@@ -175,9 +176,11 @@ static void layout(VBox *self, int updateMinSize)
     if (updateMinSize)
     {
 	self->minSize = (Size){ 0, 0 };
+	self->nexpand = 0;
 	while (PSC_ListIterator_moveNext(i))
 	{
 	    VBoxItem *item = PSC_ListIterator_current(i);
+	    if (Widget_expand(item->widget) & EXPAND_Y) ++self->nexpand;
 	    self->minSize.height += item->minSize.height + self->spacing;
 	    if (item->minSize.width > self->minSize.width)
 	    {
@@ -196,13 +199,17 @@ static void layout(VBox *self, int updateMinSize)
     if (contentheight > self->minSize.height)
     {
 	hspace = (contentheight - self->minSize.height)
-	    / PSC_List_size(self->items);
+	    / (self->nexpand ? self->nexpand : PSC_List_size(self->items));
     }
     Pos contentOrigin = Widget_contentOrigin(self, self->minSize);
     while (PSC_ListIterator_moveNext(i))
     {
 	VBoxItem *item = PSC_ListIterator_current(i);
-	Size itemSize = (Size){itemwidth, item->minSize.height + hspace};
+	Size itemSize = (Size){itemwidth, item->minSize.height};
+	if (!self->nexpand || (Widget_expand(item->widget) & EXPAND_Y))
+	{
+	    itemSize.height += hspace;
+	}
 	Widget_setSize(item->widget, itemSize);
 	Size realSize = Widget_size(item->widget);
 	Pos itemPos = contentOrigin;
