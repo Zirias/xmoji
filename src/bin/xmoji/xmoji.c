@@ -93,6 +93,7 @@ static void onsearch(void *receiver, void *sender, void *args)
     const UniStr *str = args;
     size_t nresults = 0;
     const Emoji *results[MAXSEARCHRESULTS];
+    Widget_unselect(self->tabs);
     if (str && UniStr_len(str) >= 3)
     {
 	nresults = Emoji_search(results, MAXSEARCHRESULTS, str);
