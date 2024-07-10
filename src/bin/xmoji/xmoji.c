@@ -242,6 +242,7 @@ static int startup(void *app)
 	TabBox_addTab(tabs, groupLabel, scroll);
     }
 
+    TabBox_setTab(tabs, 1);
     self->tabs = tabs;
     Widget_show(tabs);
     Window_setMainWidget(win, tabs);

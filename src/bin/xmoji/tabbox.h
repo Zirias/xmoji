@@ -18,5 +18,6 @@ TabBox *TabBox_createBase(void *derived, const char *name, void *parent);
 #define TabBox_create(...) TabBox_createBase(0, __VA_ARGS__)
 void TabBox_addTab(void *self, void *buttonWidget, void *contentWidget)
     CMETHOD ATTR_NONNULL((2)) ATTR_NONNULL((3));
+void TabBox_setTab(void *self, int index) CMETHOD;
 
 #endif

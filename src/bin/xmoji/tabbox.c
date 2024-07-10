@@ -435,5 +435,20 @@ void TabBox_addTab(void *self, void *buttonWidget, void *contentWidget)
     Widget_setContainer(tab->contentWidget, b);
     PSC_List_append(b->tabs, tab, destroyTab);
     if (b->currentIndex < 0) b->currentIndex = 0;
-    layout(self);
+    layout(b);
+}
+
+void TabBox_setTab(void *self, int index)
+{
+    TabBox *b = Object_instance(self);
+    size_t ntabs = PSC_List_size(b->tabs);
+    if (!ntabs) index = -1;
+    else if (index < 0) index = 0;
+    else if ((size_t)index >= ntabs) index = ntabs - 1;
+
+    if (index != b->currentIndex)
+    {
+	b->currentIndex = index;
+	layout(b);
+    }
 }
