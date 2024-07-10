@@ -47,7 +47,7 @@ xmoji_EMOJIGEN_FILES=	emojidata.h:contrib/emoji-test.txt
 xmoji_LIBS=		m \
 			rt
 xmoji_PKGDEPS=		fontconfig \
-			freetype2 \
+			freetype2 >= 24.2.18 \
 			harfbuzz \
 			libpng >= 1.6 \
 			xcb \
