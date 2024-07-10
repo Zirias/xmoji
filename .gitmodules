@@ -1,3 +1,6 @@
 [submodule "zimk"]
 	path = zimk
 	url = https://github.com/Zirias/zimk.git
+[submodule "poser"]
+	path = poser
+	url = https://github.com/Zirias/poser.git

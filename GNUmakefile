@@ -1,4 +1,5 @@
 BOOLCONFVARS_OFF=	TRACE
+BOOLCONFVARS_ON=	BUNDLED_POSER
 USES=			gen pkgconfig
 
 SUBBUILD=		BIN2CSTR EMOJIGEN
@@ -20,5 +21,12 @@ EMOJIGEN_CLEANGOAL=	distclean
 DISTCLEANDIRS=		tools/bin
 
 include zimk/zimk.mk
+
+ifeq ($(BUNDLED_POSER),1)
+WITH_TLS:=		0
+INCLUDES+=		-I./poser/include
+posercore_BUILDWITH:=	#
+$(call zinc,poser/src/lib/core/core.mk)
+endif
 
 $(call zinc,src/bin/xmoji/xmoji.mk)

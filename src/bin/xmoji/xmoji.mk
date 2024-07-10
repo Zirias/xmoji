@@ -50,7 +50,6 @@ xmoji_PKGDEPS=		fontconfig \
 			freetype2 \
 			harfbuzz \
 			libpng >= 1.6 \
-			posercore \
 			xcb \
 			xcb-cursor \
 			xcb-image \
@@ -62,6 +61,14 @@ xmoji_PKGDEPS=		fontconfig \
 
 ifeq ($(TRACE),1)
 xmoji_DEFINES+=		-DTRACE_X11_REQUESTS
+endif
+
+ifeq ($(BUNDLED_POSER),1)
+xmoji_STATICDEPS+=	posercore
+xmoji_LIBS+=		posercore
+xmoji_LDFLAGS+=		-pthread
+else
+xmoji_PKGDEPS+=		posercore
 endif
 
 $(call binrules,xmoji)
