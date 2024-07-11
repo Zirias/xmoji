@@ -26,8 +26,8 @@ include zimk/zimk.mk
 
 ifeq ($(BUNDLED_POSER),1)
 WITH_TLS:=		0
-INCLUDES+=		-I./poser/include
 posercore_BUILDWITH:=	#
+posercore_PRECFLAGS:=	-I./poser/include
 $(call zinc,poser/src/lib/core/core.mk)
 endif
 
