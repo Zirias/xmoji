@@ -37,6 +37,15 @@ struct X11Error
     uint8_t code;
 };
 
+static void svprestartup(void *receiver, void *sender, void *args)
+{
+    (void)receiver;
+    (void)sender;
+    (void)args;
+
+    PSC_Service_setTickInterval(0);
+}
+
 static void svstartup(void *receiver, void *sender, void *args)
 {
     (void)receiver;
@@ -81,6 +90,7 @@ static void destroy(void *obj)
     X11App *self = obj;
     PSC_Event_unregister(PSC_Service_shutdown(), self, svshutdown, 0);
     PSC_Event_unregister(PSC_Service_startup(), self, svstartup, 0);
+    PSC_Event_unregister(PSC_Service_prestartup(), self, svprestartup, 0);
     free(self->name);
     free(self->locale);
     PSC_Event_destroy(self->error);
@@ -173,6 +183,7 @@ X11App *X11App_createBase(void *derived, int argc, char **argv)
     self->argc = argc;
     self->quitting = 0;
 
+    PSC_Event_register(PSC_Service_prestartup(), self, svprestartup, 0);
     PSC_Event_register(PSC_Service_startup(), self, svstartup, 0);
     PSC_Event_register(PSC_Service_shutdown(), self, svshutdown, 0);
 

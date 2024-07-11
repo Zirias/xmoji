@@ -39,6 +39,7 @@ struct TextBox
     UniStr *selected;
     TextRenderer *placeholder;
     PSC_Event *textChanged;
+    PSC_Timer *cursorBlink;
     Size minSize;
     Selection selection;
     unsigned cursor;
@@ -80,7 +81,7 @@ void blink(void *receiver, void *sender, void *args)
 static void destroy(void *obj)
 {
     TextBox *self = obj;
-    PSC_Event_unregister(PSC_Service_tick(), self, blink, 0);
+    PSC_Timer_destroy(self->cursorBlink);
     PSC_Event_destroy(self->textChanged);
     TextRenderer_destroy(self->placeholder);
     UniStr_destroy(self->phtext);
@@ -173,8 +174,7 @@ static void keyboardGrabbed(void *obj, unsigned sequence,
 static int activate(void *obj)
 {
     TextBox *self = Object_instance(obj);
-    PSC_Service_setTickInterval(600);
-    PSC_Event_register(PSC_Service_tick(), self, blink, 0);
+    PSC_Timer_start(self->cursorBlink);
     self->cursorvisible = 1;
     Widget_setBackground(self, 1, COLOR_BG_ACTIVE);
     Widget_invalidate(self);
@@ -191,7 +191,7 @@ static int activate(void *obj)
 static int deactivate(void *obj)
 {
     TextBox *self = Object_instance(obj);
-    PSC_Event_unregister(PSC_Service_tick(), self, blink, 0);
+    PSC_Timer_stop(self->cursorBlink);
     if (self->cursorvisible)
     {
 	self->cursorvisible = 0;
@@ -557,6 +557,9 @@ TextBox *TextBox_createBase(void *derived, const char *name, void *parent)
     self->text = UniStrBuilder_create();
     self->renderer = TextRenderer_create(self->base.base);
     TextRenderer_setNoLigatures(self->renderer, 1);
+    self->cursorBlink = PSC_Timer_create();
+    PSC_Timer_setMs(self->cursorBlink, 600);
+    PSC_Event_register(PSC_Timer_expired(self->cursorBlink), self, blink, 0);
     self->phtext = 0;
     self->placeholder = 0;
     self->textChanged = PSC_Event_create(self);
