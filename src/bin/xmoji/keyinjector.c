@@ -156,9 +156,9 @@ void KeyInjector_init(unsigned ms, InjectorFlags flags)
     if (!timer)
     {
 	timer = PSC_Timer_create();
-	PSC_Timer_setMs(timer, ms);
 	PSC_Event_register(PSC_Timer_expired(timer), 0, resetkmap, 0);
     }
+    PSC_Timer_setMs(timer, ms);
     injectflags = flags;
 }
 
