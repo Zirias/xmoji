@@ -591,25 +591,31 @@ static void flushandsync(void *receiver, void *sender, void *args)
     /* Trigger event for end of event-loop iteration */
     PSC_Event_raise(eventsDone, 0, 0);
 
-    /* Repeat this reading new input until it did not trigger reading
-     * more data */
-    while (xcb_total_read(c) != rdpos)
+    do
     {
-	readX11Input(0, 0, 0);
-	PSC_Event_raise(eventsDone, 0, 0);
-    }
+	/* Repeat this reading new input until it did not trigger reading
+	 * more data */
+	while (xcb_total_read(c) != rdpos)
+	{
+	    readX11Input(0, 0, 0);
+	    PSC_Event_raise(eventsDone, 0, 0);
+	}
 
-    /* Finally check whether a sync is needed */
-    if (!syncseq && (waitingNoreply || waitingNum >= SYNCTHRESH))
-    {
-	syncseq = AWAIT(xcb_get_input_focus(c), 0, sync_cb);
-	xcb_flush(c);
-    }
-    else if (newWaiting)
-    {
-	xcb_flush(c);
-	newWaiting = 0;
-    }
+	/* Finally check whether a sync is needed */
+	if (!syncseq && (waitingNoreply || waitingNum >= SYNCTHRESH))
+	{
+	    syncseq = AWAIT(xcb_get_input_focus(c), 0, sync_cb);
+	    xcb_flush(c);
+	}
+	else if (newWaiting)
+	{
+	    xcb_flush(c);
+	    newWaiting = 0;
+	}
+
+	/* Check again whether xcb_flush() could have triggered a read,
+	 * repeat the whole dance in this case */
+    } while (xcb_total_read(c) != rdpos);
 }
 
 int X11Adapter_init(int argc, char **argv, const char *locale,
