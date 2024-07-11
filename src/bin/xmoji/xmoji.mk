@@ -28,7 +28,6 @@ xmoji_MODULES=		button \
 			textbox \
 			textlabel \
 			textrenderer \
-			timer \
 			tooltip \
 			unistr \
 			unistrbuilder \
@@ -46,8 +45,7 @@ xmoji_BIN2CSTR_FILES=	icon256.h:icons/256x256/xmoji.png \
 			icon32.h:icons/32x32/xmoji.png \
 			icon16.h:icons/16x16/xmoji.png
 xmoji_EMOJIGEN_FILES=	emojidata.h:contrib/emoji-test.txt
-xmoji_LIBS=		m \
-			rt
+xmoji_LIBS=		m
 xmoji_PKGDEPS=		fontconfig \
 			freetype2 >= 24.2.18 \
 			harfbuzz \
@@ -68,7 +66,7 @@ endif
 ifeq ($(BUNDLED_POSER),1)
 xmoji_STATICDEPS+=	posercore
 xmoji_PRECFLAGS+=	-I./poser/include
-xmoji_LIBS+=		posercore
+xmoji_LIBS+=		posercore rt
 xmoji_LDFLAGS+=		-pthread
 else
 xmoji_PKGDEPS+=		posercore

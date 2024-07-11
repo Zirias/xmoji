@@ -1,6 +1,5 @@
 #include "keyinjector.h"
 
-#include "timer.h"
 #include "unistr.h"
 #include "x11adapter.h"
 
@@ -19,8 +18,7 @@ typedef struct InjectJob
     unsigned symspercode;
 } InjectJob;
 
-static Timer *timer;
-static unsigned resetms;
+static PSC_Timer *timer;
 static InjectorFlags injectflags;
 
 static InjectJob queue[MAXQUEUELEN];
@@ -47,7 +45,7 @@ static void resetkmap(void *receiver, void *sender, void *args)
     (void)sender;
     (void)args;
 
-    Timer_stop(timer);
+    PSC_Timer_stop(timer);
     xcb_connection_t *c = X11Adapter_connection();
     const xcb_setup_t *setup = xcb_get_setup(c);
     CHECK(xcb_change_keyboard_mapping(c, queue[queuefront].len,
@@ -139,7 +137,7 @@ static void doinject(void *obj, unsigned sequence,
 
     queue[queuefront].len = len;
     queue[queuefront].symspercode = kmap->keysyms_per_keycode;
-    Timer_start(timer, resetms);
+    PSC_Timer_start(timer);
 }
 
 static void injectnext(void)
@@ -157,10 +155,10 @@ void KeyInjector_init(unsigned ms, InjectorFlags flags)
 {
     if (!timer)
     {
-	timer = Timer_create();
-	PSC_Event_register(Timer_expired(timer), 0, resetkmap, 0);
+	timer = PSC_Timer_create();
+	PSC_Timer_setMs(timer, ms);
+	PSC_Event_register(PSC_Timer_expired(timer), 0, resetkmap, 0);
     }
-    resetms = ms;
     injectflags = flags;
 }
 
@@ -175,7 +173,7 @@ void KeyInjector_inject(const UniStr *str)
 void KeyInjector_done(void)
 {
     if (!timer) return;
-    Timer_destroy(timer);
+    PSC_Timer_destroy(timer);
     timer = 0;
 }
 

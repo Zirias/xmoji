@@ -1,7 +1,6 @@
 #include "xselection.h"
 
 #include "object.h"
-#include "timer.h"
 #include "unistr.h"
 #include "window.h"
 #include "x11adapter.h"
@@ -25,7 +24,7 @@ struct XSelectionRequest
     XSelectionRequest *next;
     XSelectionRequest *parent;
     XSelectionRequest *subreqs;
-    Timer *timeout;
+    PSC_Timer *timeout;
     void *data;
     size_t datalen;
     size_t datapos;
@@ -62,7 +61,7 @@ struct XSelectionConvert
     XSelection *selection;
     XSelectionConvert *next;
     Widget *requestor;
-    Timer *timeout;
+    PSC_Timer *timeout;
     void *data;
     size_t datalen;
     XSelectionCallback received;
@@ -171,7 +170,7 @@ static void XSelectionRequest_reject(XSelection *selection,
 static void XSelectionRequest_done(XSelectionRequest *self, int destroy)
 {
     if (destroy && !self) return;
-    Timer_destroy(self->timeout);
+    PSC_Timer_destroy(self->timeout);
     free(self->data);
     if (self->sendincr)
     {
@@ -413,10 +412,11 @@ static void XSelectionRequest_start(XSelectionRequest *self)
 		(unsigned)Window_id(self->selection->w));
 	PSC_Event_register(X11Adapter_propertyNotify(), self,
 		XSelectionRequest_propertyChanged, self->requestor);
-	self->timeout = Timer_create();
-	PSC_Event_register(Timer_expired(self->timeout), self,
+	self->timeout = PSC_Timer_create();
+	PSC_Timer_setMs(self->timeout, REQUESTTIMEOUT);
+	PSC_Event_register(PSC_Timer_expired(self->timeout), self,
 		XSelectionRequest_timedout, 0);
-	Timer_start(self->timeout, REQUESTTIMEOUT);
+	PSC_Timer_start(self->timeout);
 	AWAIT(xcb_change_property(c, XCB_PROP_MODE_REPLACE, self->requestor,
 		    self->property, A(INCR), 32, 1, &incr),
 		self, XSelectionRequest_checkError);
@@ -629,7 +629,7 @@ static void XSelectionConvert_done(XSelectionConvert *self, int destroy)
     }
     XSelectionConvert *next = self->next;
     Object_destroy(self->requestor);
-    Timer_destroy(self->timeout);
+    PSC_Timer_destroy(self->timeout);
     Window_returnProperty(self->selection->w, self->property);
     if (self->recvincr)
     {
@@ -707,9 +707,10 @@ static void XSelectionConvert_readProperty(void *obj, unsigned sequence,
     }
     if (prop->type == A(INCR))
     {
+	PSC_Timer_setMs(self->timeout, REQUESTTIMEOUT);
 	PSC_Event_register(Window_propertyChanged(self->selection->w),
 		self, XSelectionConvert_readIncr, self->property);
-	Timer_start(self->timeout, REQUESTTIMEOUT);
+	PSC_Timer_start(self->timeout);
 	self->recvincr = 1;
 	if (self->next) XSelectionConvert_start(self->next);
 	return;
@@ -837,9 +838,10 @@ static void XSelectionConvert_convert(XSelectionConvert *self)
 
 static void XSelectionConvert_start(XSelectionConvert *self)
 {
-    PSC_Event_register(Timer_expired(self->timeout), self,
+    PSC_Timer_setMs(self->timeout, CONVERTTIMEOUT);
+    PSC_Event_register(PSC_Timer_expired(self->timeout), self,
 	    XSelectionConvert_timedout, 0);
-    Timer_start(self->timeout, CONVERTTIMEOUT);
+    PSC_Timer_start(self->timeout);
     self->target = A(TARGETS);
     XSelectionConvert_convert(self);
 }
@@ -889,7 +891,7 @@ void XSelection_request(XSelection *self, XSelectionType type,
     conversion->selection = self;
     conversion->next = 0;
     conversion->requestor = Object_ref(widget);
-    conversion->timeout = Timer_create();
+    conversion->timeout = PSC_Timer_create();
     conversion->data = 0;
     conversion->datalen = 0;
     conversion->received = received;

@@ -1,20 +1,16 @@
 #include "tooltip.h"
 
 #include "textlabel.h"
-#include "timer.h"
 #include "window.h"
 
 #include <poser/core.h>
-
-static Timer *timer;
-unsigned timerref;
 
 struct Tooltip
 {
     TextLabel *label;
     Widget *parent;
     Window *window;
-    unsigned delay;
+    PSC_Timer *timer;
 };
 
 static void timeout(void *receiver, void *sender, void *args)
@@ -23,8 +19,7 @@ static void timeout(void *receiver, void *sender, void *args)
     (void)args;
 
     Tooltip *self = receiver;
-    Timer_stop(timer);
-    PSC_Event_unregister(Timer_expired(timer), self, timeout, 0);
+    PSC_Timer_stop(self->timer);
     if (self->window)
     {
 	Window_showTooltip(self->window, self->label, self->parent);
@@ -33,15 +28,13 @@ static void timeout(void *receiver, void *sender, void *args)
 
 Tooltip *Tooltip_create(const UniStr *text, Widget *parent, unsigned delay)
 {
-    if (!timerref++)
-    {
-	timer = Timer_create();
-    }
     Tooltip *self = PSC_malloc(sizeof *self);
     self->label = TextLabel_create(0, 0);
     self->parent = parent;
     self->window = 0;
-    self->delay = delay ? delay : 2000;
+    self->timer = PSC_Timer_create();
+    PSC_Timer_setMs(self->timer, delay ? delay : 2000);
+    PSC_Event_register(PSC_Timer_expired(self->timer), self, timeout, 0);
 
     TextLabel_setText(self->label, text);
     TextLabel_setColor(self->label, COLOR_TOOLTIP);
@@ -54,25 +47,20 @@ Tooltip *Tooltip_create(const UniStr *text, Widget *parent, unsigned delay)
 void Tooltip_activate(Tooltip *self, Window *window)
 {
     self->window = window;
-    PSC_Event_register(Timer_expired(timer), self, timeout, 0);
-    Timer_start(timer, self->delay);
+    PSC_Timer_start(self->timer);
 }
 
 void Tooltip_cancel(Tooltip *self)
 {
     self->window = 0;
-    Timer_stop(timer);
-    PSC_Event_unregister(Timer_expired(timer), self, timeout, 0);
+    PSC_Timer_stop(self->timer);
 }
 
 void Tooltip_destroy(Tooltip *self)
 {
     if (!self) return;
+    PSC_Timer_destroy(self->timer);
     Object_destroy(self->label);
     free(self);
-    if (!--timerref)
-    {
-	Timer_destroy(timer);
-    }
 }
 
