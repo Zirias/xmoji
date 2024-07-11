@@ -72,6 +72,7 @@ static void svshutdown(void *receiver, void *sender, void *args)
     Object_vcallv(X11App, shutdown, self);
     if (PSC_List_size(self->windows))
     {
+	PSC_Service_setTickInterval(1000);
 	PSC_Service_shutdownLock();
 	self->quitting = 1;
 	PSC_ListIterator *i = PSC_List_iterator(self->windows);
