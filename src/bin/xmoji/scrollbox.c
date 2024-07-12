@@ -201,6 +201,9 @@ static Widget *childAt(void *obj, Pos pos)
     Widget *child = Widget_cast(self);
     if (!self->widget) return child;
     Rect childGeom = Widget_geometry(self->widget);
+    Pos childOffset = Widget_offset(self->widget);
+    childGeom.pos.x += childOffset.x;
+    childGeom.pos.y += childOffset.y;
     if (pos.x >= childGeom.pos.x
 	    && pos.x < childGeom.pos.x + childGeom.size.width
 	    && pos.y >= childGeom.pos.y
@@ -314,19 +317,25 @@ static void sizeRequested(void *receiver, void *sender, void *args)
 
     ScrollBox *self = receiver;
     Size scrollSize = Widget_minSize(sender);
-    Size curSize = Widget_size(sender);
-    if (scrollSize.height > curSize.height)
+    Size sizeAvail = Widget_size(self);
+    if (scrollSize.height > sizeAvail.height
+	    && sizeAvail.width > self->scrollBar.size.width + 2)
     {
-	curSize = Widget_size(self);
-	if (curSize.height && curSize.width)
-	{
-	    curSize.height = scrollSize.height;
-	    curSize.width -= self->scrollBar.size.width + 2;
-	    Widget_setSize(sender, curSize);
-	}
+	sizeAvail.width -= self->scrollBar.size.width + 2;
     }
-    self->minSize.width = scrollSize.width + self->scrollBar.size.width + 2;
-    Widget_requestSize(self);
+    if (sizeAvail.width > scrollSize.width) scrollSize.width = sizeAvail.width;
+    uint16_t minWidth = scrollSize.width;
+    if (scrollSize.height > sizeAvail.height)
+    {
+	minWidth += self->scrollBar.size.width + 2;
+    }
+    if (minWidth > self->minSize.width)
+    {
+	self->minSize.width = minWidth;
+	Widget_requestSize(self);
+    }
+    else Widget_setSize(sender, scrollSize);
+
     if (memcmp(&self->scrollSize, &scrollSize, sizeof self->scrollSize))
     {
 	self->scrollSize = scrollSize;
