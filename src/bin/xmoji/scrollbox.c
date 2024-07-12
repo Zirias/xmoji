@@ -317,6 +317,7 @@ static void sizeRequested(void *receiver, void *sender, void *args)
 
     ScrollBox *self = receiver;
     Size scrollSize = Widget_minSize(sender);
+    uint16_t minWidth = scrollSize.width;
     Size sizeAvail = Widget_size(self);
     if (scrollSize.height > sizeAvail.height
 	    && sizeAvail.width > self->scrollBar.size.width + 2)
@@ -324,7 +325,6 @@ static void sizeRequested(void *receiver, void *sender, void *args)
 	sizeAvail.width -= self->scrollBar.size.width + 2;
     }
     if (sizeAvail.width > scrollSize.width) scrollSize.width = sizeAvail.width;
-    uint16_t minWidth = scrollSize.width;
     if (scrollSize.height > sizeAvail.height)
     {
 	minWidth += self->scrollBar.size.width + 2;
