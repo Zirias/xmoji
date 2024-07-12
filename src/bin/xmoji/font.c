@@ -1,6 +1,8 @@
 #include "font.h"
 
-#include "svghooks.h"
+#ifdef WITH_SVG
+#  include "svghooks.h"
+#endif
 #include "x11adapter.h"
 #include "xrdb.h"
 
@@ -66,10 +68,12 @@ static int Font_init(void)
 	goto error;
     }
 
+#ifdef WITH_SVG
     if (FT_Property_Set(ftlib, "ot-svg", "svg-hooks", SvgHooks_get()) != 0)
     {
 	PSC_Log_msg(PSC_L_WARNING, "Could not add SVG rendering hooks");
     }
+#endif
 
     byPattern = PSC_HashTable_create(5);
     byId = PSC_HashTable_create(5);
@@ -168,6 +172,15 @@ static Font *createFromFile(const char *file, int index, char *id,
 		pixelsize = fixedpixelsize;
 	    }
 	}
+#if defined(FT_FACE_FLAG_SVG) && !defined(WITH_SVG)
+	else if (face->face_flags & FT_FACE_FLAG_SVG)
+	{
+	    PSC_Log_msg(PSC_L_WARNING,
+		    "SVG support disabled, ignoring SVG font");
+	    FT_Done_Face(face);
+	    return 0;
+	}
+#endif
 	else if (FT_Set_Char_Size(face, 0,
 		    (unsigned)(64.0 * pixelsize), 0, 0) != 0)
 	{

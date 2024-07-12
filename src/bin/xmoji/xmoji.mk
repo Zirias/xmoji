@@ -18,12 +18,10 @@ xmoji_MODULES=		button \
 			imagelabel \
 			keyinjector \
 			menu \
-			nanosvg \
 			object \
 			pixmap \
 			scrollbox \
 			surface \
-			svghooks \
 			tabbox \
 			textbox \
 			textlabel \
@@ -47,7 +45,6 @@ xmoji_BIN2CSTR_FILES=	icon256.h:icons/256x256/xmoji.png \
 xmoji_EMOJIGEN_FILES=	emojidata.h:contrib/emoji-test.txt
 xmoji_LIBS=		m
 xmoji_PKGDEPS=		fontconfig \
-			freetype2 >= 24.2.18 \
 			harfbuzz \
 			libpng >= 1.6 \
 			xcb \
@@ -70,6 +67,15 @@ xmoji_LIBS+=		posercore rt
 xmoji_LDFLAGS+=		-pthread
 else
 xmoji_PKGDEPS+=		posercore
+endif
+
+ifeq ($(WITH_SVG),1)
+xmoji_MODULES+=		nanosvg \
+			svghooks
+xmoji_PKGDEPS+=		freetype2 >= 24.2.18
+xmoji_DEFINES+=		-DWITH_SVG
+else
+xmoji_PKGDEPS+=		freetype2
 endif
 
 $(call binrules,xmoji)
