@@ -172,3 +172,6 @@ To build and install Xmoji, you can simply type
     make
     make install
 
+If your default `make` utility is not GNU make (like e.g. on a BSD system),
+install GNU make first and type `gmake` instead of `make`.
+
