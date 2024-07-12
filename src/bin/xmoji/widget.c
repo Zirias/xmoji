@@ -254,8 +254,19 @@ void Widget_setFontResName(void *self, const char *name,
     XRdb_register(rdb, "Font", name);
     const char *pattern = XRdb_value(rdb,
 	    XRdbKey(Widget_resname(self), name), XRQF_OVERRIDES);
-    if (!pattern) pattern = defpattern;
-    doSetFont(Object_instance(self), Font_create(pattern, options));
+    char *reqpat = 0;
+    if (pattern)
+    {
+	reqpat = PSC_malloc(strlen(pattern) + strlen(defpattern) + 2);
+	strcpy(reqpat, pattern);
+	strcat(reqpat, ",");
+	strcat(reqpat, defpattern);
+	pattern = reqpat;
+    }
+    else pattern = defpattern;
+    Font *font = Font_create(pattern, options);
+    free(reqpat);
+    doSetFont(Object_instance(self), font);
 }
 
 void Widget_setContextMenu(void *self, Menu *menu)
