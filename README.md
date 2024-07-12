@@ -156,7 +156,7 @@ Dependencies:
   (GNU GCC and LLVM clang work fine)
 * GNU make
 * fontconfig
-* freetype ( >= 2.12 )
+* freetype ( >= 2.12 when SVG support is enabled, see below )
 * harfbuzz
 * libpng ( >= 1.6 )
 * libxcb, libxcb-cursor, libxcb-image, libxcb-xkb and libxcb-xtest
@@ -174,4 +174,33 @@ To build and install Xmoji, you can simply type
 
 If your default `make` utility is not GNU make (like e.g. on a BSD system),
 install GNU make first and type `gmake` instead of `make`.
+
+### Build options
+
+Options can be given as variables in each make invocation, e.g. like this:
+
+    make FOO=yes
+    make FOO=yes install
+
+Alternatively, they can be saved and are then used automatically, like this:
+
+    make FOO=on config
+    make
+    make install
+
+The following build options are available:
+
+* `TRACE` (bool): Enables tracing of all X11 requests. When running with
+  `-vv`, this prints all requests to stderr. Also, when an error occurs,
+  the code and location of the request that caused it is printed.
+  For debugging only. Default: `off`.
+
+* `BUNDLED_POSER` (bool): Uses the bundled poser lib and links it statically.
+  When disabled, poser must be installed and will be linked as a shared
+  library. Default: `on`.
+
+* `WITH_SVG` (bool): Enable support for fonts with SVG glyphs. When enabled,
+  freetype >= 2.12 is required and the bundled
+  [nanosvg](https://github.com/memononen/nanosvg) is built for rasterizing
+  the SVG glyphs. Default: `on`.
 
