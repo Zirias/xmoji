@@ -21,6 +21,7 @@ xmoji_MODULES=		button \
 			object \
 			pixmap \
 			scrollbox \
+			shape \
 			surface \
 			tabbox \
 			textbox \
