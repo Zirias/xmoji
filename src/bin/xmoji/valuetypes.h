@@ -114,4 +114,11 @@ typedef enum Expand
     EXPAND_Y	= 1 << 1
 } Expand;
 
+typedef enum PictFormat
+{
+    PICTFORMAT_ALPHA,
+    PICTFORMAT_RGB,
+    PICTFORMAT_ARGB
+} PictFormat;
+
 #endif

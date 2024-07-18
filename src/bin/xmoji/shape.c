@@ -40,10 +40,10 @@ Shape *Shape_create(ShapeRenderer renderer, size_t datasz, const void *data)
     return self;
 }
 
-void Shape_render(Shape *self, xcb_render_picture_t ownerpic)
+void Shape_render(Shape *self, void *obj, xcb_render_picture_t ownerpic)
 {
     if (self->picture) return;
-    self->picture = self->renderer(ownerpic, self->data);
+    self->picture = self->renderer(obj, ownerpic, self->data);
 }
 
 xcb_render_picture_t Shape_picture(const Shape *self)

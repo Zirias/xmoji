@@ -2,6 +2,7 @@
 
 #include "flowgrid.h"
 #include "flyout.h"
+#include "pen.h"
 #include "shape.h"
 #include "textlabel.h"
 #include "textrenderer.h"
@@ -26,16 +27,16 @@ struct EmojiButton
     FlowGrid *flowgrid;
     Flyout *flyout;
     Shape *triangle;
-    xcb_render_picture_t pen;
-    Color pencolor;
+    Pen *pen;
     Size trianglesize;
+    Color pencolor;
     int selected;
 };
 
 static void destroy(void *obj)
 {
     EmojiButton *self = obj;
-    if (self->pen) xcb_render_free_picture(X11Adapter_connection(), self->pen);
+    Pen_destroy(self->pen);
     Shape_destroy(self->triangle);
     free(self);
 }
@@ -81,29 +82,16 @@ static void renderCallback(void *ctx, TextRenderer *renderer)
     }
 }
 
-static xcb_render_picture_t renderTriangle(xcb_render_picture_t ownerpic,
-	const void *data)
+static xcb_render_picture_t renderTriangle(void *obj,
+	xcb_render_picture_t ownerpic, const void *data)
 {
+    EmojiButton *self = obj;
     const Size *sz = data;
+
     xcb_connection_t *c = X11Adapter_connection();
     xcb_screen_t *s = X11Adapter_screen();
 
     xcb_pixmap_t tmp = xcb_generate_id(c);
-    CHECK(xcb_create_pixmap(c, 8, tmp, s->root, 1, 1),
-	    "Cannot create triangle pen pixmap for 0x%x", (unsigned)ownerpic);
-    xcb_render_picture_t pen = xcb_generate_id(c);
-    uint32_t repeat = XCB_RENDER_REPEAT_NORMAL;
-    CHECK(xcb_render_create_picture(c, pen, tmp, X11Adapter_alphaformat(),
-		XCB_RENDER_CP_REPEAT, &repeat),
-	    "Cannot create triangle pen for 0x%x", (unsigned)ownerpic);
-    xcb_free_pixmap(c, tmp);
-    Color color = 0xffffffff;
-    xcb_rectangle_t rect = {0, 0, 1, 1};
-    CHECK(xcb_render_fill_rectangles(c, XCB_RENDER_PICT_OP_OVER,
-		pen, Color_xcb(color), 1, &rect),
-	    "Cannot colorize triangle pen for 0x%x", (unsigned)ownerpic);
-
-    tmp = xcb_generate_id(c);
     CHECK(xcb_create_pixmap(c, 8, tmp, s->root, sz->width, sz->height),
 	    "Cannot create triangle pixmap for 0x%x", (unsigned)ownerpic);
     xcb_render_picture_t pic = xcb_generate_id(c);
@@ -111,9 +99,8 @@ static xcb_render_picture_t renderTriangle(xcb_render_picture_t ownerpic,
 		0, 0),
 	    "Cannot create triangle picture for 0x%x", (unsigned)ownerpic);
     xcb_free_pixmap(c, tmp);
-    color = 0;
-    rect.width = sz->width;
-    rect.height = sz->height;
+    Color color = 0;
+    xcb_rectangle_t rect = {0, 0, sz->width, sz->height};
     CHECK(xcb_render_fill_rectangles(c, XCB_RENDER_PICT_OP_SRC,
 		pic, Color_xcb(color), 1, &rect),
 	    "Cannot clear triangle picture for 0x%x", (unsigned)ownerpic);
@@ -124,10 +111,11 @@ static xcb_render_picture_t renderTriangle(xcb_render_picture_t ownerpic,
 	{ x, y },
 	{ x, y - (sz->height << 14) }
     };
+    if (!self->pen) self->pen = Pen_create();
+    Pen_configure(self->pen, PICTFORMAT_ALPHA, 0xffffffff);
     CHECK(xcb_render_triangles(c, XCB_RENDER_PICT_OP_OVER,
-		pen, pic, 0, 0, 0, 1, &triangle),
+		Pen_picture(self->pen, ownerpic), pic, 0, 0, 0, 1, &triangle),
 	"Cannot render triangle for 0x%x", (unsigned)ownerpic);
-    xcb_render_free_picture(c, pen);
 
     return pic;
 }
@@ -142,7 +130,7 @@ static void prerender(EmojiButton *self, Size newSize)
 	Shape *triangle = Shape_create(renderTriangle,
 		sizeof self->trianglesize, &self->trianglesize);
 	if (self->triangle) Shape_destroy(self->triangle);
-	Shape_render(triangle, Widget_picture(self));
+	Shape_render(triangle, self, Widget_picture(self));
 	self->triangle = triangle;
     }
 }
@@ -155,31 +143,17 @@ static int draw(void *obj, xcb_render_picture_t picture)
     if (rc == 0 && picture && self->flyout)
     {
 	xcb_connection_t *c = X11Adapter_connection();
-	if (!self->pen)
-	{
-	    xcb_pixmap_t tmp = xcb_generate_id(c);
-	    CHECK(xcb_create_pixmap(c, 24, tmp,
-			X11Adapter_screen()->root, 1, 1),
-		    "Cannot create pen pixmap for 0x%x", (unsigned)picture);
-	    self->pen = xcb_generate_id(c);
-	    uint32_t repeat = XCB_RENDER_REPEAT_NORMAL;
-	    CHECK(xcb_render_create_picture(c, self->pen, tmp,
-			X11Adapter_rgbformat(), XCB_RENDER_CP_REPEAT, &repeat),
-		    "Cannot create pen for 0x%x", (unsigned)picture);
-	    xcb_free_pixmap(c, tmp);
-	}
+	if (!self->pen) self->pen = Pen_create();
 	Rect geom = Widget_geometry(self);
 	if (!self->pencolor) prerender(self, geom.size);
 	Color pencolor = Widget_color(self, COLOR_ACTIVE);
 	if (pencolor != self->pencolor)
 	{
+	    Pen_configure(self->pen, PICTFORMAT_RGB, pencolor);
 	    self->pencolor = pencolor;
-	    xcb_rectangle_t rect = {0, 0, 1, 1};
-	    CHECK(xcb_render_fill_rectangles(c, XCB_RENDER_PICT_OP_OVER,
-			self->pen, Color_xcb(pencolor), 1, &rect),
-		    "Canot colorize pen for 0x%x", (unsigned)picture);
 	}
-	CHECK(xcb_render_composite(c, XCB_RENDER_PICT_OP_OVER, self->pen,
+	CHECK(xcb_render_composite(c, XCB_RENDER_PICT_OP_OVER,
+		    Pen_picture(self->pen, picture),
 		    Shape_picture(self->triangle), picture, 0, 0, 0, 0,
 		    geom.pos.x, geom.pos.y, geom.size.width, geom.size.height),
 		"Cannot composite fly-out indicator on 0x%x",
@@ -239,8 +213,8 @@ EmojiButton *EmojiButton_createBase(void *derived,
     self->flyout = 0;
     self->triangle = 0;
     self->pen = 0;
-    self->pencolor = 0;
     self->trianglesize = (Size){0, 0};
+    self->pencolor = 0;
     self->selected = 0;
 
     Button_setBorderWidth(self, 0);

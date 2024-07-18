@@ -152,9 +152,7 @@ static PSC_Event *requestError;
 static PSC_Event *eventsDone;
 static xcb_atom_t atoms[NATOMS];
 static xcb_render_pictformat_t rootformat;
-static xcb_render_pictformat_t alphaformat;
-static xcb_render_pictformat_t argbformat;
-static xcb_render_pictformat_t rgbformat;
+static xcb_render_pictformat_t formats[3];
 static int32_t kbdid;
 static int fd;
 static uint8_t xkbevbase;
@@ -730,7 +728,7 @@ int X11Adapter_init(int argc, char **argv, const char *locale,
 	    if (fi.data->direct.green_mask != 0) continue;
 	    if (fi.data->direct.blue_mask != 0) continue;
 	    if (fi.data->direct.alpha_mask != 255) continue;
-	    alphaformat = fi.data->id;
+	    formats[PICTFORMAT_ALPHA] = fi.data->id;
 	}
 	else
 	{
@@ -740,31 +738,31 @@ int X11Adapter_init(int argc, char **argv, const char *locale,
 	    if (fi.data->direct.green_mask != 255) continue;
 	    if (fi.data->direct.blue_shift != 0) continue;
 	    if (fi.data->direct.blue_mask != 255) continue;
-	    if (fi.data->depth == 32 && fi.data->direct.alpha_mask == 255)
+	    if (fi.data->depth == 24 && fi.data->direct.alpha_mask == 0)
 	    {
-		argbformat = fi.data->id;
+		formats[PICTFORMAT_RGB] = fi.data->id;
 	    }
-	    else if (fi.data->depth == 24 && fi.data->direct.alpha_mask == 0)
+	    else if (fi.data->depth == 32 && fi.data->direct.alpha_mask == 255)
 	    {
-		rgbformat = fi.data->id;
+		formats[PICTFORMAT_ARGB] = fi.data->id;
 	    }
 	}
     }
     free(pf);
     pf = 0;
-    if (!alphaformat)
+    if (!formats[PICTFORMAT_ALPHA])
     {
 	PSC_Log_msg(PSC_L_ERROR, "No 8bit alpha format found");
 	goto error;
     }
-    if (!argbformat)
-    {
-	PSC_Log_msg(PSC_L_ERROR, "No 32bit ARGB format found");
-	goto error;
-    }
-    if (!rgbformat)
+    if (!formats[PICTFORMAT_RGB])
     {
 	PSC_Log_msg(PSC_L_ERROR, "No 24bit RGB format found");
+	goto error;
+    }
+    if (!formats[PICTFORMAT_ARGB])
+    {
+	PSC_Log_msg(PSC_L_ERROR, "No 32bit ARGB format found");
 	goto error;
     }
 
@@ -958,19 +956,9 @@ xcb_render_pictformat_t X11Adapter_rootformat(void)
     return rootformat;
 }
 
-xcb_render_pictformat_t X11Adapter_alphaformat(void)
+xcb_render_pictformat_t X11Adapter_format(PictFormat format)
 {
-    return alphaformat;
-}
-
-xcb_render_pictformat_t X11Adapter_argbformat(void)
-{
-    return argbformat;
-}
-
-xcb_render_pictformat_t X11Adapter_rgbformat(void)
-{
-    return rgbformat;
+    return formats[format];
 }
 
 struct xkb_compose_table *X11Adapter_kbdcompose(void)
@@ -1291,8 +1279,7 @@ void X11Adapter_done(void)
     buttonrelease = 0;
     buttonpress = 0;
     rootformat = 0;
-    alphaformat = 0;
-    argbformat = 0;
+    memset(formats, 0, sizeof formats);
     for (unsigned i = 0; i < sizeof cursornames / sizeof *cursornames; ++i)
     {
 	xcb_free_cursor(c, cursors[i]);

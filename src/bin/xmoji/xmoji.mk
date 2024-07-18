@@ -19,6 +19,7 @@ xmoji_MODULES=		button \
 			keyinjector \
 			menu \
 			object \
+			pen \
 			pixmap \
 			scrollbox \
 			shape \

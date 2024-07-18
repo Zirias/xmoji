@@ -6,12 +6,13 @@
 
 C_CLASS_DECL(Shape);
 
-typedef xcb_render_picture_t (*ShapeRenderer)(
+typedef xcb_render_picture_t (*ShapeRenderer)(void *obj,
 	xcb_render_picture_t ownerpic, const void *data);
 
 Shape *Shape_create(ShapeRenderer renderer,
 	size_t datasz, const void *data) ATTR_RETNONNULL;
-void Shape_render(Shape *self, xcb_render_picture_t ownerpic) CMETHOD;
+void Shape_render(Shape *self, void *obj,
+	xcb_render_picture_t ownerpic) CMETHOD;
 xcb_render_picture_t Shape_picture(const Shape *self) CMETHOD ATTR_PURE;
 void Shape_destroy(Shape *self);
 
