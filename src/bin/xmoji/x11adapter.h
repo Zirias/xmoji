@@ -268,9 +268,6 @@ size_t X11Adapter_maxRequestSize(void);
 xcb_atom_t X11Adapter_atom(XAtomId id) ATTR_PURE;
 xcb_render_pictformat_t X11Adapter_rootformat(void);
 xcb_render_pictformat_t X11Adapter_format(PictFormat format);
-#define X11Adapter_alphaformat() X11Adapter_format(PICTFORMAT_ALPHA)
-#define X11Adapter_rgbformat() X11Adapter_format(PICTFORMAT_RGB)
-#define X11Adapter_argbformat() X11Adapter_format(PICTFORMAT_ARGB)
 struct xkb_compose_table *X11Adapter_kbdcompose(void);
 PSC_Event *X11Adapter_buttonpress(void) ATTR_RETNONNULL;
 PSC_Event *X11Adapter_buttonrelease(void) ATTR_RETNONNULL;

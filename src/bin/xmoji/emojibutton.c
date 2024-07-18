@@ -95,8 +95,8 @@ static xcb_render_picture_t renderTriangle(void *obj,
     CHECK(xcb_create_pixmap(c, 8, tmp, s->root, sz->width, sz->height),
 	    "Cannot create triangle pixmap for 0x%x", (unsigned)ownerpic);
     xcb_render_picture_t pic = xcb_generate_id(c);
-    CHECK(xcb_render_create_picture(c, pic, tmp, X11Adapter_alphaformat(),
-		0, 0),
+    CHECK(xcb_render_create_picture(c, pic, tmp,
+		X11Adapter_format(PICTFORMAT_ALPHA), 0, 0),
 	    "Cannot create triangle picture for 0x%x", (unsigned)ownerpic);
     xcb_free_pixmap(c, tmp);
     Color color = 0;

@@ -580,20 +580,20 @@ int Font_uploadGlyphs(Font *self, uint32_t ownerid,
 	self->glyphset = xcb_generate_id(c);
 	if (self->glyphtype == FGT_BITMAP_BGRA)
 	{
-	    CHECK(xcb_render_create_glyph_set(c,
-			self->glyphset, X11Adapter_argbformat()),
+	    CHECK(xcb_render_create_glyph_set(c, self->glyphset,
+			X11Adapter_format(PICTFORMAT_ARGB)),
 		    "Font: Cannot create glyphset for 0x%x",
 		    (unsigned)ownerid);
 	    self->maskglyphset = xcb_generate_id(c);
-	    CHECK(xcb_render_create_glyph_set(c,
-			self->maskglyphset, X11Adapter_alphaformat()),
+	    CHECK(xcb_render_create_glyph_set(c, self->maskglyphset,
+			X11Adapter_format(PICTFORMAT_ALPHA)),
 		    "Font: Cannot create mask glyphset for 0x%x",
 		    (unsigned)ownerid);
 	}
 	else
 	{
-	    CHECK(xcb_render_create_glyph_set(c,
-			self->glyphset, X11Adapter_alphaformat()),
+	    CHECK(xcb_render_create_glyph_set(c, self->glyphset,
+			X11Adapter_format(PICTFORMAT_ALPHA)),
 		    "Font: Cannot create glyphset for 0x%x",
 		    (unsigned)ownerid);
 	}

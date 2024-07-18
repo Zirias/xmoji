@@ -134,7 +134,7 @@ static void sizeChanged(void *receiver, void *sender, void *args)
 	Widget_setDrawable(self, self->p);
 	self->pic = xcb_generate_id(c);
 	CHECK(xcb_render_create_picture(c, self->pic, self->p,
-		    X11Adapter_rgbformat(), 0, 0),
+		    X11Adapter_format(PICTFORMAT_RGB), 0, 0),
 		"Cannot create backing store picture for 0x%x",
 		(unsigned)Widget_picture(self));
     }

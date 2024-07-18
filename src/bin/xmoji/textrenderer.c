@@ -103,7 +103,7 @@ static void createTmpPicture(TextRenderer *self, xcb_connection_t *c)
 	    (unsigned)ownerpic);
     self->tpic = xcb_generate_id(c);
     CHECK(xcb_render_create_picture(c, self->tpic, tmp,
-		X11Adapter_rgbformat(), 0, 0),
+		X11Adapter_format(PICTFORMAT_RGB), 0, 0),
 	    "TextRenderer: Cannot create temporary picture for 0x%x",
 	    (unsigned)ownerpic);
     xcb_free_pixmap(c, tmp);
