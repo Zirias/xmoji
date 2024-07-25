@@ -9,6 +9,7 @@ xmoji_MODULES=		button \
 			command \
 			emoji \
 			emojibutton \
+			emojihistory \
 			filewatcher \
 			flowgrid \
 			flyout \
