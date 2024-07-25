@@ -7,6 +7,7 @@ xmoji_DEFINES=		-DVERSION=\"$(xmoji_VERSION)\"
 xmoji_MODULES=		button \
 			colorset \
 			command \
+			configfile \
 			emoji \
 			emojibutton \
 			emojihistory \
