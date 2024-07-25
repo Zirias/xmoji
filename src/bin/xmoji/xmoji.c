@@ -1,7 +1,9 @@
 #include "button.h"
 #include "command.h"
+#include "config.h"
 #include "emoji.h"
 #include "emojibutton.h"
+#include "emojihistory.h"
 #include "flowgrid.h"
 #include "hbox.h"
 #include "icon.h"
@@ -26,17 +28,27 @@
 #define MAXSEARCHRESULTS 64
 
 static int startup(void *app);
+static void destroy(void *app);
 
-static MetaX11App mo = MetaX11App_init(startup, 0, "Xmoji", free);
+static MetaX11App mo = MetaX11App_init(startup, 0, "Xmoji", destroy);
 
 typedef struct Xmoji
 {
     Object base;
+    const char *cfgfile;
+    Config *config;
     Window *mainWindow;
     Window *aboutDialog;
     TabBox *tabs;
     FlowGrid *searchGrid;
+    FlowGrid *recentGrid;
 } Xmoji;
+
+static void destroy(void *app)
+{
+    Xmoji *self = app;
+    Config_destroy(self->config);
+}
 
 static void onabout(void *receiver, void *sender, void *args)
 {
@@ -83,6 +95,7 @@ static void kbinject(void *receiver, void *sender, void *args)
     Button *b = sender;
     KeyInjector_inject(Button_text(b));
     Widget_unselect(self->tabs);
+    EmojiHistory_record(Config_history(self->config), Button_text(b));
 }
 
 static void onsearch(void *receiver, void *sender, void *args)
@@ -111,9 +124,32 @@ static void onsearch(void *receiver, void *sender, void *args)
     }
 }
 
+static void onhistorychanged(void *receiver, void *sender, void *args)
+{
+    (void)args;
+
+    Xmoji *self = receiver;
+    EmojiHistory *history = sender;
+    for (size_t i = 0; i < HISTSIZE; ++i)
+    {
+	void *button = FlowGrid_widgetAt(self->recentGrid, i);
+	const Emoji *emoji = EmojiHistory_at(history, i);
+	if (emoji)
+	{
+	    Button_setText(button, Emoji_str(emoji));
+	    Widget_setTooltip(button, Emoji_name(emoji), 0);
+	    Widget_show(button);
+	}
+	else Widget_hide(button);
+    }
+    Widget_invalidate(self->recentGrid);
+}
+
 static int startup(void *app)
 {
     Xmoji *self = Object_instance(app);
+
+    self->config = Config_create(self->cfgfile);
 
     UniStr(about, U"About");
     UniStr(aboutdesc, U"About Xmoji");
@@ -183,8 +219,7 @@ static int startup(void *app)
     for (unsigned i = 0; i < MAXSEARCHRESULTS; ++i)
     {
 	EmojiButton *emojiButton = EmojiButton_create(0, grid);
-	PSC_Event_register(Button_clicked(emojiButton), self,
-		kbinject, 0);
+	PSC_Event_register(Button_clicked(emojiButton), self, kbinject, 0);
 	FlowGrid_addWidget(grid, emojiButton);
     }
     Widget_show(grid);
@@ -194,6 +229,43 @@ static int startup(void *app)
     VBox_addWidget(box, scroll);
     Widget_show(box);
     TabBox_addTab(tabs, groupLabel, box);
+
+    EmojiHistory *history = Config_history(self->config);
+    PSC_Event_register(EmojiHistory_changed(history), self,
+	    onhistorychanged, 0);
+    groupLabel = TextLabel_create(0, tabs);
+    UniStr(recentEmoji, U"\x23f3");
+    UniStr(recentText, U"Recently used");
+    TextLabel_setText(groupLabel, recentEmoji);
+    Widget_setTooltip(groupLabel, recentText, 0);
+    Widget_setFontResName(groupLabel, "emojiFont", "emoji", 0);
+    Widget_show(groupLabel);
+
+    scroll = ScrollBox_create(0, tabs);
+    grid = FlowGrid_create(scroll);
+    FlowGrid_setSpacing(grid, (Size){0, 0});
+    Widget_setPadding(grid, (Box){0, 0, 0, 0});
+    Widget_setFontResName(grid, "emojiFont", "emoji", 0);
+    int havehistory = 0;
+    for (unsigned i = 0; i < HISTSIZE; ++i)
+    {
+	const Emoji *emoji = EmojiHistory_at(history, i);
+	EmojiButton *emojiButton = EmojiButton_create(0, grid);
+	if (emoji)
+	{
+	    havehistory = 1;
+	    Button_setText(emojiButton, Emoji_str(emoji));
+	    Widget_setTooltip(emojiButton, Emoji_name(emoji), 0);
+	    Widget_show(emojiButton);
+	}
+	PSC_Event_register(Button_clicked(emojiButton), self, kbinject, 0);
+	FlowGrid_addWidget(grid, emojiButton);
+    }
+    Widget_show(grid);
+    ScrollBox_setWidget(scroll, grid);
+    self->recentGrid = grid;
+    Widget_show(scroll);
+    TabBox_addTab(tabs, groupLabel, scroll);
 
     size_t groups = EmojiGroup_numGroups();
     for (size_t groupidx = 0; groupidx < groups; ++groupidx)
@@ -244,7 +316,7 @@ static int startup(void *app)
 	TabBox_addTab(tabs, groupLabel, scroll);
     }
 
-    TabBox_setTab(tabs, 1);
+    TabBox_setTab(tabs, havehistory ? 1 : 2);
     self->tabs = tabs;
     Widget_show(tabs);
     Window_setMainWidget(win, tabs);
@@ -312,7 +384,16 @@ static int startup(void *app)
 Xmoji *Xmoji_create(int argc, char **argv)
 {
     Xmoji *self = PSC_malloc(sizeof *self);
+    memset(self, 0, sizeof *self);
     CREATEFINALBASE(X11App, argc, argv);
+    for (int i = 1; i < argc-1; ++i)
+    {
+	if (!strcmp(argv[i], "-cfg"))
+	{
+	    self->cfgfile = argv[++i];
+	    break;
+	}
+    }
     return self;
 }
 
