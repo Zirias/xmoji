@@ -8,6 +8,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
 #include <unistd.h>
 
 #define TMPSUFX ".tmp"
@@ -190,6 +191,25 @@ PSC_Event *ConfigFile_changed(ConfigFile *self)
     return self->changed;
 }
 
+static int ensurepath(char *current)
+{
+    int rc = 0;
+    char *sep = strrchr(current, '/');
+    if (!sep || sep == current) return rc;
+    *sep = 0;
+    struct stat st;
+    if (stat(current, &st) < 0)
+    {
+	rc = ensurepath(current);
+    }
+    else if (S_ISDIR(st.st_mode)) goto done;
+    else rc = -1;
+    if (rc == 0) rc = mkdir(current, 0777);
+done:
+    *sep = '/';
+    return rc;
+}
+
 int ConfigFile_write(ConfigFile *self)
 {
     int rc = -1;
@@ -197,6 +217,7 @@ int ConfigFile_write(ConfigFile *self)
     char *tmpnm = PSC_malloc(nmlen + sizeof TMPSUFX);
     memcpy(tmpnm, self->path, nmlen);
     memcpy(tmpnm+nmlen, TMPSUFX, sizeof TMPSUFX);
+    if (ensurepath(tmpnm) < 0) goto done;
     FILE *f = fopen(tmpnm, "w");
     if (!f) goto done;
     for (size_t i = 0; i < self->nkeys; ++i)
