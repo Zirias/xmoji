@@ -34,6 +34,7 @@ struct Widget
     Tooltip *tooltip;
     PSC_Event *shown;
     PSC_Event *hidden;
+    PSC_Event *pasted;
     PSC_Event *activated;
     PSC_Event *sizeRequested;
     PSC_Event *sizeChanged;
@@ -71,6 +72,7 @@ static void destroy(void *obj)
     PSC_Event_destroy(self->sizeChanged);
     PSC_Event_destroy(self->sizeRequested);
     PSC_Event_destroy(self->activated);
+    PSC_Event_destroy(self->pasted);
     PSC_Event_destroy(self->hidden);
     PSC_Event_destroy(self->shown);
     Tooltip_destroy(self->tooltip);
@@ -145,6 +147,7 @@ Widget *Widget_createBase(void *derived, const char *name, void *parent)
     else self->resname = Object_className(self);
     self->shown = PSC_Event_create(self);
     self->hidden = PSC_Event_create(self);
+    self->pasted = PSC_Event_create(self);
     self->activated = PSC_Event_create(self);
     self->sizeRequested = PSC_Event_create(self);
     self->sizeChanged = PSC_Event_create(self);
@@ -191,6 +194,12 @@ PSC_Event *Widget_hidden(void *self)
 {
     Widget *w = Object_instance(self);
     return w->hidden;
+}
+
+PSC_Event *Widget_pasted(void *self)
+{
+    Widget *w = Object_instance(self);
+    return w->pasted;
 }
 
 PSC_Event *Widget_activated(void *self)
@@ -996,6 +1005,14 @@ void Widget_setSelection(void *self, XSelectionName name,
 	default:	    return;
     }
     XSelection_publish(selection, Object_instance(self), content);
+}
+
+void Widget_raisePasted(void *self, XSelectionName name,
+	XSelectionContent content)
+{
+    Widget *w = Object_instance(self);
+    PastedEventArgs ea = { name, content };
+    PSC_Event_raise(w->pasted, 0, &ea);
 }
 
 const Rect *Widget_damages(const void *self, int *num)

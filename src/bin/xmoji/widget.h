@@ -102,6 +102,12 @@ typedef struct WidgetEventArgs
     int external;
 } WidgetEventArgs;
 
+typedef struct PastedEventArgs
+{
+    XSelectionName name;
+    XSelectionContent content;
+} PastedEventArgs;
+
 typedef struct SizeChangedEventArgs
 {
     int external;
@@ -123,6 +129,7 @@ const char *Widget_name(const void *self) CMETHOD;
 const char *Widget_resname(const void *self) CMETHOD ATTR_RETNONNULL;
 PSC_Event *Widget_shown(void *self) CMETHOD ATTR_RETNONNULL;
 PSC_Event *Widget_hidden(void *self) CMETHOD ATTR_RETNONNULL;
+PSC_Event *Widget_pasted(void *self) CMETHOD ATTR_RETNONNULL;
 PSC_Event *Widget_activated(void *self) CMETHOD ATTR_RETNONNULL;
 PSC_Event *Widget_sizeRequested(void *self) CMETHOD ATTR_RETNONNULL;
 PSC_Event *Widget_sizeChanged(void *self) CMETHOD ATTR_RETNONNULL;
@@ -196,6 +203,8 @@ void Widget_offerFont(void *self, Font *font) CMETHOD ATTR_NONNULL((2));
 void Widget_requestPaste(void *self, XSelectionName name,
 	XSelectionType type) CMETHOD;
 void Widget_setSelection(void *self, XSelectionName name,
+	XSelectionContent content) CMETHOD;
+void Widget_raisePasted(void *self, XSelectionName name,
 	XSelectionContent content) CMETHOD;
 const Rect *Widget_damages(const void *self, int *num) CMETHOD;
 

@@ -444,6 +444,7 @@ static XSelectionRequest *XSelectionRequest_create(XSelection *selection,
 	    || (ev->target == A(UTF8_STRING)
 		&& selection->content.type == XST_TEXT))
     {
+	int notify = 1;
 	XSelectionRequest *self = PSC_malloc(sizeof *self);
 	self->selection = selection;
 	self->next = 0;
@@ -452,6 +453,7 @@ static XSelectionRequest *XSelectionRequest_create(XSelection *selection,
 	self->timeout = 0;
 	if (ev->target == A(MULTIPLE))
 	{
+	    notify = 0;
 	    self->data = 0;
 	    self->datalen = 0;
 	    self->proptype = A(ATOM_PAIR);
@@ -459,6 +461,7 @@ static XSelectionRequest *XSelectionRequest_create(XSelection *selection,
 	}
 	else if (ev->target == A(TARGETS))
 	{
+	    notify = 0;
 	    xcb_atom_t *targets;
 	    switch (selection->content.type)
 	    {
@@ -487,6 +490,7 @@ static XSelectionRequest *XSelectionRequest_create(XSelection *selection,
 	}
 	else if (ev->target == A(TIMESTAMP))
 	{
+	    notify = 0;
 	    self->data = PSC_malloc(sizeof selection->ownedTime);
 	    memcpy(self->data, &selection->ownedTime,
 		    sizeof selection->ownedTime);
@@ -514,6 +518,12 @@ static XSelectionRequest *XSelectionRequest_create(XSelection *selection,
 	self->requestor = ev->requestor;
 	self->time = ev->time;
 	self->subidx = 0;
+	if (notify && selection->owner)
+	{
+	    Widget_raisePasted(selection->owner,
+		    selection->name == XCB_ATOM_PRIMARY
+		    ? XSN_PRIMARY : XSN_CLIPBOARD, selection->content);
+	}
 	return self;
     }
     if (!parent) XSelectionRequest_reject(selection,
