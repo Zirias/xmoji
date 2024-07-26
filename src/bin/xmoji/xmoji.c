@@ -145,6 +145,17 @@ static void onhistorychanged(void *receiver, void *sender, void *args)
     Widget_invalidate(self->recentGrid);
 }
 
+static void onpasted(void *receiver, void *sender, void *args)
+{
+    (void)sender;
+
+    Xmoji *self = receiver;
+    PastedEventArgs *ea = args;
+    if (ea->content.type != XST_TEXT) return;
+    Widget_unselect(self->tabs);
+    EmojiHistory_record(Config_history(self->config), ea->content.data);
+}
+
 static int startup(void *app)
 {
     Xmoji *self = Object_instance(app);
@@ -220,6 +231,7 @@ static int startup(void *app)
     {
 	EmojiButton *emojiButton = EmojiButton_create(0, grid);
 	PSC_Event_register(Button_clicked(emojiButton), self, kbinject, 0);
+	PSC_Event_register(Widget_pasted(emojiButton), self, onpasted, 0);
 	FlowGrid_addWidget(grid, emojiButton);
     }
     Widget_show(grid);
@@ -259,6 +271,7 @@ static int startup(void *app)
 	    Widget_show(emojiButton);
 	}
 	PSC_Event_register(Button_clicked(emojiButton), self, kbinject, 0);
+	PSC_Event_register(Widget_pasted(emojiButton), self, onpasted, 0);
 	FlowGrid_addWidget(grid, emojiButton);
     }
     Widget_show(grid);
@@ -295,6 +308,8 @@ static int startup(void *app)
 		Widget_show(emojiButton);
 		PSC_Event_register(Button_clicked(emojiButton), self,
 			kbinject, 0);
+		PSC_Event_register(Widget_pasted(emojiButton), self,
+			onpasted, 0);
 		FlowGrid_addWidget(grid, emojiButton);
 		neutral = emojiButton;
 	    }
@@ -306,6 +321,8 @@ static int startup(void *app)
 		Widget_show(emojiButton);
 		PSC_Event_register(Button_clicked(emojiButton), self,
 			kbinject, 0);
+		PSC_Event_register(Widget_pasted(emojiButton), self,
+			onpasted, 0);
 		EmojiButton_addVariant(neutral, emojiButton);
 	    }
 	}
