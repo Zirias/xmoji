@@ -139,10 +139,7 @@ static char *canonicalpath(const char *path)
 Config *Config_create(const char *path)
 {
     Config *self = PSC_malloc(sizeof *self);
-    if (path)
-    {
-	self->cfgfile = canonicalpath(path);
-    }
+    self->cfgfile = path ? canonicalpath(path) : 0;
     if (!self->cfgfile)
     {
 	const char *home = getenv("XDG_CONFIG_HOME");
