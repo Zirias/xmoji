@@ -100,10 +100,18 @@ Config *Config_create(const char *path)
     self->reading = 0;
     EmojiHistory_deserialize(self->history,
 	    ConfigFile_get(self->cfg, keys[CFG_HISTORY]));
-    ConfigFile_write(self->cfg);
-    PSC_Event_register(ConfigFile_changed(self->cfg), self, filechanged, 0);
-    PSC_Event_register(EmojiHistory_changed(self->history), self,
-	    historychanged, 0);
+    if (ConfigFile_write(self->cfg) >= 0)
+    {
+	PSC_Event_register(ConfigFile_changed(self->cfg), self,
+		filechanged, 0);
+	PSC_Event_register(EmojiHistory_changed(self->history), self,
+		historychanged, 0);
+    }
+    else
+    {
+	PSC_Log_fmt(PSC_L_ERROR, "Cannot write to `%s', giving up. Runtime "
+		"configuration will NOT be persisted.", self->cfgfile);
+    }
     return self;
 }
 
