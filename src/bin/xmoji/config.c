@@ -5,6 +5,7 @@
 #include "configfile.h"
 #include "emojihistory.h"
 
+#include <errno.h>
 #include <poser/core.h>
 #include <pwd.h>
 #include <stdlib.h>
@@ -60,14 +61,89 @@ static void historychanged(void *receiver, void *sender, void *args)
     ConfigFile_write(self->cfg);
 }
 
+static char *canonicalpath(const char *path)
+{
+    char *canon = 0;
+    if (*path != '/')
+    {
+	size_t curdirsz;
+	long path_max = pathconf(".", _PC_PATH_MAX);
+	if (path_max < 0) curdirsz = 1024;
+	else if (path_max > 16384) curdirsz = 16384;
+	else curdirsz = path_max;
+	for (;;)
+	{
+	    canon = PSC_realloc(canon, curdirsz);
+	    if (getcwd(canon, curdirsz)) break;
+	    if (errno != ERANGE)
+	    {
+		free(canon);
+		canon = 0;
+		break;
+	    }
+	    curdirsz *= 2;
+	}
+	if (!canon) return 0;
+    }
+    size_t maxlen = strlen(path);
+    size_t len = 0;
+    if (canon)
+    {
+	len = strlen(canon);
+	maxlen += len;
+	canon = PSC_realloc(canon, maxlen + 1);
+    }
+    else canon = PSC_malloc(maxlen + 1);
+    while (*path)
+    {
+	if (*path == '.')
+	{
+	    if (!path[1]) break;
+	    if (path[1] == '/')
+	    {
+		path += 2;
+		continue;
+	    }
+	    if (path[1] == '.' && (!path[2] || path[2] == '/'))
+	    {
+		if (len)
+		{
+		    --len;
+		    while (len && canon[len] != '/') --len;
+		}
+		if (!path[2]) break;
+		path += 3;
+		continue;
+	    }
+	}
+	if (*path == '/')
+	{
+	    ++path;
+	    continue;
+	}
+	size_t complen = 1;
+	while (path[complen] && path[complen] != '/') ++complen;
+	canon[len++] = '/';
+	memcpy(canon+len, path, complen);
+	len += complen;
+	path += complen;
+    }
+    if (canon)
+    {
+	canon[len++] = 0;
+	canon = PSC_realloc(canon, len);
+    }
+    return canon;
+}
+
 Config *Config_create(const char *path)
 {
     Config *self = PSC_malloc(sizeof *self);
     if (path)
     {
-	self->cfgfile = PSC_copystr(path);
+	self->cfgfile = canonicalpath(path);
     }
-    else
+    if (!self->cfgfile)
     {
 	const char *home = getenv("XDG_CONFIG_HOME");
 	if (home)
@@ -93,7 +169,14 @@ Config *Config_create(const char *path)
 	    memcpy(self->cfgfile+homelen + sizeof CFGDEFPATH - 1,
 		    CFGDEFNAME, sizeof CFGDEFNAME);
 	}
+	char *canon = canonicalpath(self->cfgfile);
+	if (canon)
+	{
+	    free(self->cfgfile);
+	    self->cfgfile = canon;
+	}
     }
+    PSC_Log_fmt(PSC_L_INFO, "Config file: %s", self->cfgfile);
     self->cfg = ConfigFile_create(self->cfgfile,
 	    sizeof keys / sizeof *keys, keys);
     self->history = EmojiHistory_create(HISTSIZE);
