@@ -22,6 +22,17 @@ DISTCLEANDIRS=		tools/bin
 
 NODIST=			poser/zimk
 
+HAVE_KQUEUE=		$(shell echo '#include <sys/event.h>\n'\
+			'int (*f)(void) = kqueue;' | \
+			$(or $(CC),cc) -xc -c -o- - >/dev/null 2>&1 && echo 1)
+HAVE_INOTIFY=		$(shell echo '#include <sys/inotify.h>\n'\
+			'int (*f)(void) = inotify_init;' | \
+			$(or $(CC),cc) -xc -c -o- - >/dev/null 2>&1 && echo 1)
+BOOLCONFVARS_OFF+=	$(if $(HAVE_KQUEUE),,WITH_KQUEUE) \
+			$(if $(HAVE_INOTIFY),,WITH_INOTIFY)
+BOOLCONFVARS_ON+=	$(if $(HAVE_KQUEUE),WITH_KQUEUE,) \
+			$(if $(HAVE_INOTIFY),WITH_INOTIFY,)
+
 include zimk/zimk.mk
 
 ifeq ($(BUNDLED_POSER),1)

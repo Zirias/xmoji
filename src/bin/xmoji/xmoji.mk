@@ -84,4 +84,15 @@ else
 xmoji_PKGDEPS+=		freetype2
 endif
 
+ifeq ($(WITH_KQUEUE),1)
+ifeq ($(WITH_INOTIFY),1)
+$(error Cannot enable both WITH_KQUEUE and WITH_INOTIFY)
+endif
+xmoji_DEFINES+=		-DWITH_KQUEUE
+endif
+
+ifeq ($(WITH_INOTIFY),1)
+xmoji_DEFINES+=		-DWITH_INOTIFY
+endif
+
 $(call binrules,xmoji)
