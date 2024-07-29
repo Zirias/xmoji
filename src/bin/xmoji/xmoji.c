@@ -48,6 +48,7 @@ static void destroy(void *app)
 {
     Xmoji *self = app;
     Config_destroy(self->config);
+    free(self);
 }
 
 static void onabout(void *receiver, void *sender, void *args)
