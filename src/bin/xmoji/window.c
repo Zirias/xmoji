@@ -206,7 +206,7 @@ static int hide(void *obj)
     if (!self->mapped) return 0;
     if (self->havewmstate && self->hideState == WS_MINIMIZED)
     {
-	self->mapped = 0;
+	if (self->state == WS_MINIMIZED) return 0;
 	xcb_client_message_event_t msg = {
 	    .response_type = XCB_CLIENT_MESSAGE,
 	    .format = 32,
