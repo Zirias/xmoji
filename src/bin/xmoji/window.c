@@ -891,9 +891,10 @@ Window *Window_createBase(void *derived, const char *name,
 		    XCB_ATOM_WM_HINTS, XCB_ATOM_WM_HINTS, 32,
 		    sizeof hints >> 2, &hints),
 		"Cannot set window manager hints on 0x%x", (unsigned)self->w);
-	xcb_atom_t delwin = A(WM_DELETE_WINDOW);
+	xcb_atom_t protocols[2] = { A(WM_DELETE_WINDOW), A(WM_TAKE_FOCUS) };
 	CHECK(xcb_change_property(c, XCB_PROP_MODE_REPLACE, self->w,
-		    A(WM_PROTOCOLS), XCB_ATOM_ATOM, 32, 1, &delwin),
+		    A(WM_PROTOCOLS), XCB_ATOM_ATOM, 32,
+		    (flags & WF_REJECT_FOCUS) ? 2 : 1, protocols),
 		"Cannot set supported protocols on 0x%x", (unsigned)self->w);
 	size_t sz;
 	const char *wmclass = X11Adapter_wmClass(&sz);

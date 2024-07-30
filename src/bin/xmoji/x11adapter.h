@@ -31,6 +31,7 @@ typedef enum XGlitch
     X(WM_DELETE_WINDOW) \
     X(WM_PROTOCOLS) \
     X(WM_STATE) \
+    X(WM_TAKE_FOCUS) \
     X(_MOTIF_WM_HINTS) \
     X(_NET_WM_ICON) \
     X(_NET_WM_ICON_NAME) \
