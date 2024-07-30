@@ -24,7 +24,9 @@ This is currently work in progress and should become the successor of my
 * Emojis with skin-tone variants are grouped again, only the neutral version
   is shown and right-clicking it shows a fly-out style menu with all available
   versions.
-* There's also a search tab to find emojis by their name.
+* The search tab allows to find emojis by their name.
+* The history tab shows the most recently used emojis and is automatically
+  persisted.
 
 ## XResources
 
@@ -144,6 +146,27 @@ slightly larger scroll bar and a dark color scheme:
     Xmoji*scrollBarWidth: 12
     Xmoji*scrollBarMinHeight: 25
 
+## Runtime configuration
+
+Runtime configuration is work in progress, currently only the history of
+recently used emojis is stored in the configuration file. This file is
+automatically monitored for external changes.
+
+By default, Xmoji will use a configuration file in these places:
+
+* `${XDG_CONFIG_HOME}/xmoji.cfg`, if `XDG_CONFIG_HOME` is set.
+* `${HOME}/.config/xmoji.cfg`, if `HOME` is set.
+* `~/.config/xmoji.cfg`, with `~` refering to the home directory obtained
+  from the passwd database.
+
+The location of the configuration file can be overridden from the command line
+with `-cfg`, e.g.
+
+    xmoji -cfg /tmp/xmoji.cfg
+
+CAUTION: Xmoji will attempt to create missing directories for storing its
+runtime configuration.
+
 ## Building
 
 To obtain the source from git, make sure to include submodules, e.g. with the
@@ -203,4 +226,17 @@ The following build options are available:
   freetype >= 2.12 is required and the bundled
   [nanosvg](https://github.com/memononen/nanosvg) is built for rasterizing
   the SVG glyphs. Default: `on`.
+
+* `WITH_KQUEUE` (bool): Use `kqueue` (available on BSD systems) for watching
+  the configuration file instead of periodically calling `stat()`.
+  Default: `on` when `kqueue` is detected, `off` otherwise.
+
+* `WITH_INOTIFY` (bool): Use `inotify` (available on Linux) for watching the
+  configuration file instead of periodically calling `stat()`.
+  Default: `on` when `inotify` is detected, `off` otherwise.
+
+Enabling both `WITH_KQUEUE` and `WITH_INOTIFY` at the same time is an error.
+Even when one of them is enabled, Xmoji will try to detect whether the
+configuration file is stored on NFS and in that case silently fall back to
+periodically calling `stat()` on it.
 
