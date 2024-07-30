@@ -37,7 +37,6 @@ typedef struct Xmoji
     Object base;
     const char *cfgfile;
     Config *config;
-    Window *mainWindow;
     Window *aboutDialog;
     TabBox *tabs;
     FlowGrid *searchGrid;
@@ -58,15 +57,6 @@ static void onabout(void *receiver, void *sender, void *args)
 
     Xmoji *self = receiver;
     Widget_show(self->aboutDialog);
-}
-
-static void onhide(void *receiver, void *sender, void *args)
-{
-    (void)sender;
-    (void)args;
-
-    Xmoji *self = receiver;
-    Widget_hide(self->mainWindow);
 }
 
 static void onquit(void *receiver, void *sender, void *args)
@@ -168,11 +158,6 @@ static int startup(void *app)
     Command *aboutCommand = Command_create(about, aboutdesc, self);
     PSC_Event_register(Command_triggered(aboutCommand), self, onabout, 0);
 
-    UniStr(hide, U"Hide");
-    UniStr(hidedesc, U"Minimize the application window");
-    Command *hideCommand = Command_create(hide, hidedesc, self);
-    PSC_Event_register(Command_triggered(hideCommand), self, onhide, 0);
-
     UniStr(quit, U"Quit");
     UniStr(quitdesc, U"Exit the application");
     Command *quitCommand = Command_create(quit, quitdesc, self);
@@ -180,7 +165,6 @@ static int startup(void *app)
 
     Menu *menu = Menu_create("mainMenu", self);
     Menu_addItem(menu, aboutCommand);
-    Menu_addItem(menu, hideCommand);
     Menu_addItem(menu, quitCommand);
 
     Icon *appIcon = Icon_create();
@@ -195,7 +179,6 @@ static int startup(void *app)
     Pixmap_destroy(pm);
 
     Window *win = Window_create("mainWindow", WF_REJECT_FOCUS, self);
-    self->mainWindow = win;
     Window_setTitle(win, "Xmoji");
     Widget_setContextMenu(win, menu);
     Icon_apply(appIcon, win);
