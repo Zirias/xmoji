@@ -30,13 +30,21 @@
 #undef statnfs
 #if defined(WITH_KQUEUE) || defined(WITH_INOTIFY)
 #  define HAVE_EVENTS 1
+#  include <unistd.h>
 #  ifdef WITH_KQUEUE
 #    include <fcntl.h>
 #    include <sys/event.h>
-#    include <unistd.h>
 #  endif
 #  ifdef WITH_INOTIFY
 #    include <sys/inotify.h>
+#    define ALIGNEVBUF
+#    if defined __has_attribute
+#      if __has_attribute (aligned)
+#        undef ALIGNEVBUF
+#        define ALIGNEVBUF __attribute__ \
+	    ((aligned(__alignof__(struct inotify_event))))
+#      endif
+#    endif
 #  endif
 #  ifdef __linux__
 #    include <linux/magic.h>
@@ -66,10 +74,8 @@ struct FileWatcher
     int watching;
 #ifdef HAVE_EVENTS
     int evqueue;
-#  ifdef WITH_KQUEUE
     int fd;
     int dirfd;
-#  endif
 #endif
 };
 
@@ -83,10 +89,8 @@ FileWatcher *FileWatcher_create(const char *path)
     self->changed = PSC_Event_create(self);
 #ifdef HAVE_EVENTS
     self->evqueue = -1;
-#  ifdef WITH_KQUEUE
     self->fd = -1;
     self->dirfd = -1;
-#  endif
 #endif
     return self;
 }
@@ -154,6 +158,7 @@ static int isNfs(const char *path)
 #  endif
 }
 
+static void handleevqueue(void *receiver, void *sender, void *args);
 static int watchEvents(FileWatcher *self);
 static int watchEvDir(FileWatcher *self);
 
@@ -162,13 +167,34 @@ static int recheck(FileWatcher *self)
     struct stat st;
     if (self->watching == WATCHING_EVENTS)
     {
+#ifdef WITH_KQUEUE
 	if (fstat(self->fd, &st) < 0) return watchEvDir(self);
+#else
+	if (stat(self->path, &st) < 0) return watchEvDir(self);
+#endif
 	return 0;
     }
     if (self->watching == WATCHING_EVDIR)
     {
 	if (stat(self->path, &st) >= 0) return watchEvents(self);
 	return 0;
+    }
+    return 0;
+}
+
+static int initevqueue(FileWatcher *self)
+{
+    if (self->evqueue < 0)
+    {
+#ifdef WITH_KQUEUE
+	self->evqueue = kqueue();
+#else
+	self->evqueue = inotify_init();
+#endif
+	if (self->evqueue < 0) return -1;
+	PSC_Event_register(PSC_Service_readyRead(), self,
+		handleevqueue, self->evqueue);
+	PSC_Service_registerRead(self->evqueue);
     }
     return 0;
 }
@@ -226,19 +252,6 @@ static void handleevqueue(void *receiver, void *sender, void *args)
 	    PSC_Event_raise(self->changed, 0, &ea);
 	}
     }
-}
-
-static int initevqueue(FileWatcher *self)
-{
-    if (self->evqueue < 0)
-    {
-	self->evqueue = kqueue();
-	if (self->evqueue < 0) return -1;
-	PSC_Event_register(PSC_Service_readyRead(), self,
-		handleevqueue, self->evqueue);
-	PSC_Service_registerRead(self->evqueue);
-    }
-    return 0;
 }
 
 static int watchEvents(FileWatcher *self)
@@ -303,6 +316,121 @@ static void unwatchEvents(FileWatcher *self)
 		NOTE_DELETE|NOTE_EXTEND|NOTE_RENAME|NOTE_WRITE, 0, 0);
     }
     kevent(self->evqueue, &evreq, 1, 0, 0, 0);
+    self->watching = 0;
+}
+
+#endif
+
+#ifdef WITH_INOTIFY
+
+static void handleevqueue(void *receiver, void *sender, void *args)
+{
+    (void)sender;
+    (void)args;
+
+    static char evbuf[4096] ALIGNEVBUF;
+    const struct inotify_event *event;
+    FileWatcher *self = receiver;
+
+    ssize_t len = read(self->evqueue, evbuf, sizeof evbuf);
+    if (len < 0) return;
+    for (char *ptr = evbuf; ptr < evbuf + len;
+	    ptr += sizeof *event + event->len)
+    {
+	event = (const struct inotify_event *)ptr;
+	if (self->watching == WATCHING_EVDIR && event->wd == self->dirfd)
+	{
+	    if (event->mask & (IN_DELETE_SELF|IN_MOVE_SELF))
+	    {
+		inotify_rm_watch(self->evqueue, self->dirfd);
+		self->dirfd = -1;
+		FileChange ea = FC_ERRORED;
+		PSC_Event_raise(self->changed, 0, &ea);
+		return;
+	    }
+	    int rc = watchEvents(self);
+	    if (rc < 0)
+	    {
+		FileChange ea = FC_ERRORED;
+		PSC_Event_raise(self->changed, 0, &ea);
+		return;
+	    }
+	    if (self->watching == WATCHING_EVENTS)
+	    {
+		FileChange ea = FC_CREATED;
+		PSC_Event_raise(self->changed, 0, &ea);
+		return;
+	    }
+	}
+	if (self->watching == WATCHING_EVENTS && event->wd == self->fd)
+	{
+	    if (event->mask & (IN_DELETE_SELF|IN_MOVE_SELF))
+	    {
+		FileChange ea = FC_DELETED;
+		if (watchEvDir(self) < 0) ea = FC_ERRORED;
+		else if (self->watching == WATCHING_EVENTS) ea = FC_MODIFIED;
+		PSC_Event_raise(self->changed, 0, &ea);
+		return;
+	    }
+	    FileChange ea = FC_MODIFIED;
+	    PSC_Event_raise(self->changed, 0, &ea);
+	}
+    }
+}
+
+static int watchEvents(FileWatcher *self)
+{
+    if (initevqueue(self) < 0) return -1;
+    if (self->fd >= 0)
+    {
+	inotify_rm_watch(self->evqueue, self->fd);
+	self->fd = -1;
+    }
+    if (self->dirfd >= 0)
+    {
+	inotify_rm_watch(self->evqueue, self->dirfd);
+	self->dirfd = -1;
+    }
+    self->fd = inotify_add_watch(self->evqueue, self->path,
+	    IN_DELETE_SELF|IN_MODIFY|IN_MOVE_SELF);
+    if (self->fd < 0) return watchEvDir(self);
+    self->watching = WATCHING_EVENTS;
+
+    int rc = recheck(self);
+    return rc;
+}
+
+static int watchEvDir(FileWatcher *self)
+{
+    if (initevqueue(self) < 0) return -1;
+    if (self->fd >= 0)
+    {
+	inotify_rm_watch(self->evqueue, self->fd);
+	self->fd = -1;
+    }
+    checkDir(self);
+    self->dirfd = inotify_add_watch(self->evqueue, self->dirpath,
+	    IN_CREATE|IN_DELETE|IN_DELETE_SELF|IN_MOVE_SELF|IN_MOVE
+	    |IN_ONLYDIR);
+    if (self->dirfd < 0) return -1;
+    self->watching = WATCHING_EVDIR;
+
+    int rc = recheck(self);
+    return rc;
+}
+
+static void unwatchEvents(FileWatcher *self)
+{
+    if (self->watching == WATCHING_EVENTS)
+    {
+	inotify_rm_watch(self->evqueue, self->fd);
+	self->fd = -1;
+    }
+    else
+    {
+	inotify_rm_watch(self->evqueue, self->dirfd);
+	self->dirfd = -1;
+    }
     self->watching = 0;
 }
 
