@@ -1249,5 +1249,5 @@ void Window_showTooltip(void *self, void *widget, void *parentWidget)
 void Window_invalidateHover(void *self)
 {
     Window *w = Object_instance(self);
-    w->mouse = (Pos){-1, -1};
+    if (w->anchorPos.x < 0) w->mouse = (Pos){-1, -1};
 }
