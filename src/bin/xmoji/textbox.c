@@ -504,7 +504,6 @@ static void keyPressed(void *obj, const KeyEvent *event)
     TextRenderer_setText(self->renderer, str);
     PSC_Event_raise(self->textChanged, 0, (void *)str);
 cursoronly:
-    PSC_Service_setTickInterval(600);
     self->cursorvisible = 1;
     Widget_invalidate(self);
     if (oldSelection.len != self->selection.len
@@ -630,7 +629,6 @@ static int clicked(void *obj, const ClickEvent *event)
     if (index != self->cursor || self->selection.len != selectlen)
     {
 	Widget_invalidate(self);
-	PSC_Service_setTickInterval(600);
 	self->cursorvisible = 1;
     }
     self->cursor = index;
