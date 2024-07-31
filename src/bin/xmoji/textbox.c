@@ -47,6 +47,7 @@ struct TextBox
     PSC_Timer *cursorBlink;
     Size minSize;
     Size clearbtnsz;
+    Pos lastPos;
     Selection selection;
     unsigned maxlen;
     unsigned cursor;
@@ -56,6 +57,7 @@ struct TextBox
     int grab;
     int grabbed;
     int clear;
+    int hoverclear;
 };
 
 static void updateSelected(TextBox *self)
@@ -328,12 +330,34 @@ static void leave(void *obj)
 	Widget_setBackground(obj, 1, COLOR_BG_BELOW);
 	Widget_invalidate(self);
     }
+    if (self->clear) self->lastPos = (Pos){ -1, -1 };
 }
 
 static Size minSize(const void *obj)
 {
     const TextBox *self = Object_instance(obj);
     return self->minSize;
+}
+
+static void updatehover(TextBox *self, Pos pos)
+{
+    const UniStr *str = UniStrBuilder_stringView(self->text);
+    if (UniStr_len(str))
+    {
+	Rect geom = Widget_geometry(self);
+	if (pos.x > geom.pos.x + geom.size.width - self->clearbtnsz.width)
+	{
+	    Widget_setCursor(self, XC_HAND);
+	}
+	else Widget_setCursor(self, XC_XTERM);
+    }
+    else Widget_setCursor(self, XC_XTERM);
+    if (pos.x == self->lastPos.x && pos.y == self->lastPos.y)
+    {
+	Window *w = Window_fromWidget(self);
+	if (w) Window_invalidateHover(w);
+    }
+    else self->lastPos = pos;
 }
 
 static void keyPressed(void *obj, const KeyEvent *event)
@@ -498,6 +522,7 @@ static void keyPressed(void *obj, const KeyEvent *event)
 	    {
 		UniStrBuilder_insertChar(self->text,
 			self->cursor++, event->codepoint);
+		if (self->clear && !len) updatehover(self, self->lastPos);
 	    }
 	    break;
     }
@@ -528,6 +553,7 @@ static void paste(void *obj, XSelectionContent content)
     TextRenderer_setText(self->renderer, str);
     PSC_Event_raise(self->textChanged, 0, (void *)str);
     Widget_invalidate(self);
+    if (self->clear && !len) updatehover(self, self->lastPos);
 }
 
 static void unselect(void *obj)
@@ -559,20 +585,7 @@ static Widget *childAt(void *obj, Pos pos)
 {
     TextBox *self = Object_instance(obj);
     Widget *child = Widget_cast(obj);
-    if (self->clear)
-    {
-	const UniStr *str = UniStrBuilder_stringView(self->text);
-	if (UniStr_len(str))
-	{
-	    Rect geom = Widget_geometry(obj);
-	    if (pos.x > geom.pos.x + geom.size.width
-		    - self->clearbtnsz.width)
-	    {
-		Widget_setCursor(self, XC_HAND);
-	    }
-	    else Widget_setCursor(self, XC_XTERM);
-	}
-    }
+    if (self->clear) updatehover(self, pos);
     return child;
 }
 
@@ -593,6 +606,7 @@ static int clicked(void *obj, const ClickEvent *event)
 		self->selection.len = 0;
 		self->selection.start = 0;
 		UniStrBuilder_clear(self->text);
+		updatehover(self, self->lastPos);
 		Widget_invalidate(self);
 		PSC_Event_raise(self->textChanged, 0, (void *)str);
 		Widget_focus(self);
@@ -718,6 +732,7 @@ TextBox *TextBox_createBase(void *derived, const char *name, void *parent)
     self->selected = 0;
     self->minSize = (Size){ 120, 12 };
     self->clearbtnsz = (Size){ 0, 0 };
+    self->lastPos = (Pos){ -1, -1 };
     self->selection = (Selection){ 0, 0 };
     self->maxlen = 128;
     self->cursor = 0;
@@ -726,6 +741,7 @@ TextBox *TextBox_createBase(void *derived, const char *name, void *parent)
     self->grab = 0;
     self->grabbed = 0;
     self->clear = 0;
+    self->hoverclear = 0;
 
     Widget_setBackground(self, 1, COLOR_BG_BELOW);
     Widget_setExpand(self, EXPAND_X);
