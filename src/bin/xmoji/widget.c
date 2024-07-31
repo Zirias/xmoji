@@ -264,7 +264,7 @@ void Widget_setFontResName(void *self, const char *name,
     const char *pattern = XRdb_value(rdb,
 	    XRdbKey(Widget_resname(self), name), XRQF_OVERRIDES);
     char *reqpat = 0;
-    if (pattern)
+    if (pattern && defpattern)
     {
 	reqpat = PSC_malloc(strlen(pattern) + strlen(defpattern) + 2);
 	strcpy(reqpat, pattern);
@@ -272,7 +272,7 @@ void Widget_setFontResName(void *self, const char *name,
 	strcat(reqpat, defpattern);
 	pattern = reqpat;
     }
-    else pattern = defpattern;
+    else if (!pattern) pattern = defpattern;
     Font *font = Font_create(pattern, options);
     free(reqpat);
     doSetFont(Object_instance(self), font);
