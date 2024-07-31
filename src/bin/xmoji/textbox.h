@@ -21,6 +21,8 @@ TextBox *TextBox_createBase(void *derived, const char *name, void *parent);
 const UniStr *TextBox_text(const void *self) CMETHOD;
 PSC_Event *TextBox_textChanged(void *self) CMETHOD ATTR_RETNONNULL;
 void TextBox_setText(void *self, const UniStr *text) CMETHOD;
+unsigned TextBox_maxLen(const void *self) CMETHOD;
+void TextBox_setMaxLen(void *self, unsigned len) CMETHOD;
 void TextBox_setPlaceholder(void *self, const UniStr *text) CMETHOD;
 void TextBox_setGrab(void *self, int grab) CMETHOD;
 

@@ -42,6 +42,7 @@ struct TextBox
     PSC_Timer *cursorBlink;
     Size minSize;
     Selection selection;
+    unsigned maxlen;
     unsigned cursor;
     unsigned scrollpos;
     unsigned dragAnchor;
@@ -389,8 +390,11 @@ static void keyPressed(void *obj, const KeyEvent *event)
 			self->selection.len);
 		self->selection.len = 0;
 	    }
-	    UniStrBuilder_insertChar(self->text,
-		    self->cursor++, event->codepoint);
+	    if (len < self->maxlen)
+	    {
+		UniStrBuilder_insertChar(self->text,
+			self->cursor++, event->codepoint);
+	    }
 	    break;
     }
     TextRenderer_setText(self->renderer, str);
@@ -410,10 +414,14 @@ static void paste(void *obj, XSelectionContent content)
 {
     if (content.type == XST_NONE) return;
     TextBox *self = Object_instance(obj);
-    UniStrBuilder_insertStr(self->text, self->cursor,
-	    UniStr_str(content.data));
-    self->cursor += UniStr_len(content.data);
     const UniStr *str = UniStrBuilder_stringView(self->text);
+    size_t len = UniStr_len(str);
+    if (len >= self->maxlen) return;
+    size_t inslen = UniStr_len(content.data);
+    if (inslen > self->maxlen - len) inslen = self->maxlen - len;
+    UniStrBuilder_insertStr(self->text, self->cursor,
+	    UniStr_str(content.data), inslen);
+    self->cursor += inslen;
     TextRenderer_setText(self->renderer, str);
     PSC_Event_raise(self->textChanged, 0, (void *)str);
     Widget_invalidate(self);
@@ -566,6 +574,7 @@ TextBox *TextBox_createBase(void *derived, const char *name, void *parent)
     self->selected = 0;
     self->minSize = (Size){ 120, 12 };
     self->selection = (Selection){ 0, 0 };
+    self->maxlen = 128;
     self->cursor = 0;
     self->scrollpos = 0;
     self->cursorvisible = 0;
@@ -600,6 +609,18 @@ void TextBox_setText(void *self, const UniStr *text)
     b->cursor = 0;
     TextRenderer_setText(b->renderer, text);
     Widget_invalidate(b);
+}
+
+unsigned TextBox_maxLen(const void *self)
+{
+    const TextBox *b = Object_instance(self);
+    return b->maxlen;
+}
+
+void TextBox_setMaxLen(void *self, unsigned len)
+{
+    TextBox *b = Object_instance(self);
+    b->maxlen = len;
 }
 
 void TextBox_setPlaceholder(void *self, const UniStr *text)

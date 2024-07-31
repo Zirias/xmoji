@@ -200,6 +200,7 @@ static int startup(void *app)
     VBox_setSpacing(box, 0);
     Widget_setPadding(box, (Box){0, 2, 0, 0});
     TextBox *search = TextBox_create("searchBox", box);
+    TextBox_setMaxLen(search, 32);
     UniStr(clickToSearch, U"Click to type and search ...");
     TextBox_setPlaceholder(search, clickToSearch);
     TextBox_setGrab(search, 1);

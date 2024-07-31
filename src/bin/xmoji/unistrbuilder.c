@@ -64,7 +64,7 @@ void UniStrBuilder_insertChar(UniStrBuilder *self,
 }
 
 void UniStrBuilder_insertStr(UniStrBuilder *self,
-	size_t pos, const char32_t *s)
+	size_t pos, const char32_t *s, size_t maxlen)
 {
     if (pos >= self->string.len)
     {
@@ -72,6 +72,7 @@ void UniStrBuilder_insertStr(UniStrBuilder *self,
 	return;
     }
     size_t insertlen = UniStr_utf32len(s);
+    if (maxlen && maxlen < insertlen) insertlen = maxlen;
     adjust(self, self->string.len + insertlen);
     memmove(self->string.str + pos + insertlen, self->string.str + pos,
 	    (self->string.len + 1 - pos) * sizeof *self->string.str);

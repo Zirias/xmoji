@@ -18,7 +18,7 @@ void UniStrBuilder_insertChar(UniStrBuilder *self,
 	size_t pos, char32_t c)
     CMETHOD;
 void UniStrBuilder_insertStr(UniStrBuilder *self,
-	size_t pos, const char32_t *s)
+	size_t pos, const char32_t *s, size_t maxlen)
     CMETHOD ATTR_NONNULL((3));
 
 void UniStrBuilder_clear(UniStrBuilder *self)
