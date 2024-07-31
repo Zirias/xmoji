@@ -1,6 +1,8 @@
 #include "textbox.h"
 
 #include "font.h"
+#include "pen.h"
+#include "shape.h"
 #include "textrenderer.h"
 #include "unistr.h"
 #include "unistrbuilder.h"
@@ -19,6 +21,7 @@ static void leave(void *obj);
 static void paste(void *obj, XSelectionContent content);
 static void unselect(void *obj);
 static void setFont(void *obj, Font *font);
+static Widget *childAt(void *obj, Pos pos);
 static Size minSize(const void *obj);
 static void keyPressed(void *obj, const KeyEvent *event);
 static int clicked(void *obj, const ClickEvent *event);
@@ -27,7 +30,7 @@ static void dragged(void *obj, const DragEvent *event);
 static MetaTextBox mo = MetaTextBox_init(
 	0, draw, 0, 0,
 	activate, deactivate, enter, leave, 0, 0, paste, unselect, setFont,
-	0, minSize, keyPressed, clicked, dragged,
+	childAt, minSize, keyPressed, clicked, dragged,
 	"TextBox", destroy);
 
 struct TextBox
@@ -38,9 +41,12 @@ struct TextBox
     UniStr *phtext;
     UniStr *selected;
     TextRenderer *placeholder;
+    Shape *clearbtn;
+    Pen *pen;
     PSC_Event *textChanged;
     PSC_Timer *cursorBlink;
     Size minSize;
+    Size clearbtnsz;
     Selection selection;
     unsigned maxlen;
     unsigned cursor;
@@ -49,6 +55,7 @@ struct TextBox
     int cursorvisible;
     int grab;
     int grabbed;
+    int clear;
 };
 
 static void updateSelected(TextBox *self)
@@ -82,6 +89,8 @@ void blink(void *receiver, void *sender, void *args)
 static void destroy(void *obj)
 {
     TextBox *self = obj;
+    Pen_destroy(self->pen);
+    Shape_destroy(self->clearbtn);
     PSC_Timer_destroy(self->cursorBlink);
     PSC_Event_destroy(self->textChanged);
     TextRenderer_destroy(self->placeholder);
@@ -92,13 +101,93 @@ static void destroy(void *obj)
     free(self);
 }
 
+static xcb_render_picture_t renderClearbtn(void *obj,
+	xcb_render_picture_t ownerpic, const void *data)
+{
+    TextBox *self = obj;
+    const Size *sz = data;
+
+    xcb_connection_t *c = X11Adapter_connection();
+    xcb_screen_t *s = X11Adapter_screen();
+
+    xcb_pixmap_t tmp = xcb_generate_id(c);
+    CHECK(xcb_create_pixmap(c, 8, tmp, s->root, sz->width, sz->height),
+	    "Cannot create clear button pixmap for 0x%x", (unsigned)ownerpic);
+    xcb_render_picture_t pic = xcb_generate_id(c);
+    CHECK(xcb_render_create_picture(c, pic, tmp,
+		X11Adapter_format(PICTFORMAT_ALPHA), 0, 0),
+	    "Cannot create clear button picture for 0x%x", (unsigned)ownerpic);
+    xcb_free_pixmap(c, tmp);
+    Color color = 0;
+    xcb_rectangle_t rect = {0, 0, sz->width, sz->height};
+    CHECK(xcb_render_fill_rectangles(c, XCB_RENDER_PICT_OP_SRC,
+		pic, Color_xcb(color), 1, &rect),
+	    "Cannot clear clear button picture for 0x%x", (unsigned)ownerpic);
+    uint32_t w = sz->width << 16;
+    uint32_t h = sz->height << 16;
+    uint32_t off = sz->height << 14;
+    uint32_t center = sz->height << 15;
+    xcb_render_pointfix_t points[] = {
+	{ off, center },
+	{ center, off },
+	{ center, h - off },
+	{ w, off },
+	{ w, h - off }
+    };
+    if (!self->pen) self->pen = Pen_create();
+    Pen_configure(self->pen, PICTFORMAT_ALPHA, 0xffffffff);
+    CHECK(xcb_render_tri_strip(c, XCB_RENDER_PICT_OP_OVER,
+		Pen_picture(self->pen, ownerpic), pic, 0, 0, 0,
+		sizeof points / sizeof *points, points),
+	    "Cannot render clear button for 0x%x", (unsigned)ownerpic);
+    uint32_t xoff = sz->height << 12;
+    xcb_render_pointfix_t x1points[] = {
+	{ center - xoff, off + xoff + xoff },
+	{ center, off + xoff },
+	{ w - off, h - off - xoff },
+	{ w - off + xoff, h - off - xoff - xoff }
+    };
+    CHECK(xcb_render_tri_strip(c, XCB_RENDER_PICT_OP_OUT_REVERSE,
+		Pen_picture(self->pen, ownerpic), pic, 0, 0, 0,
+		sizeof x1points / sizeof *x1points, x1points),
+	    "Cannot render clear glyph for 0x%x", (unsigned)ownerpic);
+    xcb_render_pointfix_t x2points[] = {
+	{ w - off + xoff, off + xoff + xoff },
+	{ w - off, off + xoff },
+	{ center, h - off - xoff },
+	{ center - xoff, h - off - xoff - xoff }
+    };
+    CHECK(xcb_render_tri_strip(c, XCB_RENDER_PICT_OP_OUT_REVERSE,
+		Pen_picture(self->pen, ownerpic), pic, 0, 0, 0,
+		sizeof x2points / sizeof *x2points, x2points),
+	    "Cannot render clear glyph for 0x%x", (unsigned)ownerpic);
+
+    return pic;
+}
+
+static void prerender(TextBox *self, Size newSize)
+{
+    if (!self->clear) return;
+    Size clearbtnsz = { newSize.height, newSize.height };
+    if (clearbtnsz.width == self->clearbtnsz.width
+	    && clearbtnsz.height == self->clearbtnsz.height) return;
+
+    self->clearbtnsz = clearbtnsz;
+    Shape *clearbtn = Shape_create(renderClearbtn, sizeof self->clearbtnsz,
+	    &self->clearbtnsz);
+    if (self->clearbtn) Shape_destroy(self->clearbtn);
+    Shape_render(clearbtn, self, Widget_picture(self));
+    self->clearbtn = clearbtn;
+}
+
 static int draw(void *obj, xcb_render_picture_t picture)
 {
     if (!picture) return 0;
     TextBox *self = Object_instance(obj);
     xcb_connection_t *c = X11Adapter_connection();
     Color color = Widget_color(self, COLOR_BELOW);
-    Rect contentArea = Rect_pad(Widget_geometry(self), Widget_padding(self));
+    Rect geom = Widget_geometry(self);
+    Rect contentArea = Rect_pad(geom, Widget_padding(self));
     int rc = 0;
     unsigned cursorpos = 0;
     if (UniStr_len(UniStrBuilder_stringView(self->text)))
@@ -138,6 +227,21 @@ static int draw(void *obj, xcb_render_picture_t picture)
 	}
 	else rc = TextRenderer_render(self->renderer,
 		picture, color, contentArea.pos);
+	if (self->clear)
+	{
+	    if (!self->clearbtn) prerender(self, geom.size);
+	    if (!self->pen) self->pen = Pen_create();
+	    Pen_configure(self->pen, PICTFORMAT_RGB,
+		    Widget_color(self, COLOR_NORMAL));
+	    CHECK(xcb_render_composite(c, XCB_RENDER_PICT_OP_OVER,
+			Pen_picture(self->pen, picture),
+			Shape_picture(self->clearbtn), picture, 0, 0, 0, 0,
+			geom.pos.x + geom.size.width - self->clearbtnsz.width,
+			geom.pos.y,
+			self->clearbtnsz.width, self->clearbtnsz.height),
+		    "Cannot composite clear button on 0x%x",
+		    (unsigned)picture);
+	}
     }
     else
     {
@@ -452,11 +556,51 @@ static void setFont(void *obj, Font *font)
     Widget_requestSize(self);
 }
 
+static Widget *childAt(void *obj, Pos pos)
+{
+    TextBox *self = Object_instance(obj);
+    Widget *child = Widget_cast(obj);
+    if (self->clear)
+    {
+	const UniStr *str = UniStrBuilder_stringView(self->text);
+	if (UniStr_len(str))
+	{
+	    Rect geom = Widget_geometry(obj);
+	    if (pos.x > geom.pos.x + geom.size.width
+		    - self->clearbtnsz.width)
+	    {
+		Widget_setCursor(self, XC_HAND);
+	    }
+	    else Widget_setCursor(self, XC_XTERM);
+	}
+    }
+    return child;
+}
+
 static int clicked(void *obj, const ClickEvent *event)
 {
     TextBox *self = Object_instance(obj);
     if (event->button != MB_LEFT &&
 	    !(event->button == MB_MIDDLE && Widget_active(self))) return 0;
+    if (event->button == MB_LEFT && self->clear)
+    {
+	const UniStr *str = UniStrBuilder_stringView(self->text);
+	if (UniStr_len(str))
+	{
+	    Rect geom = Widget_geometry(obj);
+	    if (event->pos.x > geom.pos.x + geom.size.width
+		    - self->clearbtnsz.width)
+	    {
+		self->selection.len = 0;
+		self->selection.start = 0;
+		UniStrBuilder_clear(self->text);
+		Widget_invalidate(self);
+		PSC_Event_raise(self->textChanged, 0, (void *)str);
+		Widget_focus(self);
+		return 1;
+	    }
+	}
+    }
     if (event->button == MB_LEFT && !Widget_active(self))
     {
 	Widget_focus(self);
@@ -570,9 +714,12 @@ TextBox *TextBox_createBase(void *derived, const char *name, void *parent)
     PSC_Event_register(PSC_Timer_expired(self->cursorBlink), self, blink, 0);
     self->phtext = 0;
     self->placeholder = 0;
+    self->clearbtn = 0;
+    self->pen = 0;
     self->textChanged = PSC_Event_create(self);
     self->selected = 0;
     self->minSize = (Size){ 120, 12 };
+    self->clearbtnsz = (Size){ 0, 0 };
     self->selection = (Selection){ 0, 0 };
     self->maxlen = 128;
     self->cursor = 0;
@@ -580,6 +727,7 @@ TextBox *TextBox_createBase(void *derived, const char *name, void *parent)
     self->cursorvisible = 0;
     self->grab = 0;
     self->grabbed = 0;
+    self->clear = 0;
 
     Widget_setBackground(self, 1, COLOR_BG_BELOW);
     Widget_setExpand(self, EXPAND_X);
@@ -655,5 +803,11 @@ void TextBox_setGrab(void *self, int grab)
 {
     TextBox *b = Object_instance(self);
     b->grab = grab;
+}
+
+void TextBox_setClearBtn(void *self, int enabled)
+{
+    TextBox *b = Object_instance(self);
+    b->clear = enabled;
 }
 

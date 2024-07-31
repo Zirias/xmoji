@@ -25,5 +25,6 @@ unsigned TextBox_maxLen(const void *self) CMETHOD;
 void TextBox_setMaxLen(void *self, unsigned len) CMETHOD;
 void TextBox_setPlaceholder(void *self, const UniStr *text) CMETHOD;
 void TextBox_setGrab(void *self, int grab) CMETHOD;
+void TextBox_setClearBtn(void *self, int enabled) CMETHOD;
 
 #endif

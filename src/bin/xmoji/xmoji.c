@@ -204,6 +204,7 @@ static int startup(void *app)
     UniStr(clickToSearch, U"Click to type and search ...");
     TextBox_setPlaceholder(search, clickToSearch);
     TextBox_setGrab(search, 1);
+    TextBox_setClearBtn(search, 1);
     PSC_Event_register(TextBox_textChanged(search), self, onsearch, 0);
     Widget_show(search);
     VBox_addWidget(box, search);
