@@ -14,7 +14,8 @@ typedef enum InjectorFlags
 				 beginning */
 } InjectorFlags;
 
-void KeyInjector_init(unsigned ms, InjectorFlags flags);
+void KeyInjector_init(unsigned beforems, unsigned afterms,
+	InjectorFlags flags);
 void KeyInjector_inject(const UniStr *str);
 void KeyInjector_done(void);
 

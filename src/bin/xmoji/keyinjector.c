@@ -18,7 +18,8 @@ typedef struct InjectJob
     unsigned symspercode;
 } InjectJob;
 
-static PSC_Timer *timer;
+static PSC_Timer *before;
+static PSC_Timer *after;
 static InjectorFlags injectflags;
 
 static InjectJob queue[MAXQUEUELEN];
@@ -28,6 +29,7 @@ static unsigned queueback;
 
 static void finish(void);
 static void resetkmap(void *receiver, void *sender, void *args);
+static void fakekeys(void *receiver, void *sender, void *args);
 static void doinject(void *obj, unsigned sequence,
 	void *reply, xcb_generic_error_t *error);
 static void injectnext(void);
@@ -45,7 +47,7 @@ static void resetkmap(void *receiver, void *sender, void *args)
     (void)sender;
     (void)args;
 
-    PSC_Timer_stop(timer);
+    PSC_Timer_stop(after);
     xcb_connection_t *c = X11Adapter_connection();
     const xcb_setup_t *setup = xcb_get_setup(c);
     CHECK(xcb_change_keyboard_mapping(c, queue[queuefront].len,
@@ -54,6 +56,28 @@ static void resetkmap(void *receiver, void *sender, void *args)
 	    "KeyInjector: Cannot change keymap", 0);
     free(queue[queuefront].orig);
     finish();
+}
+
+static void fakekeys(void *receiver, void *sender, void *args)
+{
+    (void)receiver;
+    (void)sender;
+    (void)args;
+
+    PSC_Timer_stop(before);
+    xcb_connection_t *c = X11Adapter_connection();
+    const xcb_setup_t *setup = xcb_get_setup(c);
+    for (unsigned x = 0; x < queue[queuefront].len; ++x)
+    {
+	CHECK(xcb_test_fake_input(c, XCB_KEY_PRESS, setup->min_keycode + x,
+		    XCB_CURRENT_TIME, XCB_NONE, 0, 0, 0),
+		"KeyInjector: Cannot inject fake key press event", 0);
+	CHECK(xcb_test_fake_input(c, XCB_KEY_RELEASE, setup->min_keycode + x,
+		    XCB_CURRENT_TIME, XCB_NONE, 0, 0, 0),
+		"KeyInjector: Cannot inject fake key release event", 0);
+    }
+
+    PSC_Timer_start(after);
 }
 
 static void doinject(void *obj, unsigned sequence,
@@ -124,20 +148,11 @@ static void doinject(void *obj, unsigned sequence,
 	    "KeyInjector: Cannot change keymap", 0);
     free(syms);
     UniStr_destroy(queue[queuefront].str);
-
-    for (unsigned x = 0; x < len; ++x)
-    {
-	CHECK(xcb_test_fake_input(c, XCB_KEY_PRESS, setup->min_keycode + x,
-		    XCB_CURRENT_TIME, XCB_NONE, 0, 0, 0),
-		"KeyInjector: Cannot inject fake key press event", 0);
-	CHECK(xcb_test_fake_input(c, XCB_KEY_RELEASE, setup->min_keycode + x,
-		    XCB_CURRENT_TIME, XCB_NONE, 0, 0, 0),
-		"KeyInjector: Cannot inject fake key release event", 0);
-    }
-
     queue[queuefront].len = len;
     queue[queuefront].symspercode = kmap->keysyms_per_keycode;
-    PSC_Timer_start(timer);
+
+    if (before) PSC_Timer_start(before);
+    else fakekeys(0, 0, 0);
 }
 
 static void injectnext(void)
@@ -151,14 +166,28 @@ static void injectnext(void)
 	    0, doinject);
 }
 
-void KeyInjector_init(unsigned ms, InjectorFlags flags)
+void KeyInjector_init(unsigned beforems, unsigned afterms, InjectorFlags flags)
 {
-    if (!timer)
+    if (beforems)
     {
-	timer = PSC_Timer_create();
-	PSC_Event_register(PSC_Timer_expired(timer), 0, resetkmap, 0);
+	if (!before)
+	{
+	    before = PSC_Timer_create();
+	    PSC_Event_register(PSC_Timer_expired(before), 0, fakekeys, 0);
+	}
+	PSC_Timer_setMs(before, beforems);
     }
-    PSC_Timer_setMs(timer, ms);
+    else if (before)
+    {
+	PSC_Timer_destroy(before);
+	before = 0;
+    }
+    if (!after)
+    {
+	after = PSC_Timer_create();
+	PSC_Event_register(PSC_Timer_expired(after), 0, resetkmap, 0);
+    }
+    PSC_Timer_setMs(after, afterms);
     injectflags = flags;
 }
 
@@ -172,8 +201,10 @@ void KeyInjector_inject(const UniStr *str)
 
 void KeyInjector_done(void)
 {
-    if (!timer) return;
-    PSC_Timer_destroy(timer);
-    timer = 0;
+    if (!after) return;
+    PSC_Timer_destroy(after);
+    after = 0;
+    PSC_Timer_destroy(before);
+    before = 0;
 }
 

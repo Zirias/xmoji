@@ -186,7 +186,7 @@ static int startup(void *app)
     TabBox *tabs = TabBox_create("mainTabBox", win);
     Widget_setPadding(tabs, (Box){0, 0, 0, 0});
 
-    KeyInjector_init(100, IF_ADDZWSPACE|IF_EXTRAZWJ);
+    KeyInjector_init(50, 100, IF_ADDZWSPACE|IF_EXTRAZWJ);
 
     TextLabel *groupLabel = TextLabel_create(0, tabs);
     UniStr(searchEmoji, U"\x1f50d");
