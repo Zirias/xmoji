@@ -1,5 +1,6 @@
 #include "x11adapter.h"
 
+#include "font.h"
 #include "suppress.h"
 #include "unistr.h"
 #include "xrdb.h"
@@ -9,6 +10,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <xcb/xcb_cursor.h>
+#include <xcb/xcb_image.h>
 #include <xcb/xcbext.h>
 SUPPRESS(pedantic)
 #include <xcb/xkb.h>
@@ -766,6 +768,50 @@ int X11Adapter_init(int argc, char **argv, const char *locale,
 	goto error;
     }
 
+    glitches = 0;
+    xcb_render_glyphset_t probeset = xcb_generate_id(c);
+    xcb_render_create_glyph_set(c, probeset, formats[PICTFORMAT_ALPHA]);
+    xcb_render_glyphinfo_t probeglyph = { 1, 1, 0, 0, 0, 0 };
+    uint8_t probebitmap[] = { 0xff, 0xff, 0xff, 0xff };
+    uint32_t probegid = 0;
+    xcb_render_add_glyphs(c, probeset, 1, &probegid, &probeglyph,
+	    4, probebitmap);
+    xcb_pixmap_t probepixmap = xcb_generate_id(c);
+    xcb_create_pixmap(c, 8, probepixmap, s->root, 1, 1);
+    xcb_render_picture_t probesrc = xcb_generate_id(c);
+    xcb_render_create_picture(c, probesrc, probepixmap,
+	    formats[PICTFORMAT_ALPHA], 0, 0);
+    xcb_free_pixmap(c, probepixmap);
+    xcb_rectangle_t proberect = { 0, 0, 1, 1 };
+    Color probecolor = 0xffffffff;
+    xcb_render_fill_rectangles(c, XCB_RENDER_PICT_OP_SRC, probesrc,
+	    Color_xcb(probecolor), 1, &proberect);
+    probepixmap = xcb_generate_id(c);
+    xcb_create_pixmap(c, 8, probepixmap, s->root, 1, 1);
+    xcb_render_picture_t probedst = xcb_generate_id(c);
+    xcb_render_create_picture(c, probedst, probepixmap,
+	    formats[PICTFORMAT_ALPHA], 0, 0);
+    probecolor = 0;
+    xcb_render_fill_rectangles(c, XCB_RENDER_PICT_OP_SRC, probedst,
+	    Color_xcb(probecolor), 1, &proberect);
+    GlyphRenderInfo proberender =  { 1, { 0, 0, 0 }, 0, 0, 0 };
+    xcb_render_composite_glyphs_32(c, XCB_RENDER_PICT_OP_OVER, probesrc,
+	    probedst, 0, probeset, 0, 1, sizeof proberender,
+	    (const uint8_t *)&proberender);
+    xcb_render_free_picture(c, probedst);
+    xcb_render_free_picture(c, probesrc);
+    xcb_render_free_glyph_set(c, probeset);
+    xcb_image_t *probeimg = xcb_image_get(c, probepixmap, 0, 0, 1, 1,
+	    0xffffffff, XCB_IMAGE_FORMAT_Z_PIXMAP);
+    xcb_free_pixmap(c, probepixmap);
+    if (probeimg->data[0])
+    {
+	PSC_Log_msg(PSC_L_INFO,
+		"Detected glyph rendering glitch, enabling workaround.");
+	glitches |= XG_RENDER_SRC_OFFSET;
+    }
+    xcb_image_destroy(probeimg);
+
     uint16_t xkbmaj;
     uint16_t xkbmin;
     if (xkb_x11_setup_xkb_extension(c, XKB_X11_MIN_MAJOR_XKB_VERSION,
@@ -866,9 +912,7 @@ int X11Adapter_init(int argc, char **argv, const char *locale,
 	}
     }
     if (!rdb) rdb = XRdb_create(0, 0, classname, name);
-
     XRdb_setOverrides(rdb, argc, argv);
-    glitches = XRdb_int(rdb, XRdbKey("glitches"), XRQF_OVERRIDES, 0, 0, 1);
 
     if (xcb_cursor_context_new(c, s, &cctx) < 0)
     {

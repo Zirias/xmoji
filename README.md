@@ -56,14 +56,6 @@ individual widgets.
 
 ### Generic rendering options
 
-* `glitches` (no class): Enable workarounds for rendering glitches. This
-  is interpreted as a bit mask to enable individual workarounds for
-  rendering bugs. Default: `0`.
-
-  There's only one bit currently available:
-  - `1`: Use a transformation for compositing RGBA glyphs instead of a
-       simple offset. Enable this if you experience broken rendering of
-       emojis.
 * `backingStore` (no class): Use an offscreen pixmap for window contents
   and contents of scrollable areas. Disable this to save X server memory
   at the cost of visible flicker. Default: `1`.
