@@ -194,18 +194,38 @@ static int draw(void *obj, xcb_render_picture_t picture)
     unsigned cursorpos = 0;
     if (UniStr_len(UniStrBuilder_stringView(self->text)))
     {
+	uint16_t maxx = contentArea.size.width;
+	if (self->clear)
+	{
+	    if (!self->clearbtn) prerender(self, geom.size);
+	    if (!self->pen) self->pen = Pen_create();
+	    Pen_configure(self->pen, PICTFORMAT_RGB,
+		    Widget_color(self, COLOR_NORMAL));
+	    CHECK(xcb_render_composite(c, XCB_RENDER_PICT_OP_OVER,
+			Pen_picture(self->pen, picture),
+			Shape_picture(self->clearbtn), picture, 0, 0, 0, 0,
+			geom.pos.x + geom.size.width - self->clearbtnsz.width,
+			geom.pos.y,
+			self->clearbtnsz.width, self->clearbtnsz.height),
+		    "Cannot composite clear button on 0x%x",
+		    (unsigned)picture);
+	    maxx -= self->clearbtnsz.width;
+	    Rect clip = geom;
+	    clip.size.width = maxx;
+	    Widget_addClip(self, clip);
+	}
 	Size textsz = TextRenderer_size(self->renderer);
 	if (self->scrollpos > textsz.width ||
-		textsz.width - self->scrollpos < contentArea.size.width)
+		textsz.width - self->scrollpos < maxx)
 	{
-	    if (contentArea.size.width >= textsz.width) self->scrollpos = 0;
-	    else self->scrollpos = textsz.width - contentArea.size.width - 1;
+	    if (maxx >= textsz.width) self->scrollpos = 0;
+	    else self->scrollpos = textsz.width - maxx - 1;
 	}
 	cursorpos = TextRenderer_pixelOffset(self->renderer, self->cursor);
 	if (cursorpos < self->scrollpos) self->scrollpos = cursorpos;
-	else if (cursorpos >= contentArea.size.width + self->scrollpos)
+	else if (cursorpos >= maxx + self->scrollpos)
 	{
-	    self->scrollpos = cursorpos - contentArea.size.width + 1;
+	    self->scrollpos = cursorpos - maxx + 1;
 	}
 	contentArea.pos.x -= self->scrollpos;
 	if (self->selection.len && Widget_active(self))
@@ -229,21 +249,6 @@ static int draw(void *obj, xcb_render_picture_t picture)
 	}
 	else rc = TextRenderer_render(self->renderer,
 		picture, color, contentArea.pos);
-	if (self->clear)
-	{
-	    if (!self->clearbtn) prerender(self, geom.size);
-	    if (!self->pen) self->pen = Pen_create();
-	    Pen_configure(self->pen, PICTFORMAT_RGB,
-		    Widget_color(self, COLOR_NORMAL));
-	    CHECK(xcb_render_composite(c, XCB_RENDER_PICT_OP_OVER,
-			Pen_picture(self->pen, picture),
-			Shape_picture(self->clearbtn), picture, 0, 0, 0, 0,
-			geom.pos.x + geom.size.width - self->clearbtnsz.width,
-			geom.pos.y,
-			self->clearbtnsz.width, self->clearbtnsz.height),
-		    "Cannot composite clear button on 0x%x",
-		    (unsigned)picture);
-	}
     }
     else
     {

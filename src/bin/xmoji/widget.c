@@ -1021,3 +1021,24 @@ const Rect *Widget_damages(const void *self, int *num)
     if (num) *num = w->ndamages;
     return w->damages;
 }
+
+void Widget_addClip(void *self, Rect rect)
+{
+    Widget *w = Object_instance(self);
+    Box clipBox = Box_fromRect(getClipRect(w, 1));
+    Box addBox = Box_fromRect(rect);
+    if (addBox.left > clipBox.left) clipBox.left = addBox.left;
+    if (addBox.right < clipBox.right) clipBox.right = addBox.right;
+    if (addBox.top > clipBox.top) clipBox.top = addBox.top;
+    if (addBox.bottom < clipBox.bottom) clipBox.bottom = addBox.bottom;
+    xcb_rectangle_t cliprect = {
+	clipBox.left, clipBox.top,
+	clipBox.right > clipBox.left ? clipBox.right - clipBox.left : 0,
+	clipBox.bottom > clipBox.top ? clipBox.bottom - clipBox.top : 0
+    };
+    CHECK(xcb_render_set_picture_clip_rectangles(X11Adapter_connection(),
+		w->picture, 0, 0, 1, &cliprect),
+	    "Cannot set clipping region on 0x%x",
+	    (unsigned)w->picture);
+}
+

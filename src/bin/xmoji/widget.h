@@ -207,5 +207,6 @@ void Widget_setSelection(void *self, XSelectionName name,
 void Widget_raisePasted(void *self, XSelectionName name,
 	XSelectionContent content) CMETHOD;
 const Rect *Widget_damages(const void *self, int *num) CMETHOD;
+void Widget_addClip(void *self, Rect rect) CMETHOD;
 
 #endif
