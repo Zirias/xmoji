@@ -110,7 +110,12 @@ static void Font_done(void)
     byPattern = 0;
     FT_Done_FreeType(ftlib);
     FcPatternDestroy(defaultpat);
+#ifdef NDEBUG
+    if (FcGetVersion() >= 21500) FcFini();
+    else PSC_Log_msg(PSC_L_INFO, "Skipping FcFini() for fontconfig < 2.15");
+#else
     FcFini();
+#endif
 }
 
 static char *createFontId(const char *file, int index, double pixelsize)
