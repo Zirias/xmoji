@@ -293,7 +293,7 @@ void HBox_addWidget(void *self, void *widget)
     Widget_setContainer(widget, b);
     PSC_Event_register(Widget_sizeRequested(widget), b, sizeRequested, 0);
     PSC_List_append(b->items, item, destroyItem);
-    layout(self, 1);
+    layout(b, 1);
 }
 
 uint16_t HBox_spacing(const void *self)
