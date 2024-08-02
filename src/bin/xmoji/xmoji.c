@@ -14,6 +14,7 @@
 #include "pixmap.h"
 #include "scrollbox.h"
 #include "tabbox.h"
+#include "table.h"
 #include "textbox.h"
 #include "textlabel.h"
 #include "unistr.h"
@@ -38,6 +39,7 @@ typedef struct Xmoji
     const char *cfgfile;
     Config *config;
     Window *aboutDialog;
+    Window *settingsDialog;
     TabBox *tabs;
     FlowGrid *searchGrid;
     FlowGrid *recentGrid;
@@ -59,6 +61,15 @@ static void onabout(void *receiver, void *sender, void *args)
     Widget_show(self->aboutDialog);
 }
 
+static void onsettings(void *receiver, void *sender, void *args)
+{
+    (void)sender;
+    (void)args;
+
+    Xmoji *self = receiver;
+    Widget_show(self->settingsDialog);
+}
+
 static void onquit(void *receiver, void *sender, void *args)
 {
     (void)receiver;
@@ -76,6 +87,15 @@ static void onaboutok(void *receiver, void *sender, void *args)
 
     Xmoji *self = receiver;
     Window_close(self->aboutDialog);
+}
+
+static void onsettingsok(void *receiver, void *sender, void *args)
+{
+    (void)sender;
+    (void)args;
+
+    Xmoji *self = receiver;
+    Window_close(self->settingsDialog);
 }
 
 static void kbinject(void *receiver, void *sender, void *args)
@@ -158,6 +178,12 @@ static int startup(void *app)
     Command *aboutCommand = Command_create(about, aboutdesc, self);
     PSC_Event_register(Command_triggered(aboutCommand), self, onabout, 0);
 
+    UniStr(settings, U"Settings");
+    UniStr(settingsdesc, U"Configure runtime settings");
+    Command *settingsCommand = Command_create(settings, settingsdesc, self);
+    PSC_Event_register(Command_triggered(settingsCommand), self,
+	    onsettings, 0);
+
     UniStr(quit, U"Quit");
     UniStr(quitdesc, U"Exit the application");
     Command *quitCommand = Command_create(quit, quitdesc, self);
@@ -165,6 +191,7 @@ static int startup(void *app)
 
     Menu *menu = Menu_create("mainMenu", self);
     Menu_addItem(menu, aboutCommand);
+    Menu_addItem(menu, settingsCommand);
     Menu_addItem(menu, quitCommand);
 
     Icon *appIcon = Icon_create();
@@ -378,6 +405,53 @@ static int startup(void *app)
     Widget_show(hbox);
     Window_setMainWidget(aboutDlg, hbox);
     self->aboutDialog = aboutDlg;
+
+    Window *settingsDlg = Window_create("settingsDialog",
+	    WF_WINDOW_DIALOG|WF_FIXED_SIZE, win);
+    Window_setTitle(settingsDlg, "Xmoji settings");
+    Icon_apply(appIcon, settingsDlg);
+    Widget_setFontResName(settingsDlg, 0, 0, 0);
+    Table *table = Table_create(settingsDlg);
+
+    TableRow *row = TableRow_create(table);
+    label = TextLabel_create("waitBeforeLabel", row);
+    UniStr(waitBefore, U"Wait before sending keys (ms):");
+    TextLabel_setText(label, waitBefore);
+    Widget_setAlign(label, AH_RIGHT);
+    Widget_show(label);
+    HBox_addWidget(row, label);
+    TextBox *tb = TextBox_create("waitBeforeBox", row);
+    Widget_show(tb);
+    HBox_addWidget(row, tb);
+    Widget_show(row);
+    Table_addRow(table, row);
+    row = TableRow_create(table);
+    label = TextLabel_create("waitAfterLabel", row);
+    UniStr(waitAfter, U"Wait after sending keys (ms):");
+    TextLabel_setText(label, waitAfter);
+    Widget_setAlign(label, AH_RIGHT);
+    Widget_show(label);
+    HBox_addWidget(row, label);
+    tb = TextBox_create("waitAfterBox", row);
+    Widget_show(tb);
+    HBox_addWidget(row, tb);
+    Widget_show(row);
+    Table_addRow(table, row);
+    row = TableRow_create(table);
+    Widget *dummy = Widget_create("dummy", row);
+    HBox_addWidget(row, dummy);
+    button = Button_create("okButton", row);
+    Button_setText(button, ok);
+    Widget_setAlign(button, AH_RIGHT);
+    Widget_show(button);
+    PSC_Event_register(Button_clicked(button), self, onsettingsok, 0);
+    HBox_addWidget(row, button);
+    Widget_show(row);
+    Table_addRow(table, row);
+
+    Widget_show(table);
+    Window_setMainWidget(settingsDlg, table);
+    self->settingsDialog = settingsDlg;
 
     Icon_destroy(appIcon);
     Widget_show(win);
