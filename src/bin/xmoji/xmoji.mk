@@ -29,6 +29,8 @@ xmoji_MODULES=		button \
 			shape \
 			surface \
 			tabbox \
+			table \
+			tablerow \
 			textbox \
 			textlabel \
 			textrenderer \
