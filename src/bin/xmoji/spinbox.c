@@ -1,7 +1,9 @@
 #include "spinbox.h"
 
 #include "textbox.h"
+#include "unistr.h"
 
+#include <errno.h>
 #include <poser/core.h>
 #include <stdlib.h>
 
@@ -26,6 +28,8 @@ struct SpinBox
     Object base;
     TextBox *textBox;
     PSC_Event *changed;
+    unsigned minlen;
+    int val;
     int min;
     int max;
     int step;
@@ -110,6 +114,52 @@ static void sizeRequested(void *receiver, void *sender, void *args)
     Widget_requestSize(self);
 }
 
+static int tryParse(int *value, int min, int max, const UniStr *str)
+{
+    char *cstr = LATIN1(str);
+    char *endp;
+    errno = 0;
+    int ok = 0;
+    long lval = strtol(cstr, &endp, 10);
+    if (*endp || endp == cstr || errno != 0) goto done;
+    if (lval < min || lval > max) goto done;
+    if (value) *value = lval;
+    ok = 1;
+done:
+    free(cstr);
+    return ok;
+}
+
+static UniStr *valstr(int value)
+{
+    char buf[64];
+    snprintf(buf, sizeof buf, "%d", value);
+    return UniStr_create(buf);
+}
+
+static int filter(void *obj, const UniStr *str)
+{
+    SpinBox *self = obj;
+
+    if (UniStr_len(str) <= self->minlen)
+    {
+	int ok = 1;
+	const char32_t *s = UniStr_str(str);
+	for (unsigned i = 0; i < UniStr_len(str); ++i)
+	{
+	    if (self->min < 0 && !i && *s == U'-') continue;
+	    if (s[i] < U'0' || s[i] > U'9')
+	    {
+		ok = 0;
+		break;
+	    }
+	}
+	return ok;
+    }
+
+    return tryParse(0, self->min, self->max, str);
+}
+
 SpinBox *SpinBox_createBase(void *derived, const char *name,
 	int min, int max, int step, void *parent)
 {
@@ -117,10 +167,20 @@ SpinBox *SpinBox_createBase(void *derived, const char *name,
     CREATEBASE(Widget, name, parent);
     self->textBox = TextBox_create(name, self);
     self->changed = PSC_Event_create(self);
+    UniStr *minstr = valstr(min);
+    UniStr *maxstr = valstr(max);
+    self->minlen = UniStr_len(minstr);
+    if (UniStr_len(maxstr) < self->minlen) self->minlen = UniStr_len(maxstr);
+    self->val = min;
     self->min = min;
     self->max = max;
     self->step = step;
 
+    TextBox_setText(self->textBox, minstr);
+    UniStr_destroy(maxstr);
+    UniStr_destroy(minstr);
+
+    TextBox_setInputFilter(self->textBox, self, filter);
     Widget_setContainer(self->textBox, self);
     Widget_show(self->textBox);
     PSC_Event_register(Widget_sizeRequested(self->textBox), self,

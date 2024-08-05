@@ -36,6 +36,8 @@ static MetaTextBox mo = MetaTextBox_init(
 struct TextBox
 {
     Object base;
+    InputFilter filter;
+    void *filterobj;
     UniStrBuilder *text;
     TextRenderer *renderer;
     UniStr *phtext;
@@ -516,19 +518,37 @@ static void keyPressed(void *obj, const KeyEvent *event)
 
 	default:
 	    if (event->codepoint < 0x20U) return;
+	    UniStrBuilder *mod = self->text;
+	    if (self->filter) mod = UniStrBuilder_clone(self->text);
+	    unsigned cursor = self->cursor;
+
 	    if (self->selection.len)
 	    {
-		self->cursor = self->selection.start;
-		UniStrBuilder_remove(self->text, self->cursor,
-			self->selection.len);
-		self->selection.len = 0;
+		cursor = self->selection.start;
+		UniStrBuilder_remove(mod, cursor, self->selection.len);
 	    }
 	    if (len < self->maxlen)
 	    {
-		UniStrBuilder_insertChar(self->text,
-			self->cursor++, event->codepoint);
-		if (self->clear && !len) updatehover(self, self->lastPos);
+		UniStrBuilder_insertChar(mod, cursor++, event->codepoint);
 	    }
+	    if (self->filter)
+	    {
+		if (self->filter(self->filterobj,
+			    UniStrBuilder_stringView(mod)))
+		{
+		    UniStrBuilder_destroy(self->text);
+		    self->text = mod;
+		    str = UniStrBuilder_stringView(mod);
+		}
+		else
+		{
+		    UniStrBuilder_destroy(mod);
+		    return;
+		}
+	    }
+	    self->selection.len = 0;
+	    self->cursor = cursor;
+	    if (self->clear && !len) updatehover(self, self->lastPos);
 	    break;
     }
     TextRenderer_setText(self->renderer, str);
@@ -552,8 +572,24 @@ static void paste(void *obj, XSelectionContent content)
     if (len >= self->maxlen) return;
     size_t inslen = UniStr_len(content.data);
     if (inslen > self->maxlen - len) inslen = self->maxlen - len;
-    UniStrBuilder_insertStr(self->text, self->cursor,
+    UniStrBuilder *mod = self->text;
+    if (self->filter) mod = UniStrBuilder_clone(self->text);
+    UniStrBuilder_insertStr(mod, self->cursor,
 	    UniStr_str(content.data), inslen);
+    if (self->filter)
+    {
+	if (self->filter(self->filterobj, UniStrBuilder_stringView(mod)))
+	{
+	    UniStrBuilder_destroy(self->text);
+	    self->text = mod;
+	    str = UniStrBuilder_stringView(mod);
+	}
+	else
+	{
+	    UniStrBuilder_destroy(mod);
+	    return;
+	}
+    }
     self->cursor += inslen;
     TextRenderer_setText(self->renderer, str);
     PSC_Event_raise(self->textChanged, 0, (void *)str);
@@ -723,6 +759,8 @@ TextBox *TextBox_createBase(void *derived, const char *name, void *parent)
 {
     TextBox *self = PSC_malloc(sizeof *self);
     CREATEBASE(Widget, name, parent);
+    self->filter = 0;
+    self->filterobj = 0;
     self->text = UniStrBuilder_create();
     self->renderer = TextRenderer_create(self->base.base);
     TextRenderer_setNoLigatures(self->renderer, 1);
@@ -830,5 +868,12 @@ void TextBox_setClearBtn(void *self, int enabled)
 {
     TextBox *b = Object_instance(self);
     b->clear = enabled;
+}
+
+void TextBox_setInputFilter(void *self, void *obj, InputFilter filter)
+{
+    TextBox *b = Object_instance(self);
+    b->filter = filter;
+    b->filterobj = obj;
 }
 

@@ -22,6 +22,24 @@ UniStrBuilder *UniStrBuilder_create(void)
     return self;
 }
 
+UniStrBuilder *UniStrBuilder_clone(UniStrBuilder *builder)
+{
+    UniStrBuilder *self = PSC_malloc(sizeof *self);
+    self->string.len = builder->string.len;
+    if (builder->string.str)
+    {
+	self->string.str = PSC_malloc(builder->capa
+		* sizeof *self->string.str);
+	memcpy(self->string.str, builder->string.str,
+		(self->string.len + 1) * sizeof *self->string.str);
+    }
+    else self->string.str = 0;
+    self->string.len = builder->string.len;
+    self->string.refcnt = -1;
+    self->capa = builder->capa;
+    return self;
+}
+
 static void adjust(UniStrBuilder *self, size_t newlen)
 {
     if (newlen < self->capa && 2 * newlen > self->capa) return;
