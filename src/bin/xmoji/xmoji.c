@@ -13,6 +13,7 @@
 #include "menu.h"
 #include "pixmap.h"
 #include "scrollbox.h"
+#include "spinbox.h"
 #include "tabbox.h"
 #include "table.h"
 #include "textbox.h"
@@ -420,9 +421,9 @@ static int startup(void *app)
     Widget_setAlign(label, AH_RIGHT);
     Widget_show(label);
     HBox_addWidget(row, label);
-    TextBox *tb = TextBox_create("waitBeforeBox", row);
-    Widget_show(tb);
-    HBox_addWidget(row, tb);
+    SpinBox *sb = SpinBox_create("waitBeforeBox", 0, 500, 10, row);
+    Widget_show(sb);
+    HBox_addWidget(row, sb);
     Widget_show(row);
     Table_addRow(table, row);
     row = TableRow_create(table);
@@ -432,9 +433,9 @@ static int startup(void *app)
     Widget_setAlign(label, AH_RIGHT);
     Widget_show(label);
     HBox_addWidget(row, label);
-    tb = TextBox_create("waitAfterBox", row);
-    Widget_show(tb);
-    HBox_addWidget(row, tb);
+    sb = SpinBox_create("waitAfterBox", 50, 1000, 10, row);
+    Widget_show(sb);
+    HBox_addWidget(row, sb);
     Widget_show(row);
     Table_addRow(table, row);
     row = TableRow_create(table);
