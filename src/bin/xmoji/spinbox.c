@@ -23,17 +23,27 @@ static MetaSpinBox mo = MetaSpinBox_init(
 	minSize, 0, clicked, 0,
 	"SpinBox", destroy);
 
+typedef enum SBHover
+{
+    SBH_NONE,
+    SBH_TEXT,
+    SBH_UP,
+    SBH_DOWN
+} SBHover;
+
 struct SpinBox
 {
     Object base;
     TextBox *textBox;
     PSC_Event *changed;
+    Size minSize;
     unsigned minlen;
     int val;
     int min;
     int max;
     int step;
     int inval;
+    SBHover hover;
 };
 
 static void destroy(void *obj)
@@ -67,12 +77,11 @@ static int draw(void *obj, xcb_render_picture_t picture)
 static Size minSize(const void *obj)
 {
     const SpinBox *self = Object_instance(obj);
-    return Widget_minSize(self->textBox);
+    return self->minSize;
 }
 
-static void leave(void *obj)
+static void leavetb(SpinBox *self)
 {
-    SpinBox *self = Object_instance(obj);
     if (self->inval)
     {
 	UniStr *str = valstr(self->val);
@@ -81,6 +90,12 @@ static void leave(void *obj)
 	self->inval = 0;
     }
     Widget_leave(self->textBox);
+}
+
+static void leave(void *obj)
+{
+    SpinBox *self = Object_instance(obj);
+    leavetb(self);
 }
 
 static void unselect(void *obj)
@@ -100,7 +115,31 @@ static Widget *childAt(void *obj, Pos pos)
     (void)pos;
 
     SpinBox *self = Object_instance(obj);
-    return Widget_cast(self->textBox);
+    Widget *child = Widget_cast(self);
+    SBHover hover;
+    Rect textgeom = Widget_geometry(self->textBox);
+    if (Rect_containsPos(textgeom, pos))
+    {
+	hover = SBH_TEXT;
+	child = Widget_enterAt(self->textBox, pos);
+    }
+    else
+    {
+	leavetb(self);
+	if (pos.y > textgeom.pos.y + textgeom.size.height / 2)
+	{
+	    hover = SBH_DOWN;
+	}
+	else hover = SBH_UP;
+    }
+    if (hover != self->hover)
+    {
+	self->hover = hover;
+	textgeom.pos.x += textgeom.size.width;
+	textgeom.size.width = textgeom.size.height / 2;
+	Widget_invalidateRegion(self, textgeom);
+    }
+    return child;
 }
 
 static int clicked(void *obj, const ClickEvent *event)
@@ -116,6 +155,11 @@ static void layoutChanged(void *receiver, void *sender, void *args)
 
     SpinBox *self = receiver;
     Rect geom = Widget_geometry(self);
+    if (geom.size.width > geom.size.height / 2)
+    {
+	geom.size.width -= geom.size.height / 2;
+    }
+    else geom.size.width = 0;
     Widget_setSize(self->textBox, geom.size);
     Widget_setOrigin(self->textBox, geom.pos);
 }
@@ -126,6 +170,8 @@ static void sizeRequested(void *receiver, void *sender, void *args)
     (void)args;
 
     SpinBox *self = receiver;
+    self->minSize = Widget_minSize(self->textBox);
+    self->minSize.width += self->minSize.height / 2;
     Widget_requestSize(self);
 }
 
@@ -191,6 +237,7 @@ SpinBox *SpinBox_createBase(void *derived, const char *name,
     CREATEBASE(Widget, name, parent);
     self->textBox = TextBox_create(name, self);
     self->changed = PSC_Event_create(self);
+    self->minSize = (Size){0, 0};
     UniStr *minstr = valstr(min);
     UniStr *maxstr = valstr(max);
     self->minlen = UniStr_len(minstr);
@@ -200,6 +247,7 @@ SpinBox *SpinBox_createBase(void *derived, const char *name,
     self->max = max;
     self->step = step;
     self->inval = 0;
+    self->hover = SBH_NONE;
 
     TextBox_setText(self->textBox, minstr);
     UniStr_destroy(maxstr);
