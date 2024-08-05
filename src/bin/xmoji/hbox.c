@@ -24,6 +24,7 @@ typedef struct HBoxItem
 {
     Widget *widget;
     Size minSize;
+    uint16_t minWidth;
 } HBoxItem;
 
 struct HBox
@@ -178,7 +179,9 @@ static void layout(HBox *self, int updateMinSize)
 	while (PSC_ListIterator_moveNext(i))
 	{
 	    HBoxItem *item = PSC_ListIterator_current(i);
-	    self->minSize.width += item->minSize.width + self->spacing;
+	    uint16_t minw = item->minSize.width > item->minWidth
+		? item->minSize.width : item->minWidth;
+	    self->minSize.width += minw + self->spacing;
 	    if (item->minSize.height > self->minSize.height)
 	    {
 		self->minSize.height = item->minSize.height;
@@ -202,7 +205,9 @@ static void layout(HBox *self, int updateMinSize)
     while (PSC_ListIterator_moveNext(i))
     {
 	HBoxItem *item = PSC_ListIterator_current(i);
-	Size itemSize = (Size){item->minSize.width + vspace, itemheight};
+	uint16_t minw = item->minSize.width > item->minWidth
+	    ? item->minSize.width : item->minWidth;
+	Size itemSize = (Size){minw + vspace, itemheight};
 	Widget_setSize(item->widget, itemSize);
 	Size realSize = Widget_size(item->widget);
 	Pos itemPos = contentOrigin;
@@ -290,6 +295,7 @@ void HBox_addWidget(void *self, void *widget)
     HBoxItem *item = PSC_malloc(sizeof *item);
     item->widget = Widget_cast(Object_ref(widget));
     item->minSize = Widget_minSize(widget);
+    item->minWidth = 0;
     Widget_setContainer(widget, b);
     PSC_Event_register(Widget_sizeRequested(widget), b, sizeRequested, 0);
     PSC_List_append(b->items, item, destroyItem);
@@ -309,6 +315,32 @@ void HBox_setSpacing(void *self, uint16_t spacing)
     {
 	b->spacing = spacing;
 	if (PSC_List_size(b->items)) layout(b, 1);
+    }
+}
+
+unsigned HBox_cols(const void *self)
+{
+    const HBox *b = Object_instance(self);
+    return PSC_List_size(b->items);
+}
+
+uint16_t HBox_minWidth(const void *self, unsigned col)
+{
+    const HBox *b = Object_instance(self);
+    const HBoxItem *item = PSC_List_at(b->items, col);
+    if (!item) return 0;
+    return item->minWidth > item->minSize.width
+	? item->minWidth : item->minSize.width;
+}
+
+void HBox_setMinWidth(void *self, unsigned col, uint16_t minWidth)
+{
+    HBox *b = Object_instance(self);
+    HBoxItem *item = PSC_List_at(b->items, col);
+    if (item)
+    {
+	item->minWidth = minWidth;
+	layout(b, 1);
     }
 }
 

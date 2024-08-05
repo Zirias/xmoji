@@ -15,6 +15,7 @@ static Widget *childAt(void *obj, Pos pos);
 static int clicked(void *obj, const ClickEvent *event);
 
 static MetaVBox mo = MetaVBox_init(
+	0,
 	expose, draw, 0, 0,
 	0, 0, 0, leave, 0, 0, 0, unselect, setFont, childAt,
 	minSize, 0, clicked, 0,
@@ -171,6 +172,8 @@ static int clicked(void *obj, const ClickEvent *event)
 
 static void layout(VBox *self, int updateMinSize)
 {
+    Object_vcallv(VBox, layout, self, updateMinSize);
+
     PSC_ListIterator *i = PSC_List_iterator(self->items);
 
     if (updateMinSize)
@@ -319,3 +322,16 @@ void VBox_setSpacing(void *self, uint16_t spacing)
     }
 }
 
+unsigned VBox_rows(const void *self)
+{
+    const VBox *b = Object_instance(self);
+    return PSC_List_size(b->items);
+}
+
+void *VBox_widget(void *self, unsigned row)
+{
+    VBox *b = Object_instance(self);
+    VBoxItem *item = PSC_List_at(b->items, row);
+    if (!item) return 0;
+    return item->widget;
+}
