@@ -8,6 +8,7 @@ C_CLASS_DECL(UniStr);
 C_CLASS_DECL(UniStrBuilder);
 
 UniStrBuilder *UniStrBuilder_create(void);
+UniStrBuilder *UniStrBuilder_clone(UniStrBuilder *builder);
 
 void UniStrBuilder_appendChar(UniStrBuilder *self, char32_t c)
     CMETHOD;
