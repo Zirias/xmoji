@@ -16,5 +16,6 @@ C_CLASS_DECL(TableRow);
 
 TableRow *TableRow_createBase(void *derived, void *parent);
 #define TableRow_create(...) TableRow_createBase(0, __VA_ARGS__)
+TableRow *TableRow_tryCast(void *obj);
 
 #endif

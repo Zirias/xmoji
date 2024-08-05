@@ -21,3 +21,8 @@ TableRow *TableRow_createBase(void *derived, void *parent)
     return self;
 }
 
+TableRow *TableRow_tryCast(void *obj)
+{
+    return Object_cast(obj);
+}
+

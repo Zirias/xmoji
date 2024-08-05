@@ -20,4 +20,9 @@ void HBox_addWidget(void *self, void *widget) CMETHOD;
 uint16_t HBox_spacing(const void *self) CMETHOD;
 void HBox_setSpacing(void *self, uint16_t spacing) CMETHOD;
 
+/* "protected" */
+unsigned HBox_cols(const void *self) CMETHOD;
+uint16_t HBox_minWidth(const void *self, unsigned col) CMETHOD;
+void HBox_setMinWidth(void *self, unsigned col, uint16_t minWidth) CMETHOD;
+
 #endif
