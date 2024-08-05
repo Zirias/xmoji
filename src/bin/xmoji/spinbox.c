@@ -33,6 +33,7 @@ struct SpinBox
     int min;
     int max;
     int step;
+    int inval;
 };
 
 static void destroy(void *obj)
@@ -40,6 +41,13 @@ static void destroy(void *obj)
     SpinBox *self = obj;
     PSC_Event_destroy(self->changed);
     free(self);
+}
+
+static UniStr *valstr(int value)
+{
+    char buf[64];
+    snprintf(buf, sizeof buf, "%d", value);
+    return UniStr_create(buf);
 }
 
 static void expose(void *obj, Rect region)
@@ -65,6 +73,13 @@ static Size minSize(const void *obj)
 static void leave(void *obj)
 {
     SpinBox *self = Object_instance(obj);
+    if (self->inval)
+    {
+	UniStr *str = valstr(self->val);
+	TextBox_setText(self->textBox, str);
+	UniStr_destroy(str);
+	self->inval = 0;
+    }
     Widget_leave(self->textBox);
 }
 
@@ -117,6 +132,7 @@ static void sizeRequested(void *receiver, void *sender, void *args)
 static int tryParse(int *value, int min, int max, const UniStr *str)
 {
     char *cstr = LATIN1(str);
+    if (!cstr) return 0;
     char *endp;
     errno = 0;
     int ok = 0;
@@ -128,13 +144,6 @@ static int tryParse(int *value, int min, int max, const UniStr *str)
 done:
     free(cstr);
     return ok;
-}
-
-static UniStr *valstr(int value)
-{
-    char buf[64];
-    snprintf(buf, sizeof buf, "%d", value);
-    return UniStr_create(buf);
 }
 
 static int filter(void *obj, const UniStr *str)
@@ -160,6 +169,21 @@ static int filter(void *obj, const UniStr *str)
     return tryParse(0, self->min, self->max, str);
 }
 
+static void textChanged(void *receiver, void *sender, void *args)
+{
+    (void)sender;
+
+    SpinBox *self = receiver;
+    const UniStr *str = args;
+
+    if (tryParse(&self->val, self->min, self->max, str))
+    {
+	self->inval = 0;
+	PSC_Event_raise(self->changed, 0, &self->val);
+    }
+    else self->inval = 1;
+}
+
 SpinBox *SpinBox_createBase(void *derived, const char *name,
 	int min, int max, int step, void *parent)
 {
@@ -175,6 +199,7 @@ SpinBox *SpinBox_createBase(void *derived, const char *name,
     self->min = min;
     self->max = max;
     self->step = step;
+    self->inval = 0;
 
     TextBox_setText(self->textBox, minstr);
     UniStr_destroy(maxstr);
@@ -185,6 +210,8 @@ SpinBox *SpinBox_createBase(void *derived, const char *name,
     Widget_show(self->textBox);
     PSC_Event_register(Widget_sizeRequested(self->textBox), self,
 	    sizeRequested, 0);
+    PSC_Event_register(TextBox_textChanged(self->textBox), self,
+	    textChanged, 0);
 
     Widget_setPadding(self, (Box){0, 0, 0, 0});
     PSC_Event_register(Widget_sizeChanged(self), self, layoutChanged, 0);
@@ -207,7 +234,12 @@ PSC_Event *SpinBox_valueChanged(void *self)
 
 void SpinBox_setValue(void *self, int value)
 {
-    (void)self;
-    (void)value;
+    SpinBox *b = Object_instance(self);
+    if (value > b->max) value = b->max;
+    if (value < b->min) value = b->min;
+    UniStr *str = valstr(value);
+    TextBox_setText(b->textBox, str);
+    UniStr_destroy(str);
+    b->val = value;
 }
 

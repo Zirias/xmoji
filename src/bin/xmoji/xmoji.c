@@ -422,6 +422,7 @@ static int startup(void *app)
     Widget_show(label);
     HBox_addWidget(row, label);
     SpinBox *sb = SpinBox_create("waitBeforeBox", 0, 500, 10, row);
+    SpinBox_setValue(sb, 50);
     Widget_show(sb);
     HBox_addWidget(row, sb);
     Widget_show(row);
@@ -434,6 +435,7 @@ static int startup(void *app)
     Widget_show(label);
     HBox_addWidget(row, label);
     sb = SpinBox_create("waitAfterBox", 50, 1000, 10, row);
+    SpinBox_setValue(sb, 100);
     Widget_show(sb);
     HBox_addWidget(row, sb);
     Widget_show(row);
