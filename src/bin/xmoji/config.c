@@ -16,22 +16,137 @@
 #define CFGDEFNAME "/xmoji.cfg"
 #define CFGDEFPATH "/.config"
 
+#define DEF_INJECTORFLAGS   (IF_ADDSPACE|IF_EXTRAZWJ)
+#define DEF_WAITBEFORE	    50
+#define DEF_WAITAFTER	    100
+
 enum ConfigKey
 {
+    CFG_INJECTORFLAGS,
+    CFG_WAITBEFORE,
+    CFG_WAITAFTER,
     CFG_HISTORY
 };
 
 static const char *keys[] = {
+    "injectorFlags",
+    "waitBefore",
+    "waitAfter",
     "history"
+};
+
+static void readHistory(Config *self);
+static void readInjectorFlags(Config *self);
+static void readWaitBefore(Config *self);
+static void readWaitAfter(Config *self);
+
+static void (*const readers[])(Config *) = {
+    readInjectorFlags,
+    readWaitBefore,
+    readWaitAfter,
+    readHistory
 };
 
 struct Config
 {
     char *cfgfile;
     ConfigFile *cfg;
+    PSC_Event *changed[sizeof keys / sizeof *keys - 1];
     EmojiHistory *history;
     int reading;
+    InjectorFlags injectorFlags;
+    unsigned waitBefore;
+    unsigned waitAfter;
 };
+
+static void readHistory(Config *self)
+{
+    EmojiHistory_deserialize(self->history,
+	    ConfigFile_get(self->cfg, keys[CFG_HISTORY]));
+}
+
+static int tryParseNum(long *val, const char *str)
+{
+    if (!str) return 0;
+    char *endptr;
+    errno = 0;
+    long lv = strtol(str, &endptr, 10);
+    if (errno != 0 || *endptr || endptr == str) return 0;
+    *val = lv;
+    return 1;
+}
+
+static void writeNum(Config *self, enum ConfigKey key, long val)
+{
+    char buf[32];
+    snprintf(buf, 32, "%ld", val);
+    ConfigFile_set(self->cfg, keys[key], PSC_copystr(buf));
+    ConfigFile_write(self->cfg);
+}
+
+static void readInjectorFlags(Config *self)
+{
+    InjectorFlags flags = DEF_INJECTORFLAGS;
+    long flagsval;
+    if (tryParseNum(&flagsval,
+		ConfigFile_get(self->cfg, keys[CFG_INJECTORFLAGS])))
+    {
+	if (flagsval & ~(IF_ADDSPACE|IF_ADDZWSPACE|IF_EXTRAZWJ)) goto done;
+	if ((flagsval & (IF_ADDSPACE|IF_ADDZWSPACE))
+		== (IF_ADDSPACE|IF_ADDZWSPACE)) goto done;
+	flags = flagsval;
+    }
+done:
+    if (self->reading == 2 || flags != self->injectorFlags)
+    {
+	self->injectorFlags = flags;
+	if (self->reading < 2)
+	{
+	    ConfigChangedEventArgs ea = { 1 };
+	    PSC_Event_raise(self->changed[CFG_INJECTORFLAGS], 0, &ea);
+	}
+    }
+}
+
+static void readWaitBefore(Config *self)
+{
+    unsigned waitBefore = DEF_WAITBEFORE;
+    long waitval;
+    if (tryParseNum(&waitval, ConfigFile_get(self->cfg, keys[CFG_WAITBEFORE]))
+	    && waitval >= 0 && waitval <= 500)
+    {
+	waitBefore = waitval;
+    }
+    if (self->reading == 2 || waitBefore != self->waitBefore)
+    {
+	self->waitBefore = waitBefore;
+	if (self->reading < 2)
+	{
+	    ConfigChangedEventArgs ea = { 1 };
+	    PSC_Event_raise(self->changed[CFG_WAITBEFORE], 0, &ea);
+	}
+    }
+}
+
+static void readWaitAfter(Config *self)
+{
+    unsigned waitAfter = DEF_WAITAFTER;
+    long waitval;
+    if (tryParseNum(&waitval, ConfigFile_get(self->cfg, keys[CFG_WAITAFTER]))
+	    && waitval >= 50 && waitval <= 1000)
+    {
+	waitAfter = waitval;
+    }
+    if (self->reading == 2 || waitAfter != self->waitAfter)
+    {
+	self->waitAfter = waitAfter;
+	if (self->reading < 2)
+	{
+	    ConfigChangedEventArgs ea = { 1 };
+	    PSC_Event_raise(self->changed[CFG_WAITAFTER], 0, &ea);
+	}
+    }
+}
 
 static void filechanged(void *receiver, void *sender, void *args)
 {
@@ -41,10 +156,13 @@ static void filechanged(void *receiver, void *sender, void *args)
     ConfigFileChangedEventArgs *ea = args;
 
     self->reading = 1;
-    if (!strcmp(ea->key, keys[CFG_HISTORY]))
+    for (size_t i = 0; i < sizeof keys / sizeof *keys; ++i)
     {
-	EmojiHistory_deserialize(self->history,
-		ConfigFile_get(self->cfg, keys[CFG_HISTORY]));
+	if (!strcmp(ea->key, keys[i]))
+	{
+	    readers[i](self);
+	    break;
+	}
     }
     self->reading = 0;
 }
@@ -176,10 +294,17 @@ Config *Config_create(const char *path)
     PSC_Log_fmt(PSC_L_INFO, "Config file: %s", self->cfgfile);
     self->cfg = ConfigFile_create(self->cfgfile,
 	    sizeof keys / sizeof *keys, keys);
+    for (size_t i = 0; i < sizeof keys / sizeof *keys - 1; ++i)
+    {
+	self->changed[i] = PSC_Event_create(self);
+    }
     self->history = EmojiHistory_create(HISTSIZE);
+    self->reading = 1;
+    for (size_t i = 0; i < sizeof keys / sizeof *keys; ++i)
+    {
+	readers[i](self);
+    }
     self->reading = 0;
-    EmojiHistory_deserialize(self->history,
-	    ConfigFile_get(self->cfg, keys[CFG_HISTORY]));
     if (ConfigFile_write(self->cfg) >= 0)
     {
 	PSC_Event_register(ConfigFile_changed(self->cfg), self,
@@ -200,11 +325,74 @@ EmojiHistory *Config_history(Config *self)
     return self->history;
 }
 
+InjectorFlags Config_injectorFlags(const Config *self)
+{
+    return self->injectorFlags;
+}
+
+void Config_setInjectorFlags(Config *self, InjectorFlags flags)
+{
+    if (self->injectorFlags == flags) return;
+    if (flags & ~(IF_ADDSPACE|IF_ADDZWSPACE|IF_EXTRAZWJ)) return;
+    if ((flags & (IF_ADDSPACE|IF_ADDZWSPACE))
+	    == (IF_ADDSPACE|IF_ADDZWSPACE)) return;
+    writeNum(self, CFG_INJECTORFLAGS, flags);
+    ConfigChangedEventArgs ea = { 0 };
+    PSC_Event_raise(self->changed[CFG_INJECTORFLAGS], 0, &ea);
+}
+
+PSC_Event *Config_injectorFlagsChanged(Config *self)
+{
+    return self->changed[CFG_INJECTORFLAGS];
+}
+
+unsigned Config_waitBefore(const Config *self)
+{
+    return self->waitBefore;
+}
+
+void Config_setWaitBefore(Config *self, unsigned ms)
+{
+    if (self->waitBefore == ms) return;
+    if (ms > 500) return;
+    writeNum(self, CFG_WAITBEFORE, ms);
+    ConfigChangedEventArgs ea = { 0 };
+    PSC_Event_raise(self->changed[CFG_WAITBEFORE], 0, &ea);
+}
+
+PSC_Event *Config_waitBeforeChanged(Config *self)
+{
+    return self->changed[CFG_WAITBEFORE];
+}
+
+unsigned Config_waitAfter(const Config *self)
+{
+    return self->waitAfter;
+}
+
+void Config_setWaitAfter(Config *self, unsigned ms)
+{
+    if (self->waitAfter == ms) return;
+    if (ms < 50 || ms > 1000) return;
+    writeNum(self, CFG_WAITAFTER, ms);
+    ConfigChangedEventArgs ea = { 0 };
+    PSC_Event_raise(self->changed[CFG_WAITAFTER], 0, &ea);
+}
+
+PSC_Event *Config_waitAfterChanged(Config *self)
+{
+    return self->changed[CFG_WAITAFTER];
+}
+
 void Config_destroy(Config *self)
 {
     if (!self) return;
     EmojiHistory_destroy(self->history);
     ConfigFile_destroy(self->cfg);
+    for (size_t i = 0; i < sizeof keys / sizeof *keys - 1; ++i)
+    {
+	PSC_Event_destroy(self->changed[i]);
+    }
     free(self->cfgfile);
     free(self);
 }
