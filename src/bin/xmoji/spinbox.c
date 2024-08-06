@@ -1,5 +1,7 @@
 #include "spinbox.h"
 
+#include "pen.h"
+#include "shape.h"
 #include "textbox.h"
 #include "unistr.h"
 
@@ -36,7 +38,11 @@ struct SpinBox
     Object base;
     TextBox *textBox;
     PSC_Event *changed;
+    Pen *pen;
+    Shape *uparrow;
+    Shape *downarrow;
     Size minSize;
+    Size arrowsz;
     unsigned minlen;
     int val;
     int min;
@@ -49,6 +55,9 @@ struct SpinBox
 static void destroy(void *obj)
 {
     SpinBox *self = obj;
+    Shape_destroy(self->downarrow);
+    Shape_destroy(self->uparrow);
+    Pen_destroy(self->pen);
     PSC_Event_destroy(self->changed);
     free(self);
 }
@@ -66,6 +75,66 @@ static void expose(void *obj, Rect region)
     Widget_invalidateRegion(self->textBox, region);
 }
 
+static xcb_render_picture_t renderArrow(void *obj, xcb_render_triangle_t *arr,
+	xcb_render_picture_t ownerpic, const void *data)
+{
+    SpinBox *self = obj;
+    const Size *sz = data;
+
+    xcb_connection_t *c = X11Adapter_connection();
+    xcb_screen_t *s = X11Adapter_screen();
+
+    xcb_pixmap_t tmp = xcb_generate_id(c);
+    CHECK(xcb_create_pixmap(c, 8, tmp, s->root, sz->width, sz->height),
+	    "Cannot create arrow pixmap for 0x%x", (unsigned)ownerpic);
+    uint32_t pictopts[] = {
+	XCB_RENDER_POLY_MODE_IMPRECISE,
+	XCB_RENDER_POLY_EDGE_SMOOTH
+    };
+    xcb_render_picture_t pic = xcb_generate_id(c);
+    CHECK(xcb_render_create_picture(c, pic, tmp,
+		X11Adapter_format(PICTFORMAT_ALPHA),
+		XCB_RENDER_CP_POLY_MODE | XCB_RENDER_CP_POLY_EDGE, pictopts),
+	    "Cannot create arrow picture for 0x%x", (unsigned)ownerpic);
+    xcb_free_pixmap(c, tmp);
+    Color color = 0;
+    xcb_rectangle_t rect = {0, 0, sz->width, sz->height};
+    CHECK(xcb_render_fill_rectangles(c, XCB_RENDER_PICT_OP_SRC,
+		pic, Color_xcb(color), 1, &rect),
+	    "Cannot clear arrow picture for 0x%x", (unsigned)ownerpic);
+    if (!self->pen) self->pen = Pen_create();
+    Pen_configure(self->pen, PICTFORMAT_ALPHA, 0xffffffff);
+    CHECK(xcb_render_triangles(c, XCB_RENDER_PICT_OP_OVER,
+		Pen_picture(self->pen, ownerpic), pic, 0, 0, 0, 1, arr),
+	    "Cannot render arrow for 0x%x", (unsigned)ownerpic);
+
+    return pic;
+}
+
+static xcb_render_picture_t renderUparrow(void *obj,
+	xcb_render_picture_t ownerpic, const void *data)
+{
+    const Size *sz = data;
+    xcb_render_triangle_t arr = {
+	{ 0, (sz->height << 15) + (sz->height << 14) },
+	{ (sz->width << 16), (sz->height << 15) + (sz->height << 14) },
+	{ (sz->width << 15), (sz->height << 14) }
+    };
+    return renderArrow(obj, &arr, ownerpic, data);
+}
+
+static xcb_render_picture_t renderDownarrow(void *obj,
+	xcb_render_picture_t ownerpic, const void *data)
+{
+    const Size *sz = data;
+    xcb_render_triangle_t arr = {
+	{ 0, (sz->height << 14) },
+	{ (sz->width << 16), (sz->height << 14) },
+	{ (sz->width << 15), (sz->height << 15) + (sz->height << 14) }
+    };
+    return renderArrow(obj, &arr, ownerpic, data);
+}
+
 static int draw(void *obj, xcb_render_picture_t picture)
 {
     SpinBox *self = Object_instance(obj);
@@ -76,6 +145,25 @@ static int draw(void *obj, xcb_render_picture_t picture)
 	Rect geom = Widget_geometry(self->textBox);
 	geom.pos.x += geom.size.width;
 	geom.size.width = geom.size.height / 2;
+	Size arrowsz = { geom.size.width - 2, geom.size.width - 1 };
+	if (arrowsz.width != self->arrowsz.width
+		|| arrowsz.height != self->arrowsz.height)
+	{
+	    self->arrowsz = arrowsz;
+	    Shape *uparrow = Shape_create(renderUparrow,
+		    sizeof self->arrowsz, &self->arrowsz);
+	    if (self->uparrow) Shape_destroy(self->uparrow);
+	    Shape_render(uparrow, self, picture);
+	    self->uparrow = uparrow;
+	    Shape *downarrow = Shape_create(renderDownarrow,
+		    sizeof self->arrowsz, &self->arrowsz);
+	    if (self->downarrow) Shape_destroy(self->downarrow);
+	    Shape_render(downarrow, self, picture);
+	    self->downarrow = downarrow;
+	}
+	if (!self->pen) self->pen = Pen_create();
+	Pen_configure(self->pen, PICTFORMAT_RGB,
+		Widget_color(self, COLOR_NORMAL));
 	xcb_rectangle_t uprect = {
 	    geom.pos.x + 1, geom.pos.y + 1,
 	    geom.size.width - 2, geom.size.width - 1 };
@@ -85,6 +173,12 @@ static int draw(void *obj, xcb_render_picture_t picture)
 		    picture, Color_xcb(upcol), 1, &uprect),
 		"Cannot draw up button background for 0x%x",
 		(unsigned)picture);
+	CHECK(xcb_render_composite(c, XCB_RENDER_PICT_OP_OVER,
+		    Pen_picture(self->pen, picture),
+		    Shape_picture(self->uparrow), picture, 0, 0, 0, 0,
+		    geom.pos.x + 1, geom.pos.y + 1,
+		    geom.size.width - 2, geom.size.width - 1),
+		"Cannot composite up arrow for 0x%x", (unsigned)picture);
 	xcb_rectangle_t downrect = {
 	    geom.pos.x + 1, geom.pos.y + geom.size.width + 1,
 	    geom.size.width - 2, geom.size.width - 1
@@ -95,6 +189,12 @@ static int draw(void *obj, xcb_render_picture_t picture)
 		    picture, Color_xcb(downcol), 1, &downrect),
 		"Cannot draw down button background for 0x%x",
 		(unsigned)picture);
+	CHECK(xcb_render_composite(c, XCB_RENDER_PICT_OP_OVER,
+		    Pen_picture(self->pen, picture),
+		    Shape_picture(self->downarrow), picture, 0, 0, 0, 0,
+		    geom.pos.x + 1, geom.pos.y + geom.size.width + 1,
+		    geom.size.width - 2, geom.size.width - 1),
+		"Cannot composite up arrow for 0x%x", (unsigned)picture);
     }
     return rc;
 }
@@ -299,7 +399,11 @@ SpinBox *SpinBox_createBase(void *derived, const char *name,
     CREATEBASE(Widget, name, parent);
     self->textBox = TextBox_create(name, self);
     self->changed = PSC_Event_create(self);
+    self->pen = 0;
+    self->uparrow = 0;
+    self->downarrow = 0;
     self->minSize = (Size){0, 0};
+    self->arrowsz = (Size){0, 0};
     UniStr *minstr = valstr(min);
     UniStr *maxstr = valstr(max);
     self->minlen = UniStr_len(minstr);
