@@ -31,6 +31,7 @@ struct Flyout
 {
     Object base;
     Widget *widget;
+    int incborder;
 };
 
 static void destroy(void *obj)
@@ -139,6 +140,7 @@ Flyout *Flyout_createBase(void *derived, const char *name, void *parent)
     Flyout *self = PSC_malloc(sizeof *self);
     CREATEBASE(Widget, name, parent);
     self->widget = 0;
+    self->incborder = 0;
 
     Widget_setPadding(self, (Box){0, 0, 0, 0});
     PSC_Event_register(Widget_sizeChanged(self), self, sizeChanged, 0);
@@ -152,6 +154,12 @@ static void sizeRequested(void *receiver, void *sender, void *args)
     (void)args;
 
     Widget_requestSize(receiver);
+}
+
+void Flyout_setIncBorder(void *self, int enable)
+{
+    Flyout *f = Object_instance(self);
+    f->incborder = enable;
 }
 
 void Flyout_setWidget(void *self, void *widget)
@@ -185,5 +193,7 @@ void Flyout_popup(void *self, void *widget)
     }
     Widget_setContainer(window, widget);
     Window_setMainWidget(window, f);
+    if (f->incborder) Window_addFlags(window, WF_POS_INCBORDER);
+    else Window_removeFlags(window, WF_POS_INCBORDER);
     Widget_show(f);
 }
