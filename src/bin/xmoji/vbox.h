@@ -25,5 +25,6 @@ void VBox_setSpacing(void *self, uint16_t spacing) CMETHOD;
 /* "protected" */
 unsigned VBox_rows(const void *self) CMETHOD;
 void *VBox_widget(void *self, unsigned row) CMETHOD;
+int VBox_indexOf(void *self, void *widget) CMETHOD;
 
 #endif
