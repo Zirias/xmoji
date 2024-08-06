@@ -44,7 +44,8 @@ typedef enum WindowFlags
     WF_SKIP_TASKBAR	= 0x10 << 3,
     WF_SKIP_PAGER	= 0x10 << 4,
     WF_STICKY		= 0x10 << 5,
-    WF_POS_PARENTWIDGET	= 0x10 << 6
+    WF_POS_PARENTWIDGET	= 0x10 << 6,
+    WF_ALWAYS_CLASS	= 0x10 << 7
 } WindowFlags;
 
 Window *Window_createBase(void *derived, const char *name,

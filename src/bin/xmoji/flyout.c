@@ -180,7 +180,8 @@ void Flyout_popup(void *self, void *widget)
     if (!f->widget) return;
     if (!window)
     {
-	window = Window_create(0, WF_WINDOW_MENU|WF_POS_PARENTWIDGET, 0);
+	window = Window_create(0,
+		WF_WINDOW_MENU|WF_POS_PARENTWIDGET|WF_ALWAYS_CLASS, 0);
     }
     Widget_setContainer(window, widget);
     Window_setMainWidget(window, f);

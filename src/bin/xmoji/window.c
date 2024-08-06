@@ -878,6 +878,15 @@ Window *Window_createBase(void *derived, const char *name,
 		    32, 1, &parentWin->w),
 		"Cannot set transient state for 0x%x", (unsigned)self->w);
     }
+    if (wtype == WF_WINDOW_NORMAL || wtype == WF_WINDOW_DIALOG
+	    || (flags & WF_ALWAYS_CLASS))
+    {
+	size_t sz;
+	const char *wmclass = X11Adapter_wmClass(&sz);
+	CHECK(xcb_change_property(c, XCB_PROP_MODE_REPLACE, self->w,
+		    XCB_ATOM_WM_CLASS, XCB_ATOM_STRING, 8, sz, wmclass),
+		"Cannot set window class for 0x%x", (unsigned)self->w);
+    }
     if (wtype == WF_WINDOW_NORMAL || wtype == WF_WINDOW_DIALOG)
     {
 	self->kbcompose = xkb_compose_state_new(
@@ -896,11 +905,6 @@ Window *Window_createBase(void *derived, const char *name,
 		    A(WM_PROTOCOLS), XCB_ATOM_ATOM, 32,
 		    (flags & WF_REJECT_FOCUS) ? 2 : 1, protocols),
 		"Cannot set supported protocols on 0x%x", (unsigned)self->w);
-	size_t sz;
-	const char *wmclass = X11Adapter_wmClass(&sz);
-	CHECK(xcb_change_property(c, XCB_PROP_MODE_REPLACE, self->w,
-		    XCB_ATOM_WM_CLASS, XCB_ATOM_STRING, 8, sz, wmclass),
-		"Cannot set window class for 0x%x", (unsigned)self->w);
 	xcb_atom_t wmtype;
 	switch (wtype)
 	{
