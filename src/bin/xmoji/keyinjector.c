@@ -137,7 +137,7 @@ static void doinject(void *obj, unsigned sequence,
 	else codepoint = (injectflags & IF_ADDSPACE) ? 0x20 : *zw;
 	for (size_t y = 0; y < kmap->keysyms_per_keycode; ++y)
 	{
-	    syms[z++] = 0x1000000U + codepoint;
+	    syms[z++] = codepoint > 0xff ? 0x1000000U + codepoint : codepoint;
 	}
     }
 
