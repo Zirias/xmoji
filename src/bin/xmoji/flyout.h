@@ -16,6 +16,7 @@ C_CLASS_DECL(Flyout);
 
 Flyout *Flyout_createBase(void *derived, const char *name, void *parent);
 #define Flyout_create(...) Flyout_createBase(0, __VA_ARGS__)
+void Flyout_setIncBorder(void *self, int enable) CMETHOD;
 void Flyout_setWidget(void *self, void *widget) CMETHOD;
 void Flyout_popup(void *self, void *widget) CMETHOD;
 

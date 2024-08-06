@@ -45,7 +45,8 @@ typedef enum WindowFlags
     WF_SKIP_PAGER	= 0x10 << 4,
     WF_STICKY		= 0x10 << 5,
     WF_POS_PARENTWIDGET	= 0x10 << 6,
-    WF_ALWAYS_CLASS	= 0x10 << 7
+    WF_POS_INCBORDER	= 0x10 << 7,
+    WF_ALWAYS_CLASS	= 0x10 << 8
 } WindowFlags;
 
 Window *Window_createBase(void *derived, const char *name,
@@ -63,6 +64,11 @@ PSC_Event *Window_closed(void *self)
 
 PSC_Event *Window_propertyChanged(void *self)
     CMETHOD ATTR_RETNONNULL;
+
+void Window_addFlags(void *self, WindowFlags flags)
+    CMETHOD;
+void Window_removeFlags(void *self, WindowFlags flags)
+    CMETHOD;
 
 const char *Window_title(const void *self)
     CMETHOD;

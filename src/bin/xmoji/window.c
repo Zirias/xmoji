@@ -101,9 +101,19 @@ static void map(Window *self)
 		parentpos.x += offset.x;
 		parentpos.y += offset.y;
 	    }
-	    x = parentpos.x + (parent->absMouse.x - parent->mouseUpdate.x - 1);
-	    y = parentpos.y + (parent->absMouse.y - parent->mouseUpdate.y - 1);
+	    x = parentpos.x + (parent->absMouse.x - parent->mouseUpdate.x);
+	    y = parentpos.y + (parent->absMouse.y - parent->mouseUpdate.y);
 	    Size sz = Widget_size(self);
+	    if (self->flags & WF_POS_INCBORDER)
+	    {
+		parentsize.width -= 2;
+		parentsize.height -= 2;
+	    }
+	    else
+	    {
+		--x;
+		--y;
+	    }
 	    if (sz.width < parentsize.width) sz.width = parentsize.width;
 	    if (sz.height < parentsize.height) sz.height = parentsize.height;
 	    Widget_setSize(self, sz);
@@ -1041,6 +1051,20 @@ PSC_Event *Window_propertyChanged(void *self)
 {
     Window *w = Object_instance(self);
     return w->propertyChanged;
+}
+
+void Window_addFlags(void *self, WindowFlags flags)
+{
+    Window *w = Object_instance(self);
+    flags &= ~WF_WINDOW_TYPE;
+    w->flags |= flags;
+}
+
+void Window_removeFlags(void *self, WindowFlags flags)
+{
+    Window *w = Object_instance(self);
+    flags = ~flags | WF_WINDOW_TYPE;
+    w->flags &= flags;
 }
 
 const char *Window_title(const void *self)
