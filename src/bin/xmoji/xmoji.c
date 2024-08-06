@@ -1,6 +1,7 @@
 #include "button.h"
 #include "command.h"
 #include "config.h"
+#include "dropdown.h"
 #include "emoji.h"
 #include "emojibutton.h"
 #include "emojihistory.h"
@@ -415,6 +416,31 @@ static int startup(void *app)
     Table *table = Table_create(settingsDlg);
 
     TableRow *row = TableRow_create(table);
+    label = TextLabel_create("injectFlagsLabel", row);
+    UniStr(injectFlags, U"Key injection flags:");
+    TextLabel_setText(label, injectFlags);
+    Widget_setAlign(label, AH_RIGHT|AV_MIDDLE);
+    Widget_show(label);
+    HBox_addWidget(row, label);
+    Dropdown *dd = Dropdown_create("injectFlagsBox", row);
+    UniStr(flagsNone, U"None");
+    Dropdown_addOption(dd, flagsNone);
+    UniStr(flagsSpace, U"Add space");
+    Dropdown_addOption(dd, flagsSpace);
+    UniStr(flagsZws, U"Add ZW space");
+    Dropdown_addOption(dd, flagsZws);
+    UniStr(flagsZwj, U"Pre-ZWJ");
+    Dropdown_addOption(dd, flagsZwj);
+    UniStr(flagsZwjSpace, U"Pre-ZWJ + add space");
+    Dropdown_addOption(dd, flagsZwjSpace);
+    UniStr(flagsZwjZws, U"Pre-ZWJ + add ZW space");
+    Dropdown_addOption(dd, flagsZwjZws);
+    Dropdown_select(dd, 4);
+    Widget_show(dd);
+    HBox_addWidget(row, dd);
+    Widget_show(row);
+    Table_addRow(table, row);
+    row = TableRow_create(table);
     label = TextLabel_create("waitBeforeLabel", row);
     UniStr(waitBefore, U"Wait before sending keys (ms):");
     TextLabel_setText(label, waitBefore);

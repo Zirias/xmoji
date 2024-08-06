@@ -9,6 +9,7 @@ xmoji_MODULES=		button \
 			command \
 			config \
 			configfile \
+			dropdown \
 			emoji \
 			emojibutton \
 			emojihistory \
