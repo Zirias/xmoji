@@ -774,6 +774,8 @@ void TextBox_setText(void *self, const UniStr *text)
     UniStrBuilder_clear(b->text);
     UniStrBuilder_appendStr(b->text, UniStr_str(text));
     b->cursor = 0;
+    b->selection.len = 0;
+    b->selection.start = 0;
     TextRenderer_setText(b->renderer, text);
     Widget_invalidate(b);
 }

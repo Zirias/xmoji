@@ -213,6 +213,7 @@ int TextRenderer_setText(TextRenderer *self, const UniStr *text)
 	y += self->hbpos[i].y_advance;
     }
     self->uploaded = 0;
+    self->selection = (Selection){0, 0};
     return 0;
 }
 
