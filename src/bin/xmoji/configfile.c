@@ -61,7 +61,7 @@ static int doread(ConfigFile *self, int checkchanges)
     FILE *f = fopen(self->path, "r");
     if (!f) return rc;
     char **newvals = PSC_malloc(self->nkeys * sizeof *newvals);
-    memset(newvals, 0, sizeof *newvals);
+    memset(newvals, 0, self->nkeys * sizeof *newvals);
     while (fgets(buf, sizeof buf, f))
     {
 	const char *key;
