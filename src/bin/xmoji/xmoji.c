@@ -523,6 +523,16 @@ static int startup(void *app)
     Table *table = Table_create(settingsDlg);
 
     TableRow *row = TableRow_create(table);
+    UniStr(injectFlagsDesc,
+	    U"These are workarounds/hacks to help some clients receiving the\n"
+	    U"faked key press events to correctly display emojis.\n"
+	    U"\n"
+	    U"* Pre-ZWJ: If the emoji is a ZWJ sequence, prepend another\n"
+	    U"ZWJ. This is nonstandard, but helps some clients. If none of\n"
+	    U"the space options is active, a ZW space is also prepended.\n"
+	    U"* Add space: Add a regular space after each emoji\n"
+	    U"* Add ZW space: Add a zero-width space after each emoji");
+    Widget_setTooltip(row, injectFlagsDesc, 0);
     label = TextLabel_create("injectFlagsLabel", row);
     UniStr(injectFlags, U"Key injection flags:");
     TextLabel_setText(label, injectFlags);
@@ -550,6 +560,15 @@ static int startup(void *app)
     Widget_show(row);
     Table_addRow(table, row);
     row = TableRow_create(table);
+    UniStr(waitBeforeDesc,
+	    U"Sending emojis as faked X11 key events requires temporarily\n"
+	    U"changing the keyboard mapping.\n"
+	    U"This is the time (in milliseconds) to wait after changing the\n"
+	    U"mapping and before sending the key press events.\n"
+	    U"This might help prevent possible race condition bugs in\n"
+	    U"clients between applying the new mapping and processing\n"
+	    U"the events.");
+    Widget_setTooltip(row, waitBeforeDesc, 0);
     label = TextLabel_create("waitBeforeLabel", row);
     UniStr(waitBefore, U"Wait before sending keys (ms):");
     TextLabel_setText(label, waitBefore);
@@ -566,6 +585,19 @@ static int startup(void *app)
     Widget_show(row);
     Table_addRow(table, row);
     row = TableRow_create(table);
+    UniStr(waitAfterDesc,
+	    U"Sending emojis as faked X11 key events requires temporarily\n"
+	    U"changing the keyboard mapping.\n"
+	    U"This is the time (in milliseconds) to wait after sending the\n"
+	    U"key press events and before resetting the keyboard mapping.\n"
+	    U"Some clients might apply a new keyboard map before processing\n"
+	    U"all queued events, so if you see completely unrelated\n"
+	    U"characters instead of the expected emojis, try increasing this\n"
+	    U"value.\n"
+	    U"Note that if you see multiple emojis instead of just one, this\n"
+	    U"value is unrelated, but the client has issues correctly\n"
+	    U"interpreting an emoji consisting of multiple codepoints.");
+    Widget_setTooltip(row, waitAfterDesc, 0);
     label = TextLabel_create("waitAfterLabel", row);
     UniStr(waitAfter, U"Wait after sending keys (ms):");
     TextLabel_setText(label, waitAfter);
