@@ -335,3 +335,17 @@ void *VBox_widget(void *self, unsigned row)
     if (!item) return 0;
     return item->widget;
 }
+
+int VBox_indexOf(void *self, void *widget)
+{
+    VBox *b = Object_instance(self);
+    Widget *w = Widget_tryCast(widget);
+    if (!w) return -1;
+    for (size_t i = 0; i < PSC_List_size(b->items); ++i)
+    {
+	VBoxItem *item = PSC_List_at(b->items, i);
+	if (w == item->widget) return i;
+    }
+    return -1;
+}
+
