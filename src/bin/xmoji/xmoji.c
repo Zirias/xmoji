@@ -45,6 +45,9 @@ typedef struct Xmoji
     TabBox *tabs;
     FlowGrid *searchGrid;
     FlowGrid *recentGrid;
+    Dropdown *injectFlagsBox;
+    SpinBox *waitBeforeBox;
+    SpinBox *waitAfterBox;
 } Xmoji;
 
 static void destroy(void *app)
@@ -169,11 +172,113 @@ static void onpasted(void *receiver, void *sender, void *args)
     EmojiHistory_record(Config_history(self->config), ea->content.data);
 }
 
+static unsigned flagsindex(InjectorFlags flags)
+{
+    unsigned idx = (flags & IF_EXTRAZWJ) ? 3 : 0;
+    if (flags & IF_ADDSPACE) ++idx;
+    else if (flags & IF_ADDZWSPACE) idx += 2;
+    return idx;
+}
+
+static void onflagschanged(void *receiver, void *sender, void *args)
+{
+    (void)sender;
+
+    Xmoji *self = receiver;
+    ConfigChangedEventArgs *ea = args;
+
+    KeyInjector_init(Config_waitBefore(self->config),
+	    Config_waitAfter(self->config),
+	    Config_injectorFlags(self->config));
+
+    if (ea->external)
+    {
+	Dropdown_select(self->injectFlagsBox,
+		flagsindex(Config_injectorFlags(self->config)));
+    }
+}
+
+static void onflagsboxchanged(void *receiver, void *sender, void *args)
+{
+    (void)sender;
+
+    Xmoji *self = receiver;
+    unsigned flagsval = *(unsigned *)args;
+    InjectorFlags flags = 0;
+    if (flagsval > 2)
+    {
+	flags |= IF_EXTRAZWJ;
+	flagsval -= 3;
+    }
+    if (flagsval == 1) flags |= IF_ADDSPACE;
+    else if (flagsval == 2) flags |= IF_ADDZWSPACE;
+
+    Config_setInjectorFlags(self->config, flags);
+}
+
+static void onwaitbeforechanged(void *receiver, void *sender, void *args)
+{
+    (void)sender;
+
+    Xmoji *self = receiver;
+    ConfigChangedEventArgs *ea = args;
+
+    KeyInjector_init(Config_waitBefore(self->config),
+	    Config_waitAfter(self->config),
+	    Config_injectorFlags(self->config));
+
+    if (ea->external)
+    {
+	SpinBox_setValue(self->waitBeforeBox, Config_waitBefore(self->config));
+    }
+}
+
+static void onwaitbeforeboxchanged(void *receiver, void *sender, void *args)
+{
+    (void)sender;
+
+    Xmoji *self = receiver;
+    int *ms = args;
+    Config_setWaitBefore(self->config, *ms);
+}
+
+static void onwaitafterchanged(void *receiver, void *sender, void *args)
+{
+    (void)sender;
+
+    Xmoji *self = receiver;
+    ConfigChangedEventArgs *ea = args;
+
+    KeyInjector_init(Config_waitBefore(self->config),
+	    Config_waitAfter(self->config),
+	    Config_injectorFlags(self->config));
+
+    if (ea->external)
+    {
+	SpinBox_setValue(self->waitAfterBox, Config_waitAfter(self->config));
+    }
+}
+
+static void onwaitafterboxchanged(void *receiver, void *sender, void *args)
+{
+    (void)sender;
+
+    Xmoji *self = receiver;
+    int *ms = args;
+    Config_setWaitAfter(self->config, *ms);
+}
+
 static int startup(void *app)
 {
     Xmoji *self = Object_instance(app);
 
     self->config = Config_create(self->cfgfile);
+    PSC_Event_register(Config_injectorFlagsChanged(self->config), self,
+	    onflagschanged, 0);
+    PSC_Event_register(Config_waitBeforeChanged(self->config), self,
+	    onwaitbeforechanged, 0);
+    PSC_Event_register(Config_waitAfterChanged(self->config), self,
+	    onwaitafterchanged, 0);
 
     UniStr(about, U"About");
     UniStr(aboutdesc, U"About Xmoji");
@@ -215,7 +320,9 @@ static int startup(void *app)
     TabBox *tabs = TabBox_create("mainTabBox", win);
     Widget_setPadding(tabs, (Box){0, 0, 0, 0});
 
-    KeyInjector_init(50, 100, IF_ADDZWSPACE|IF_EXTRAZWJ);
+    KeyInjector_init(Config_waitBefore(self->config),
+	    Config_waitAfter(self->config),
+	    Config_injectorFlags(self->config));
 
     TextLabel *groupLabel = TextLabel_create(0, tabs);
     UniStr(searchEmoji, U"\x1f50d");
@@ -435,9 +542,11 @@ static int startup(void *app)
     Dropdown_addOption(dd, flagsZwjSpace);
     UniStr(flagsZwjZws, U"Pre-ZWJ + add ZW space");
     Dropdown_addOption(dd, flagsZwjZws);
-    Dropdown_select(dd, 4);
+    Dropdown_select(dd, flagsindex(Config_injectorFlags(self->config)));
     Widget_show(dd);
     HBox_addWidget(row, dd);
+    self->injectFlagsBox = dd;
+    PSC_Event_register(Dropdown_selected(dd), self, onflagsboxchanged, 0);
     Widget_show(row);
     Table_addRow(table, row);
     row = TableRow_create(table);
@@ -448,9 +557,12 @@ static int startup(void *app)
     Widget_show(label);
     HBox_addWidget(row, label);
     SpinBox *sb = SpinBox_create("waitBeforeBox", 0, 500, 10, row);
-    SpinBox_setValue(sb, 50);
+    SpinBox_setValue(sb, Config_waitBefore(self->config));
     Widget_show(sb);
     HBox_addWidget(row, sb);
+    self->waitBeforeBox = sb;
+    PSC_Event_register(SpinBox_valueChanged(sb), self,
+	    onwaitbeforeboxchanged, 0);
     Widget_show(row);
     Table_addRow(table, row);
     row = TableRow_create(table);
@@ -461,9 +573,12 @@ static int startup(void *app)
     Widget_show(label);
     HBox_addWidget(row, label);
     sb = SpinBox_create("waitAfterBox", 50, 1000, 10, row);
-    SpinBox_setValue(sb, 100);
+    SpinBox_setValue(sb, Config_waitAfter(self->config));
     Widget_show(sb);
     HBox_addWidget(row, sb);
+    self->waitAfterBox = sb;
+    PSC_Event_register(SpinBox_valueChanged(sb), self,
+	    onwaitafterboxchanged, 0);
     Widget_show(row);
     Table_addRow(table, row);
     row = TableRow_create(table);
