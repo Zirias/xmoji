@@ -1,6 +1,8 @@
 #include "dropdown.h"
 
 #include "flyout.h"
+#include "pen.h"
+#include "shape.h"
 #include "vbox.h"
 
 #include <poser/core.h>
@@ -20,6 +22,8 @@ struct Dropdown
 {
     Object base;
     PSC_Event *selected;
+    Pen *pen;
+    Shape *arrow;
     VBox *box;
     Flyout *flyout;
     Size minSize;
@@ -29,15 +33,75 @@ struct Dropdown
 static void destroy(void *obj)
 {
     Dropdown *self = obj;
+    Shape_destroy(self->arrow);
+    Pen_destroy(self->pen);
     PSC_Event_destroy(self->selected);
     free(self);
 }
 
+static xcb_render_picture_t renderArrow(void *obj,
+	xcb_render_picture_t ownerpic, const void *data)
+{
+    Dropdown *self = obj;
+    const Size *sz = data;
+
+    xcb_connection_t *c = X11Adapter_connection();
+    xcb_screen_t *s = X11Adapter_screen();
+
+    xcb_pixmap_t tmp = xcb_generate_id(c);
+    CHECK(xcb_create_pixmap(c, 8, tmp, s->root, sz->height, sz->height),
+	    "Cannot create arrow pixmap for 0x%x", (unsigned)ownerpic);
+    uint32_t pictopts[] = {
+	XCB_RENDER_POLY_MODE_IMPRECISE,
+	XCB_RENDER_POLY_EDGE_SMOOTH
+    };
+    xcb_render_picture_t pic = xcb_generate_id(c);
+    CHECK(xcb_render_create_picture(c, pic, tmp,
+		X11Adapter_format(PICTFORMAT_ALPHA),
+		XCB_RENDER_CP_POLY_MODE | XCB_RENDER_CP_POLY_EDGE, pictopts),
+	    "Cannot create arrow picture for 0x%x", (unsigned)ownerpic);
+    xcb_free_pixmap(c, tmp);
+    Color color = 0;
+    xcb_rectangle_t rect = {0, 0, sz->height, sz->height};
+    CHECK(xcb_render_fill_rectangles(c, XCB_RENDER_PICT_OP_SRC,
+		pic, Color_xcb(color), 1, &rect),
+	    "Cannot clear arrow picture for 0x%x", (unsigned)ownerpic);
+    if (!self->pen) self->pen = Pen_create();
+    Pen_configure(self->pen, PICTFORMAT_ALPHA, 0xffffffff);
+    xcb_render_triangle_t arr = {
+	{ (sz->height << 14), (sz->height << 14) + (sz->height << 13) },
+	{ (sz->height << 15) + (sz->height << 14),
+	    (sz->height << 14) + (sz->height << 13) },
+	{ (sz->height << 15), (sz->height << 15) + (sz->height << 13) }
+    };
+    CHECK(xcb_render_triangles(c, XCB_RENDER_PICT_OP_OVER,
+		Pen_picture(self->pen, ownerpic), pic, 0, 0, 0, 1, &arr),
+	    "Cannot render arrow for 0x%x", (unsigned)ownerpic);
+
+    return pic;
+}
 static int draw(void *obj, xcb_render_picture_t picture)
 {
     Dropdown *self = Object_instance(obj);
     int rc = 0;
     Object_bcall(rc, Widget, draw, self, picture);
+    if (rc < 0 || !picture) goto done;
+    if (!self->arrow)
+    {
+	self->arrow = Shape_create(renderArrow, sizeof self->minSize,
+		&self->minSize);
+	Shape_render(self->arrow, self, picture);
+    }
+    if (!self->pen) self->pen = Pen_create();
+    Pen_configure(self->pen, PICTFORMAT_RGB, Widget_color(self, COLOR_NORMAL));
+    Pos origin = Widget_origin(self);
+    CHECK(xcb_render_composite(X11Adapter_connection(),
+		XCB_RENDER_PICT_OP_OVER, Pen_picture(self->pen, picture),
+		Shape_picture(self->arrow), picture, 0, 0, 0, 0,
+		origin.x + self->minSize.width - self->minSize.height,
+		origin.y, self->minSize.height, self->minSize.height),
+	    "Cannot composite arrow for 0x%x", (unsigned)picture);
+done:
     return rc;
 }
 
@@ -63,6 +127,8 @@ Dropdown *Dropdown_createBase(void *derived, const char *name, void *parent)
     Dropdown *self = PSC_malloc(sizeof *self);
     CREATEBASE(Button, name, parent);
     self->selected = PSC_Event_create(self);
+    self->pen = 0;
+    self->arrow = 0;
     self->box = 0;
     self->flyout = 0;
     self->minSize = (Size){0, 0};
