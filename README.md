@@ -118,10 +118,10 @@ names. The following colors are available:
 
 ### Example
 
-The following X resources configure a larger default emoji font, a
-slightly larger scroll bar and a dark color scheme:
+The following X resources configure a different emoji font, a slightly larger
+scroll bar and a dark color scheme:
 
-    Xmoji*emojiFont: emoji:pixelsize=24
+    Xmoji*emojiFont: Twitter Color Emoji
     Xmoji*Foreground: #c8c6c5
     Xmoji*Background: #211f1d
     Xmoji*Border: #191210
@@ -140,8 +140,7 @@ slightly larger scroll bar and a dark color scheme:
 
 ## Runtime configuration
 
-Runtime configuration is work in progress, currently only the history of
-recently used emojis is stored in the configuration file. This file is
+Runtime configuration is stored in a configuration file. This file is
 automatically monitored for external changes.
 
 By default, Xmoji will use a configuration file in these places:
@@ -158,6 +157,13 @@ with `-cfg`, e.g.
 
 CAUTION: Xmoji will attempt to create missing directories for storing its
 runtime configuration.
+
+The file stores everything available in the Settings dialog, which you can
+access by right-clicking in the window, outside of an Emoji with a fly-out.
+The settings are described in the dialog using tooltips.
+
+Additionally, the history of recently used emojis is also stored in the
+configuration file.
 
 ## Building
 
