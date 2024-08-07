@@ -430,9 +430,12 @@ void TabBox_addTab(void *self, void *buttonWidget, void *contentWidget)
 	    sizeRequested, 0);
     PSC_Event_register(Widget_sizeRequested(tab->contentWidget), tab,
 	    sizeRequested, 0);
+    Font *font = Widget_font(b);
     Widget_setContainer(tab->buttonWidget, b);
+    if (font) Widget_offerFont(tab->buttonWidget, font);
     Widget_setCursor(tab->buttonWidget, XC_HAND);
     Widget_setContainer(tab->contentWidget, b);
+    if (font) Widget_offerFont(tab->contentWidget, font);
     PSC_List_append(b->tabs, tab, destroyTab);
     if (b->currentIndex < 0) b->currentIndex = 0;
     layout(b);
