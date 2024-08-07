@@ -10,11 +10,12 @@
 
 static void destroy(void *obj);
 static int draw(void *obj, xcb_render_picture_t picture);
+static void setFont(void *obj, Font *font);
 static Size minSize(const void *obj);
 static int clicked(void *obj, const ClickEvent *event);
 
 static MetaDropdown mo = MetaDropdown_init(
-	0, draw, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	0, draw, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, setFont,
 	0, minSize, 0, clicked, 0,
 	"Dropdown", destroy);
 
@@ -105,6 +106,13 @@ done:
     return rc;
 }
 
+static void setFont(void *obj, Font *font)
+{
+    Dropdown *self = Object_instance(obj);
+    Object_bcallv(Widget, setFont, self, font);
+    if (self->box) Widget_setFont(self->box, font);
+}
+
 static Size minSize(const void *obj)
 {
     const Dropdown *self = Object_instance(obj);
@@ -156,6 +164,28 @@ static void itemClicked(void *receiver, void *sender, void *args)
     }
 }
 
+static void optionSizeReq(void *receiver, void *sender, void *args)
+{
+    (void)args;
+
+    Dropdown *self = receiver;
+    Size minSz = Widget_minSize(sender);
+    minSz.width += minSz.height;
+
+    int changed = 0;
+    if (minSz.width > self->minSize.width)
+    {
+	self->minSize.width = minSz.width;
+	++changed;
+    }
+    if (minSz.height > self->minSize.height)
+    {
+	self->minSize.height = minSz.height;
+	++changed;
+    }
+    if (changed) Widget_requestSize(self);
+}
+
 void Dropdown_addOption(void *self, const UniStr *name)
 {
     Dropdown *d = Object_instance(self);
@@ -166,6 +196,7 @@ void Dropdown_addOption(void *self, const UniStr *name)
 	d->box = VBox_create(d);
 	VBox_setSpacing(d->box, 0);
 	Widget_setPadding(d->box, (Box){0, 0, 0, 0});
+	Widget_setFont(d->box, Widget_font(d));
 	Widget_show(d->box);
 	Flyout_setWidget(d->flyout, d->box);
 	Button_setText(d, name);
@@ -178,16 +209,10 @@ void Dropdown_addOption(void *self, const UniStr *name)
     Button_setMinWidth(b, 0);
     Widget_setPadding(b, (Box){0, 0, 0, 0});
     Widget_setExpand(b, EXPAND_X|EXPAND_Y);
-    Widget_setFont(b, Widget_font(d));
     Widget_show(b);
     VBox_addWidget(d->box, b);
-    Size minSz = Widget_minSize(b);
-    minSz.width += minSz.height;
-    if (minSz.width > d->minSize.width || minSz.height > d->minSize.height)
-    {
-	d->minSize = minSz;
-	Widget_requestSize(d);
-    }
+    PSC_Event_register(Widget_sizeRequested(b), d, optionSizeReq, 0);
+    optionSizeReq(d, b, 0);
 }
 
 unsigned Dropdown_selectedIndex(const void *self)
