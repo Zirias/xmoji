@@ -14,10 +14,11 @@
 static void destroy(void *obj);
 static int draw(void *obj, xcb_render_picture_t picture);
 static void unselect(void *obj);
+static void setFont(void *obj, Font *font);
 static int clicked(void *obj, const ClickEvent *event);
 
 static MetaEmojiButton mo = MetaEmojiButton_init(
-	0, draw, 0, 0, 0, 0, 0, 0, 0, 0, 0, unselect, 0,
+	0, draw, 0, 0, 0, 0, 0, 0, 0, 0, 0, unselect, setFont,
 	0, 0, 0, clicked, 0,
 	"EmojiButton", destroy);
 
@@ -29,7 +30,6 @@ struct EmojiButton
     Shape *triangle;
     Pen *pen;
     Size trianglesize;
-    Color pencolor;
     int selected;
 };
 
@@ -94,9 +94,14 @@ static xcb_render_picture_t renderTriangle(void *obj,
     xcb_pixmap_t tmp = xcb_generate_id(c);
     CHECK(xcb_create_pixmap(c, 8, tmp, s->root, sz->width, sz->height),
 	    "Cannot create triangle pixmap for 0x%x", (unsigned)ownerpic);
+    uint32_t pictopts[] = {
+	XCB_RENDER_POLY_MODE_IMPRECISE,
+	XCB_RENDER_POLY_EDGE_SMOOTH
+    };
     xcb_render_picture_t pic = xcb_generate_id(c);
     CHECK(xcb_render_create_picture(c, pic, tmp,
-		X11Adapter_format(PICTFORMAT_ALPHA), 0, 0),
+		X11Adapter_format(PICTFORMAT_ALPHA),
+		XCB_RENDER_CP_POLY_MODE | XCB_RENDER_CP_POLY_EDGE, pictopts),
 	    "Cannot create triangle picture for 0x%x", (unsigned)ownerpic);
     xcb_free_pixmap(c, tmp);
     Color color = 0;
@@ -145,13 +150,9 @@ static int draw(void *obj, xcb_render_picture_t picture)
 	xcb_connection_t *c = X11Adapter_connection();
 	if (!self->pen) self->pen = Pen_create();
 	Rect geom = Widget_geometry(self);
-	if (!self->pencolor) prerender(self, geom.size);
-	Color pencolor = Widget_color(self, COLOR_ACTIVE);
-	if (pencolor != self->pencolor)
-	{
-	    Pen_configure(self->pen, PICTFORMAT_RGB, pencolor);
-	    self->pencolor = pencolor;
-	}
+	prerender(self, geom.size);
+	Pen_configure(self->pen, PICTFORMAT_RGB,
+		Widget_color(self, COLOR_ACTIVE));
 	CHECK(xcb_render_composite(c, XCB_RENDER_PICT_OP_OVER,
 		    Pen_picture(self->pen, picture),
 		    Shape_picture(self->triangle), picture, 0, 0, 0, 0,
@@ -169,6 +170,13 @@ static void unselect(void *obj)
     self->selected = 0;
     Button_setColors(self, COLOR_BG_NORMAL, COLOR_BG_ACTIVE);
     Widget_invalidate(self);
+}
+
+static void setFont(void *obj, Font *font)
+{
+    EmojiButton *self = Object_instance(obj);
+    Object_bcallv(Widget, setFont, self, font);
+    if (self->flowgrid) Widget_setFont(self->flowgrid, font);
 }
 
 static int clicked(void *obj, const ClickEvent *event)
@@ -214,7 +222,6 @@ EmojiButton *EmojiButton_createBase(void *derived,
     self->triangle = 0;
     self->pen = 0;
     self->trianglesize = (Size){0, 0};
-    self->pencolor = 0;
     self->selected = 0;
 
     Button_setBorderWidth(self, 0);
@@ -243,6 +250,8 @@ void EmojiButton_addVariant(void *self, EmojiButton *variant)
 	Widget_setFont(b->flowgrid, Widget_font(b));
 	Widget_setBackground(b->flowgrid, 1, COLOR_BG_NORMAL);
 	Flyout_setWidget(b->flyout, b->flowgrid);
+	Font *font = Widget_font(b);
+	if (font) Widget_setFont(b->flowgrid, font);
     }
     FlowGrid_addWidget(b->flowgrid, variant);
 }
