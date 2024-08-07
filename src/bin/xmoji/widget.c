@@ -255,7 +255,7 @@ void Widget_setFont(void *self, Font *font)
     doSetFont(Object_instance(self), font ? Font_ref(font) : 0);
 }
 
-void Widget_setFontResName(void *self, const char *name,
+Font *Widget_createFontResName(void *self, const char *name,
 	const char *defpattern, const FontOptions *options)
 {
     if (!name) name = "font";
@@ -275,7 +275,14 @@ void Widget_setFontResName(void *self, const char *name,
     else if (!pattern) pattern = defpattern;
     Font *font = Font_create(pattern, options);
     free(reqpat);
-    doSetFont(Object_instance(self), font);
+    return font;
+}
+
+void Widget_setFontResName(void *self, const char *name,
+	const char *defpattern, const FontOptions *options)
+{
+    doSetFont(Object_instance(self),
+	    Widget_createFontResName(self, name, defpattern, options));
 }
 
 void Widget_setContextMenu(void *self, Menu *menu)

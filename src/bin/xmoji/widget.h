@@ -136,6 +136,8 @@ PSC_Event *Widget_sizeChanged(void *self) CMETHOD ATTR_RETNONNULL;
 PSC_Event *Widget_originChanged(void *self) CMETHOD ATTR_RETNONNULL;
 Font *Widget_font(const void *self) CMETHOD;
 void Widget_setFont(void *self, Font *font) CMETHOD;
+Font *Widget_createFontResName(void *self, const char *name,
+	const char *defpattern, const FontOptions *options) CMETHOD;
 void Widget_setFontResName(void *self, const char *name,
 	const char *defpattern, const FontOptions *options) CMETHOD;
 void Widget_setContextMenu(void *self, Menu *menu) CMETHOD;
