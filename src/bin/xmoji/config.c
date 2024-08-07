@@ -17,7 +17,7 @@
 #define CFGDEFPATH "/.config"
 
 #define DEF_SCALE	    EF_MEDIUM
-#define DEF_INJECTORFLAGS   (IF_ADDSPACE|IF_EXTRAZWJ)
+#define DEF_INJECTORFLAGS   IF_NONE
 #define DEF_WAITBEFORE	    50
 #define DEF_WAITAFTER	    100
 
