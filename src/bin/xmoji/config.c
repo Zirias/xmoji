@@ -16,12 +16,14 @@
 #define CFGDEFNAME "/xmoji.cfg"
 #define CFGDEFPATH "/.config"
 
+#define DEF_SCALE	    EF_MEDIUM
 #define DEF_INJECTORFLAGS   (IF_ADDSPACE|IF_EXTRAZWJ)
 #define DEF_WAITBEFORE	    50
 #define DEF_WAITAFTER	    100
 
 enum ConfigKey
 {
+    CFG_SCALE,
     CFG_INJECTORFLAGS,
     CFG_WAITBEFORE,
     CFG_WAITAFTER,
@@ -29,18 +31,21 @@ enum ConfigKey
 };
 
 static const char *keys[] = {
+    "scale",
     "injectorFlags",
     "waitBefore",
     "waitAfter",
     "history"
 };
 
+static void readScale(Config *self);
 static void readHistory(Config *self);
 static void readInjectorFlags(Config *self);
 static void readWaitBefore(Config *self);
 static void readWaitAfter(Config *self);
 
 static void (*const readers[])(Config *) = {
+    readScale,
     readInjectorFlags,
     readWaitBefore,
     readWaitAfter,
@@ -54,6 +59,7 @@ struct Config
     PSC_Event *changed[sizeof keys / sizeof *keys - 1];
     EmojiHistory *history;
     int reading;
+    EmojiFont scale;
     InjectorFlags injectorFlags;
     unsigned waitBefore;
     unsigned waitAfter;
@@ -82,6 +88,26 @@ static void writeNum(Config *self, enum ConfigKey key, long val)
     snprintf(buf, 32, "%ld", val);
     ConfigFile_set(self->cfg, keys[key], PSC_copystr(buf));
     ConfigFile_write(self->cfg);
+}
+
+static void readScale(Config *self)
+{
+    EmojiFont scale = DEF_SCALE;
+    long scaleval;
+    if (tryParseNum(&scaleval, ConfigFile_get(self->cfg, keys[CFG_SCALE]))
+	    && scaleval >= EF_TINY && scaleval <= EF_HUGE)
+    {
+	scale = scaleval;
+    }
+    if (self->reading == 2 || scale != self->scale)
+    {
+	self->scale = scale;
+	if (self->reading < 2)
+	{
+	    ConfigChangedEventArgs ea = { 1 };
+	    PSC_Event_raise(self->changed[CFG_SCALE], 0, &ea);
+	}
+    }
 }
 
 static void readInjectorFlags(Config *self)
@@ -299,7 +325,7 @@ Config *Config_create(const char *path)
 	self->changed[i] = PSC_Event_create(self);
     }
     self->history = EmojiHistory_create(HISTSIZE);
-    self->reading = 1;
+    self->reading = 2;
     for (size_t i = 0; i < sizeof keys / sizeof *keys; ++i)
     {
 	readers[i](self);
@@ -323,6 +349,25 @@ Config *Config_create(const char *path)
 EmojiHistory *Config_history(Config *self)
 {
     return self->history;
+}
+
+EmojiFont Config_scale(const Config *self)
+{
+    return self->scale;
+}
+
+void Config_setScale(Config *self, EmojiFont scale)
+{
+    if (self->scale == scale) return;
+    if ((int)scale < (int)EF_TINY || (int)scale > (int)EF_HUGE) return;
+    writeNum(self, CFG_SCALE, scale);
+    ConfigChangedEventArgs ea = { 0 };
+    PSC_Event_raise(self->changed[CFG_SCALE], 0, &ea);
+}
+
+PSC_Event *Config_scaleChanged(Config *self)
+{
+    return self->changed[CFG_SCALE];
 }
 
 InjectorFlags Config_injectorFlags(const Config *self)

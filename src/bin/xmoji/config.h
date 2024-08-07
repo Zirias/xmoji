@@ -1,6 +1,7 @@
 #ifndef XMOJI_CONFIG_H
 #define XMOJI_CONFIG_H
 
+#include "emojifont.h"
 #include "keyinjector.h"
 
 #define HISTSIZE 64
@@ -17,6 +18,10 @@ typedef struct ConfigChangedEventArgs
 Config *Config_create(const char *path);
 
 EmojiHistory *Config_history(Config *self) CMETHOD;
+
+EmojiFont Config_scale(const Config *self) CMETHOD;
+void Config_setScale(Config *self, EmojiFont scale) CMETHOD;
+PSC_Event *Config_scaleChanged(Config *self) CMETHOD ATTR_RETNONNULL;
 
 InjectorFlags Config_injectorFlags(const Config *self) CMETHOD;
 void Config_setInjectorFlags(Config *self, InjectorFlags flags) CMETHOD;
