@@ -361,6 +361,7 @@ void Config_setScale(Config *self, EmojiFont scale)
     if (self->scale == scale) return;
     if ((int)scale < (int)EF_TINY || (int)scale > (int)EF_HUGE) return;
     writeNum(self, CFG_SCALE, scale);
+    self->scale = scale;
     ConfigChangedEventArgs ea = { 0 };
     PSC_Event_raise(self->changed[CFG_SCALE], 0, &ea);
 }
@@ -382,6 +383,7 @@ void Config_setInjectorFlags(Config *self, InjectorFlags flags)
     if ((flags & (IF_ADDSPACE|IF_ADDZWSPACE))
 	    == (IF_ADDSPACE|IF_ADDZWSPACE)) return;
     writeNum(self, CFG_INJECTORFLAGS, flags);
+    self->injectorFlags = flags;
     ConfigChangedEventArgs ea = { 0 };
     PSC_Event_raise(self->changed[CFG_INJECTORFLAGS], 0, &ea);
 }
@@ -401,6 +403,7 @@ void Config_setWaitBefore(Config *self, unsigned ms)
     if (self->waitBefore == ms) return;
     if (ms > 500) return;
     writeNum(self, CFG_WAITBEFORE, ms);
+    self->waitBefore = ms;
     ConfigChangedEventArgs ea = { 0 };
     PSC_Event_raise(self->changed[CFG_WAITBEFORE], 0, &ea);
 }
@@ -420,6 +423,7 @@ void Config_setWaitAfter(Config *self, unsigned ms)
     if (self->waitAfter == ms) return;
     if (ms < 50 || ms > 1000) return;
     writeNum(self, CFG_WAITAFTER, ms);
+    self->waitAfter = ms;
     ConfigChangedEventArgs ea = { 0 };
     PSC_Event_raise(self->changed[CFG_WAITAFTER], 0, &ea);
 }
