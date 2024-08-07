@@ -2,7 +2,7 @@ GEN_BIN2CSTR_tool=	$(BIN2CSTR_TARGET)
 GEN_BIN2CSTR_args=	$1 $2
 GEN_EMOJIGEN_tool=	$(EMOJIGEN_TARGET)
 
-xmoji_VERSION=		0.4
+xmoji_VERSION=		0.5
 xmoji_DEFINES=		-DVERSION=\"$(xmoji_VERSION)\"
 xmoji_MODULES=		button \
 			colorset \
