@@ -272,6 +272,7 @@ static int startup(void *app)
 {
     Xmoji *self = Object_instance(app);
 
+    /* Initialize runtime configuration */
     self->config = Config_create(self->cfgfile);
     PSC_Event_register(Config_injectorFlagsChanged(self->config), self,
 	    onflagschanged, 0);
@@ -280,6 +281,7 @@ static int startup(void *app)
     PSC_Event_register(Config_waitAfterChanged(self->config), self,
 	    onwaitafterchanged, 0);
 
+    /* Initialize commands */
     UniStr(about, U"About");
     UniStr(aboutdesc, U"About Xmoji");
     Command *aboutCommand = Command_create(about, aboutdesc, self);
@@ -296,11 +298,13 @@ static int startup(void *app)
     Command *quitCommand = Command_create(quit, quitdesc, self);
     PSC_Event_register(Command_triggered(quitCommand), self, onquit, 0);
 
+    /* Create main menu */
     Menu *menu = Menu_create("mainMenu", self);
     Menu_addItem(menu, aboutCommand);
     Menu_addItem(menu, settingsCommand);
     Menu_addItem(menu, quitCommand);
 
+    /* Create application icon from pixmaps */
     Icon *appIcon = Icon_create();
     Pixmap *pm = Pixmap_createFromPng(icon48, icon48sz);
     Icon_add(appIcon, pm);
@@ -312,6 +316,7 @@ static int startup(void *app)
     Icon_add(appIcon, pm);
     Pixmap_destroy(pm);
 
+    /* Create main window */
     Window *win = Window_create("mainWindow", WF_REJECT_FOCUS, self);
     Window_setTitle(win, "Xmoji");
     Widget_setContextMenu(win, menu);
@@ -320,10 +325,12 @@ static int startup(void *app)
     TabBox *tabs = TabBox_create("mainTabBox", win);
     Widget_setPadding(tabs, (Box){0, 0, 0, 0});
 
+    /* Initialize key injector */
     KeyInjector_init(Config_waitBefore(self->config),
 	    Config_waitAfter(self->config),
 	    Config_injectorFlags(self->config));
 
+    /* Create search tab */
     TextLabel *groupLabel = TextLabel_create(0, tabs);
     UniStr(searchEmoji, U"\x1f50d");
     UniStr(searchText, U"Search");
@@ -364,6 +371,7 @@ static int startup(void *app)
     Widget_show(box);
     TabBox_addTab(tabs, groupLabel, box);
 
+    /* Create history tab */
     EmojiHistory *history = Config_history(self->config);
     PSC_Event_register(EmojiHistory_changed(history), self,
 	    onhistorychanged, 0);
@@ -402,6 +410,7 @@ static int startup(void *app)
     Widget_show(scroll);
     TabBox_addTab(tabs, groupLabel, scroll);
 
+    /* Create tabs for emoji groups as suggested by Unicode */
     size_t groups = EmojiGroup_numGroups();
     for (size_t groupidx = 0; groupidx < groups; ++groupidx)
     {
@@ -455,12 +464,14 @@ static int startup(void *app)
 	TabBox_addTab(tabs, groupLabel, scroll);
     }
 
+    /* Select history tab if not empty, otherwise first emoji group */
     TabBox_setTab(tabs, havehistory ? 1 : 2);
     self->tabs = tabs;
     Widget_show(tabs);
     Window_setMainWidget(win, tabs);
     Command_attach(quitCommand, win, Window_closed);
 
+    /* Create "About" dialog */
     Window *aboutDlg = Window_create("aboutDialog",
 	    WF_WINDOW_DIALOG|WF_FIXED_SIZE, win);
     Window_setTitle(aboutDlg, "About Xmoji");
@@ -515,6 +526,7 @@ static int startup(void *app)
     Window_setMainWidget(aboutDlg, hbox);
     self->aboutDialog = aboutDlg;
 
+    /* Create "Settings" dialog */
     Window *settingsDlg = Window_create("settingsDialog",
 	    WF_WINDOW_DIALOG|WF_FIXED_SIZE, win);
     Window_setTitle(settingsDlg, "Xmoji settings");
@@ -629,6 +641,7 @@ static int startup(void *app)
     Window_setMainWidget(settingsDlg, table);
     self->settingsDialog = settingsDlg;
 
+    /* All done, show main window */
     Icon_destroy(appIcon);
     Widget_show(win);
     return 0;
