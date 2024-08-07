@@ -9,7 +9,7 @@
 struct Shape
 {
     ShapeRenderer renderer;
-    const void *data;
+    void *data;
     size_t datasz;
     xcb_render_picture_t picture;
     unsigned refcnt;
@@ -32,7 +32,8 @@ Shape *Shape_create(ShapeRenderer renderer, size_t datasz, const void *data)
     }
     Shape *self = PSC_malloc(sizeof *self);
     self->renderer = renderer;
-    self->data = data;
+    self->data = PSC_malloc(datasz);
+    memcpy(self->data, data, datasz);
     self->datasz = datasz;
     self->picture = 0;
     self->refcnt = 1;
@@ -65,6 +66,7 @@ void Shape_destroy(Shape *self)
     {
 	xcb_render_free_picture(X11Adapter_connection(), self->picture);
     }
+    free(self->data);
     free(self);
 }
 
