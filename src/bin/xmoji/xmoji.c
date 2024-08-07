@@ -48,6 +48,7 @@ typedef struct Xmoji
     TabBox *tabs;
     FlowGrid *searchGrid;
     FlowGrid *recentGrid;
+    Dropdown *scaleBox;
     Dropdown *injectFlagsBox;
     SpinBox *waitBeforeBox;
     SpinBox *waitAfterBox;
@@ -202,7 +203,17 @@ static void onscalechanged(void *receiver, void *sender, void *args)
 
     if (ea->external)
     {
+	Dropdown_select(self->scaleBox, Config_scale(self->config));
     }
+}
+
+static void onscaleboxchanged(void *receiver, void *sender, void *args)
+{
+    (void)sender;
+
+    Xmoji *self = receiver;
+    unsigned *val = args;
+    Config_setScale(self->config, *val);
 }
 
 static unsigned flagsindex(InjectorFlags flags)
@@ -570,6 +581,35 @@ static int startup(void *app)
     Table *table = Table_create(settingsDlg);
 
     TableRow *row = TableRow_create(table);
+    UniStr(scaleDesc,
+	    U"Scale factor for the size of the emoji font.\n"
+	    U"Tiny means the default text character size.");
+    Widget_setTooltip(row, scaleDesc, 0);
+    label = TextLabel_create("scaleLabel", row);
+    UniStr(scale, U"Emoji scale:");
+    TextLabel_setText(label, scale);
+    Widget_setAlign(label, AH_RIGHT|AV_MIDDLE);
+    Widget_show(label);
+    HBox_addWidget(row, label);
+    Dropdown *dd = Dropdown_create("scaleBox", row);
+    UniStr(scaleTiny, U"Tiny");
+    Dropdown_addOption(dd, scaleTiny);
+    UniStr(scaleSmall, U"Small");
+    Dropdown_addOption(dd, scaleSmall);
+    UniStr(scaleMedium, U"Medium");
+    Dropdown_addOption(dd, scaleMedium);
+    UniStr(scaleLarge, U"Large");
+    Dropdown_addOption(dd, scaleLarge);
+    UniStr(scaleHuge, U"Huge");
+    Dropdown_addOption(dd, scaleHuge);
+    Dropdown_select(dd, Config_scale(self->config));
+    Widget_show(dd);
+    HBox_addWidget(row, dd);
+    self->scaleBox = dd;
+    PSC_Event_register(Dropdown_selected(dd), self, onscaleboxchanged, 0);
+    Widget_show(row);
+    Table_addRow(table, row);
+    row = TableRow_create(table);
     UniStr(injectFlagsDesc,
 	    U"These are workarounds/hacks to help some clients receiving the\n"
 	    U"faked key press events to correctly display emojis.\n"
@@ -586,7 +626,7 @@ static int startup(void *app)
     Widget_setAlign(label, AH_RIGHT|AV_MIDDLE);
     Widget_show(label);
     HBox_addWidget(row, label);
-    Dropdown *dd = Dropdown_create("injectFlagsBox", row);
+    dd = Dropdown_create("injectFlagsBox", row);
     UniStr(flagsNone, U"None");
     Dropdown_addOption(dd, flagsNone);
     UniStr(flagsSpace, U"Add space");
