@@ -95,12 +95,12 @@ static int draw(void *obj, xcb_render_picture_t picture)
     }
     if (!self->pen) self->pen = Pen_create();
     Pen_configure(self->pen, PICTFORMAT_RGB, Widget_color(self, COLOR_NORMAL));
-    Pos origin = Widget_origin(self);
+    Rect geom = Widget_geometry(self);
     CHECK(xcb_render_composite(X11Adapter_connection(),
 		XCB_RENDER_PICT_OP_OVER, Pen_picture(self->pen, picture),
 		Shape_picture(self->arrow), picture, 0, 0, 0, 0,
-		origin.x + self->minSize.width - self->minSize.height,
-		origin.y, self->minSize.height, self->minSize.height),
+		geom.pos.x + geom.size.width - geom.size.height,
+		geom.pos.y, geom.size.height, geom.size.height),
 	    "Cannot composite arrow for 0x%x", (unsigned)picture);
 done:
     return rc;
