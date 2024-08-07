@@ -178,7 +178,8 @@ void Surface_setWidget(void *self, void *widget)
     {
 	s->widget = Object_ref(Widget_cast(widget));
 	Widget_setContainer(s->widget, s);
-	Widget_offerFont(s->widget, Widget_font(s));
+	Font *font = Widget_font(s);
+	if (font) Widget_offerFont(s->widget, font);
 	PSC_Event_register(Widget_sizeRequested(s->widget), s,
 		sizeRequested, 0);
 	sizeRequested(s, 0, 0);
