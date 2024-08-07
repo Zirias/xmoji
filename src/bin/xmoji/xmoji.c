@@ -4,6 +4,7 @@
 #include "dropdown.h"
 #include "emoji.h"
 #include "emojibutton.h"
+#include "emojifont.h"
 #include "emojihistory.h"
 #include "flowgrid.h"
 #include "hbox.h"
@@ -40,6 +41,8 @@ typedef struct Xmoji
     Object base;
     const char *cfgfile;
     Config *config;
+    Font *emojiFont;
+    Font *scaledEmojiFont;
     Window *aboutDialog;
     Window *settingsDialog;
     TabBox *tabs;
@@ -53,6 +56,8 @@ typedef struct Xmoji
 static void destroy(void *app)
 {
     Xmoji *self = app;
+    Font_destroy(self->scaledEmojiFont);
+    Font_destroy(self->emojiFont);
     Config_destroy(self->config);
     free(self);
 }
@@ -172,6 +177,34 @@ static void onpasted(void *receiver, void *sender, void *args)
     EmojiHistory_record(Config_history(self->config), ea->content.data);
 }
 
+static void onscalechanged(void *receiver, void *sender, void *args)
+{
+    (void)sender;
+
+    Xmoji *self = receiver;
+    ConfigChangedEventArgs *ea = args;
+
+    EmojiFont scale = Config_scale(self->config);
+    Font *scaled;
+    if (scale == EF_TINY)
+    {
+	scaled = Font_ref(self->emojiFont);
+    }
+    else
+    {
+	static const double factors[] = { 1.5, 2., 3., 4.};
+	scaled = Font_createVariant(self->emojiFont,
+		factors[scale-1] * Font_pixelsize(self->emojiFont), 0, 0);
+    }
+    Font_destroy(self->scaledEmojiFont);
+    self->scaledEmojiFont = scaled;
+    Widget_setFont(self->tabs, self->scaledEmojiFont);
+
+    if (ea->external)
+    {
+    }
+}
+
 static unsigned flagsindex(InjectorFlags flags)
 {
     unsigned idx = (flags & IF_EXTRAZWJ) ? 3 : 0;
@@ -274,6 +307,8 @@ static int startup(void *app)
 
     /* Initialize runtime configuration */
     self->config = Config_create(self->cfgfile);
+    PSC_Event_register(Config_scaleChanged(self->config), self,
+	    onscalechanged, 0);
     PSC_Event_register(Config_injectorFlagsChanged(self->config), self,
 	    onflagschanged, 0);
     PSC_Event_register(Config_waitBeforeChanged(self->config), self,
@@ -323,6 +358,7 @@ static int startup(void *app)
     Icon_apply(appIcon, win);
 
     TabBox *tabs = TabBox_create("mainTabBox", win);
+    self->tabs = tabs;
     Widget_setPadding(tabs, (Box){0, 0, 0, 0});
 
     /* Initialize key injector */
@@ -330,13 +366,17 @@ static int startup(void *app)
 	    Config_waitAfter(self->config),
 	    Config_injectorFlags(self->config));
 
+    /* Create emoji font */
+    self->emojiFont = Widget_createFontResName(win, "emojiFont", "emoji", 0);
+    ConfigChangedEventArgs ea = { 0 };
+    onscalechanged(self, 0, &ea);
+
     /* Create search tab */
     TextLabel *groupLabel = TextLabel_create(0, tabs);
     UniStr(searchEmoji, U"\x1f50d");
     UniStr(searchText, U"Search");
     TextLabel_setText(groupLabel, searchEmoji);
     Widget_setTooltip(groupLabel, searchText, 0);
-    Widget_setFontResName(groupLabel, "emojiFont", "emoji", 0);
     Widget_show(groupLabel);
 
     VBox *box = VBox_create(tabs);
@@ -348,6 +388,7 @@ static int startup(void *app)
     TextBox_setPlaceholder(search, clickToSearch);
     TextBox_setGrab(search, 1);
     TextBox_setClearBtn(search, 1);
+    Widget_setFontResName(search, 0, 0, 0);
     PSC_Event_register(TextBox_textChanged(search), self, onsearch, 0);
     Widget_show(search);
     VBox_addWidget(box, search);
@@ -355,7 +396,6 @@ static int startup(void *app)
     FlowGrid *grid = FlowGrid_create(scroll);
     FlowGrid_setSpacing(grid, (Size){0, 0});
     Widget_setPadding(grid, (Box){0, 0, 0, 0});
-    Widget_setFontResName(grid, "emojiFont", "emoji", 0);
     for (unsigned i = 0; i < MAXSEARCHRESULTS; ++i)
     {
 	EmojiButton *emojiButton = EmojiButton_create(0, grid);
@@ -380,14 +420,12 @@ static int startup(void *app)
     UniStr(recentText, U"Recently used");
     TextLabel_setText(groupLabel, recentEmoji);
     Widget_setTooltip(groupLabel, recentText, 0);
-    Widget_setFontResName(groupLabel, "emojiFont", "emoji", 0);
     Widget_show(groupLabel);
 
     scroll = ScrollBox_create(0, tabs);
     grid = FlowGrid_create(scroll);
     FlowGrid_setSpacing(grid, (Size){0, 0});
     Widget_setPadding(grid, (Box){0, 0, 0, 0});
-    Widget_setFontResName(grid, "emojiFont", "emoji", 0);
     int havehistory = 0;
     for (unsigned i = 0; i < HISTSIZE; ++i)
     {
@@ -418,14 +456,12 @@ static int startup(void *app)
 	groupLabel = TextLabel_create(0, tabs);
 	TextLabel_setText(groupLabel, Emoji_str(EmojiGroup_emojiAt(group, 0)));
 	Widget_setTooltip(groupLabel, EmojiGroup_name(group), 0);
-	Widget_setFontResName(groupLabel, "emojiFont", "emoji", 0);
 	Widget_show(groupLabel);
 
 	scroll = ScrollBox_create(0, tabs);
 	grid = FlowGrid_create(scroll);
 	FlowGrid_setSpacing(grid, (Size){0, 0});
 	Widget_setPadding(grid, (Box){0, 0, 0, 0});
-	Widget_setFontResName(grid, "emojiFont", "emoji", 0);
 	size_t emojis = EmojiGroup_len(group);
 	EmojiButton *neutral = 0;
 	for (size_t idx = 0; idx < emojis; ++idx)
@@ -466,7 +502,6 @@ static int startup(void *app)
 
     /* Select history tab if not empty, otherwise first emoji group */
     TabBox_setTab(tabs, havehistory ? 1 : 2);
-    self->tabs = tabs;
     Widget_show(tabs);
     Window_setMainWidget(win, tabs);
     Command_attach(quitCommand, win, Window_closed);
