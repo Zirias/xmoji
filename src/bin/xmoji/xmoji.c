@@ -185,6 +185,7 @@ static void onscalechanged(void *receiver, void *sender, void *args)
     Xmoji *self = receiver;
     ConfigChangedEventArgs *ea = args;
 
+    X11App_showWaitCursor();
     EmojiFont scale = Config_scale(self->config);
     Font *scaled;
     if (scale == EF_TINY)

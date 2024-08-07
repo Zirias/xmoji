@@ -1279,3 +1279,14 @@ void Window_invalidateHover(void *self)
     Window *w = Object_instance(self);
     if (w->anchorPos.x < 0) w->mouse = (Pos){-1, -1};
 }
+
+void Window_showWaitCursor(void *self)
+{
+    Window *w = Object_instance(self);
+    xcb_connection_t *c = X11Adapter_connection();
+    w->cursor = XC_WATCH;
+    CHECK(xcb_change_window_attributes(c, w->w, XCB_CW_CURSOR,
+		(uint32_t[]){ X11Adapter_cursor(w->cursor) }),
+	    "Cannot change cursor for 0x%x", (unsigned)w->w);
+    xcb_flush(c);
+}

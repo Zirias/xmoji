@@ -115,7 +115,8 @@ static const xcb_xkb_select_events_details_t xkbevdetails = {
 static const char *cursornames[] = {
     "left_ptr",
     "xterm",
-    "hand2"
+    "hand2",
+    "watch"
 };
 static xcb_cursor_t cursors[sizeof cursornames / sizeof *cursornames];
 

@@ -159,6 +159,7 @@ static void itemClicked(void *receiver, void *sender, void *args)
     {
 	self->index = index;
 	Button_setText(self, Button_text(sender));
+	Widget_hide(self->flyout);
 	Widget_invalidate(self);
 	PSC_Event_raise(self->selected, 0, &self->index);
     }

@@ -109,4 +109,7 @@ void Window_showTooltip(void *self, void *widget, void *parentWidget)
 void Window_invalidateHover(void *self)
     CMETHOD;
 
+void Window_showWaitCursor(void *self)
+    CMETHOD;
+
 #endif

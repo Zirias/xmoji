@@ -193,7 +193,8 @@ typedef enum XCursor
 {
     XC_LEFTPTR,
     XC_XTERM,
-    XC_HAND
+    XC_HAND,
+    XC_WATCH
 } XCursor;
 
 typedef void (*X11ReplyHandler)(void *ctx, unsigned sequence, void *reply,

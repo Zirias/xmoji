@@ -288,3 +288,14 @@ void X11Error_ignore(X11Error *self)
     self->ignore = 1;
 }
 
+void X11App_showWaitCursor(void)
+{
+    if (!instance) return;
+    PSC_ListIterator *i = PSC_List_iterator(instance->windows);
+    while (PSC_ListIterator_moveNext(i))
+    {
+	Window *win = PSC_ListIterator_current(i);
+	Window_showWaitCursor(win);
+    }
+    PSC_ListIterator_destroy(i);
+}

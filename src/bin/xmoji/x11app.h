@@ -39,4 +39,6 @@ uint8_t X11Error_opMajor(X11Error *self) CMETHOD;
 uint16_t X11Error_opMinor(X11Error *self) CMETHOD;
 void X11Error_ignore(X11Error *self) CMETHOD;
 
+void X11App_showWaitCursor(void);
+
 #endif
