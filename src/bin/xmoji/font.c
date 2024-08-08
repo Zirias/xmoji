@@ -28,6 +28,7 @@ struct Font
     char *id;
     FcPattern *pattern;
     FT_Face face;
+    int32_t loadflags;
     FontGlyphType glyphtype;
     double pixelsize;
     double fixedpixelsize;
@@ -131,7 +132,8 @@ static char *createFontId(const char *file, int index, double pixelsize)
 }
 
 static Font *createFromFile(const char *file, int index, char *id,
-	FcPattern *pattern, const FontOptions *options, double pixelsize)
+	FcPattern *pattern, FcPattern *fcfont,
+	const FontOptions *options, double pixelsize)
 {
     double fixedpixelsize = 0;
     FT_Face face = 0;
@@ -240,6 +242,17 @@ static Font *createFromFile(const char *file, int index, char *id,
     self->id = id;
     self->pattern = pattern;
     self->face = face;
+    self->loadflags = FT_LOAD_DEFAULT;
+    FcBool bval = FcTrue;
+    FcPatternGetBool(fcfont, FC_HINTING, 0, &bval);
+    if (bval == FcTrue)
+    {
+	bval = FcFalse;
+	FcPatternGetBool(fcfont, FC_AUTOHINT, 0, &bval);
+	if (bval == FcTrue) self->loadflags |= FT_LOAD_FORCE_AUTOHINT;
+	else self->loadflags |= FT_LOAD_NO_AUTOHINT;
+    }
+    else self->loadflags |= FT_LOAD_NO_HINTING;
     double scale = 0;
     if (fixedpixelsize)
     {
@@ -371,7 +384,7 @@ Font *Font_create(const char *pattern, const FontOptions *options)
 	    }
 
 	    Font *self = createFromFile((const char *)fontfile, fontindex,
-		    id, fcpat, options, pixelsize);
+		    id, fcpat, fcfont, options, pixelsize);
 	    if (self)
 	    {
 		FcPatternDestroy(fcfont);
@@ -444,7 +457,7 @@ Font *Font_createVariant(Font *font, double pixelsize, FontStyle style,
     }
 
     Font *self = createFromFile((const char *)fontfile, fontindex,
-	    id, pattern, options, pixelsize);
+	    id, pattern, fcfont, options, pixelsize);
     FcPatternDestroy(fcfont);
     if (self) return self;
 
@@ -522,7 +535,7 @@ uint32_t Font_scale(const Font *self, uint32_t val)
 
 int32_t Font_ftLoadFlags(const Font *self)
 {
-    int32_t loadflags = FT_LOAD_DEFAULT;
+    int32_t loadflags = self->loadflags;
     switch (self->glyphtype)
     {
 	case FGT_OUTLINE:	loadflags |= FT_LOAD_NO_BITMAP; break;
