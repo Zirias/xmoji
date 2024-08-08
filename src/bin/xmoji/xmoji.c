@@ -546,17 +546,73 @@ static int startup(void *app)
     Widget_setFont(label, hfont);
     Font_destroy(hfont);
     Widget_setAlign(label, AV_MIDDLE);
+    Widget_setExpand(label, 0);
     Widget_show(label);
     VBox_addWidget(box, label);
-    UniStr(abouttxt, U"X11 Emoji Keyboard\n\n"
-	    "License: BSD 2-clause\n"
-	    "Author: Felix Palmen <felix@palmen-it.de>\n"
-	    "WWW: https://github.com/Zirias/xmoji");
+    UniStr(abouttxt, U"X11 Emoji Keyboard");
     label = TextLabel_create("aboutText", box);
     TextLabel_setText(label, abouttxt);
     Widget_setAlign(label, AV_MIDDLE);
+    Widget_setExpand(label, 0);
     Widget_show(label);
     VBox_addWidget(box, label);
+    Table *table = Table_create(box);
+    VBox_setSpacing(table, 0);
+    Widget_setExpand(table, 0);
+    Widget_setAlign(table, AV_MIDDLE);
+    TableRow *row = TableRow_create(table);
+    HBox_setSpacing(row, 6);
+    Widget_setPadding(row, (Box){0, 0, 0, 0});
+    UniStr(licenselbl, U"License:");
+    label = TextLabel_create("licenseLabel", row);
+    TextLabel_setText(label, licenselbl);
+    Widget_setPadding(label, (Box){0, 0, 0, 0});
+    Widget_show(label);
+    HBox_addWidget(row, label);
+    UniStr(license, U"BSD 2-clause");
+    label = TextLabel_create("license", row);
+    TextLabel_setText(label, license);
+    Widget_setPadding(label, (Box){0, 0, 0, 0});
+    Widget_show(label);
+    HBox_addWidget(row, label);
+    Widget_show(row);
+    Table_addRow(table, row);
+    row = TableRow_create(table);
+    HBox_setSpacing(row, 6);
+    Widget_setPadding(row, (Box){0, 0, 0, 0});
+    UniStr(authorlbl, U"Author:");
+    label = TextLabel_create("authorLabel", row);
+    TextLabel_setText(label, authorlbl);
+    Widget_setPadding(label, (Box){0, 0, 0, 0});
+    Widget_show(label);
+    HBox_addWidget(row, label);
+    UniStr(author, U"Felix Palmen <felix@palmen-it.de>");
+    label = TextLabel_create("author", row);
+    TextLabel_setText(label, author);
+    Widget_setPadding(label, (Box){0, 0, 0, 0});
+    Widget_show(label);
+    HBox_addWidget(row, label);
+    Widget_show(row);
+    Table_addRow(table, row);
+    row = TableRow_create(table);
+    HBox_setSpacing(row, 6);
+    Widget_setPadding(row, (Box){0, 0, 0, 0});
+    UniStr(wwwlbl, U"WWW:");
+    label = TextLabel_create("wwwLabel", row);
+    TextLabel_setText(label, wwwlbl);
+    Widget_setPadding(label, (Box){0, 0, 0, 0});
+    Widget_show(label);
+    HBox_addWidget(row, label);
+    UniStr(www, U"https://github.com/Zirias/xmoji");
+    label = TextLabel_create("www", row);
+    TextLabel_setText(label, www);
+    Widget_setPadding(label, (Box){0, 0, 0, 0});
+    Widget_show(label);
+    HBox_addWidget(row, label);
+    Widget_show(row);
+    Table_addRow(table, row);
+    Widget_show(table);
+    VBox_addWidget(box, table);
 
     Button *button = Button_create("okButton", box);
     UniStr(ok, U"OK");
@@ -579,9 +635,9 @@ static int startup(void *app)
     Window_setTitle(settingsDlg, "Xmoji settings");
     Icon_apply(appIcon, settingsDlg);
     Widget_setFontResName(settingsDlg, 0, 0, 0);
-    Table *table = Table_create(settingsDlg);
+    table = Table_create(settingsDlg);
 
-    TableRow *row = TableRow_create(table);
+    row = TableRow_create(table);
     UniStr(scaleDesc,
 	    U"Scale factor for the size of the emoji font.\n"
 	    U"Tiny means the default text character size.");
