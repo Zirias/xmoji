@@ -73,7 +73,7 @@ endif
 ifeq ($(BUNDLED_POSER),1)
 xmoji_STATICDEPS+=	posercore
 xmoji_PRECFLAGS+=	-I./poser/include
-xmoji_LIBS+=		posercore rt
+xmoji_LIBS+=		posercore
 xmoji_LDFLAGS+=		-pthread
 else
 xmoji_PKGDEPS+=		posercore
