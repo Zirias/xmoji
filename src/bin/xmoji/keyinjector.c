@@ -47,7 +47,6 @@ static void resetkmap(void *receiver, void *sender, void *args)
     (void)sender;
     (void)args;
 
-    PSC_Timer_stop(after);
     xcb_connection_t *c = X11Adapter_connection();
     const xcb_setup_t *setup = xcb_get_setup(c);
     CHECK(xcb_change_keyboard_mapping(c, queue[queuefront].len,
@@ -64,7 +63,6 @@ static void fakekeys(void *receiver, void *sender, void *args)
     (void)sender;
     (void)args;
 
-    PSC_Timer_stop(before);
     xcb_connection_t *c = X11Adapter_connection();
     const xcb_setup_t *setup = xcb_get_setup(c);
     for (unsigned x = 0; x < queue[queuefront].len; ++x)
@@ -77,7 +75,7 @@ static void fakekeys(void *receiver, void *sender, void *args)
 		"KeyInjector: Cannot inject fake key release event", 0);
     }
 
-    PSC_Timer_start(after);
+    PSC_Timer_start(after, 0);
 }
 
 static void doinject(void *obj, unsigned sequence,
@@ -151,7 +149,7 @@ static void doinject(void *obj, unsigned sequence,
     queue[queuefront].len = len;
     queue[queuefront].symspercode = kmap->keysyms_per_keycode;
 
-    if (before) PSC_Timer_start(before);
+    if (before) PSC_Timer_start(before, 0);
     else fakekeys(0, 0, 0);
 }
 

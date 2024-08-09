@@ -19,7 +19,6 @@ static void timeout(void *receiver, void *sender, void *args)
     (void)args;
 
     Tooltip *self = receiver;
-    PSC_Timer_stop(self->timer);
     if (self->window)
     {
 	Window_showTooltip(self->window, self->label, self->parent);
@@ -47,7 +46,7 @@ Tooltip *Tooltip_create(const UniStr *text, Widget *parent, unsigned delay)
 void Tooltip_activate(Tooltip *self, Window *window)
 {
     self->window = window;
-    PSC_Timer_start(self->timer);
+    PSC_Timer_start(self->timer, 0);
 }
 
 void Tooltip_cancel(Tooltip *self)

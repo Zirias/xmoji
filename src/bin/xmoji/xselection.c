@@ -416,7 +416,7 @@ static void XSelectionRequest_start(XSelectionRequest *self)
 	PSC_Timer_setMs(self->timeout, REQUESTTIMEOUT);
 	PSC_Event_register(PSC_Timer_expired(self->timeout), self,
 		XSelectionRequest_timedout, 0);
-	PSC_Timer_start(self->timeout);
+	PSC_Timer_start(self->timeout, 0);
 	AWAIT(xcb_change_property(c, XCB_PROP_MODE_REPLACE, self->requestor,
 		    self->property, A(INCR), 32, 1, &incr),
 		self, XSelectionRequest_checkError);
@@ -720,7 +720,7 @@ static void XSelectionConvert_readProperty(void *obj, unsigned sequence,
 	PSC_Timer_setMs(self->timeout, REQUESTTIMEOUT);
 	PSC_Event_register(Window_propertyChanged(self->selection->w),
 		self, XSelectionConvert_readIncr, self->property);
-	PSC_Timer_start(self->timeout);
+	PSC_Timer_start(self->timeout, 0);
 	self->recvincr = 1;
 	if (self->next) XSelectionConvert_start(self->next);
 	return;
@@ -851,7 +851,7 @@ static void XSelectionConvert_start(XSelectionConvert *self)
     PSC_Timer_setMs(self->timeout, CONVERTTIMEOUT);
     PSC_Event_register(PSC_Timer_expired(self->timeout), self,
 	    XSelectionConvert_timedout, 0);
-    PSC_Timer_start(self->timeout);
+    PSC_Timer_start(self->timeout, 0);
     self->target = A(TARGETS);
     XSelectionConvert_convert(self);
 }

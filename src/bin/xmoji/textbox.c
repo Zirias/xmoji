@@ -288,7 +288,7 @@ static void keyboardGrabbed(void *obj, unsigned sequence,
 static int activate(void *obj)
 {
     TextBox *self = Object_instance(obj);
-    PSC_Timer_start(self->cursorBlink);
+    PSC_Timer_start(self->cursorBlink, 1);
     self->cursorvisible = 1;
     Widget_setBackground(self, 1, COLOR_BG_ACTIVE);
     Widget_invalidate(self);
