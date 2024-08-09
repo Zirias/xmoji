@@ -297,8 +297,8 @@ Font *Font_create(const char *pattern, const FontOptions *options)
 {
     if (Font_init() < 0) return 0;
 
-    Font *cached = PSC_HashTable_get(byPattern,
-	    pattern ? pattern : "<default>");
+    const char *patkey = pattern ? pattern : "<default>";
+    Font *cached = PSC_HashTable_get(byPattern, patkey);
     if (cached)
     {
 	Font_done();
@@ -381,6 +381,7 @@ Font *Font_create(const char *pattern, const FontOptions *options)
 		free(id);
 		Font_done();
 		++cached->refcnt;
+		PSC_HashTable_set(byPattern, patkey, cached, 0);
 		return cached;
 	    }
 
@@ -391,8 +392,7 @@ Font *Font_create(const char *pattern, const FontOptions *options)
 		FcPatternDestroy(fcfont);
 		PSC_ListIterator_destroy(pi);
 		PSC_List_destroy(patterns);
-		PSC_HashTable_set(byPattern,
-			pattern ? pattern : "<default>", self, 0);
+		PSC_HashTable_set(byPattern, patkey, self, 0);
 		if (id) PSC_HashTable_set(byId, id, self, 0);
 		return self;
 	    }
@@ -409,7 +409,7 @@ Font *Font_create(const char *pattern, const FontOptions *options)
     PSC_ListIterator_destroy(pi);
     PSC_List_destroy(patterns);
     Font_done();
-    PSC_Log_fmt(PSC_L_ERROR, "No matching font found for `%s'", pattern);
+    PSC_Log_fmt(PSC_L_ERROR, "No matching font found for `%s'", patkey);
     return 0;
 }
 
