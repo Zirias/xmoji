@@ -180,7 +180,7 @@ Dependencies:
 * freetype ( >= 2.12 when SVG support is enabled, see below )
 * harfbuzz
 * libpng ( >= 1.6 )
-* libxcb, libxcb-cursor, libxcb-image, libxcb-xkb and libxcb-xtest
+* libxcb ( >= 1.14 ), libxcb-cursor, libxcb-image, libxcb-xkb and libxcb-xtest
 * xkbcommon and xkbcommon-x11
 
 For example, on a Debian or Ubuntu system, you would install these packages:

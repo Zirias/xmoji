@@ -57,7 +57,7 @@ xmoji_LIBS=		m
 xmoji_PKGDEPS=		fontconfig \
 			harfbuzz \
 			libpng >= 1.6 \
-			xcb \
+			xcb >= 1.14 \
 			xcb-cursor \
 			xcb-image \
 			xcb-render \
