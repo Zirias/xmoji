@@ -226,7 +226,8 @@ static Font *createFromFile(const char *file, int index, char *id,
     }
     uint8_t glyphidbits = 1;
     uint32_t glyphidmask = 1;
-    while ((face->num_glyphs & glyphidmask) != face->num_glyphs)
+    while (((uint32_t)face->num_glyphs & glyphidmask)
+	    != (uint32_t)face->num_glyphs)
     {
 	++glyphidbits;
 	glyphidmask <<= 1;
