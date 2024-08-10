@@ -65,6 +65,11 @@ xmoji_PKGDEPS=		fontconfig \
 			xcb-xtest \
 			xkbcommon \
 			xkbcommon-x11
+xmoji_SUB_FILES=	xmoji.desktop
+xmoji_SUB_LIST=		bindir=$(bindir)
+xmoji_ICONSIZES=	16x16 32x32 48x48 256x256
+xmoji_DESKTOPFILE=	xmoji
+xmoji_DOCS=		README.md
 
 ifeq ($(TRACE),1)
 xmoji_DEFINES+=		-DTRACE_X11_REQUESTS

@@ -1,0 +1,10 @@
+[Desktop Entry]
+Name=Xmoji
+GenericName=X11 Emoji Keyboard
+Comment=Enter emojis faking keyboard input
+Exec=%%bindir%%/xmoji
+Icon=xmoji
+StartupNotify=true
+Terminal=false
+Type=Application
+Categories=Utility;
