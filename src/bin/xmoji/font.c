@@ -345,16 +345,29 @@ Font *Font_create(const char *pattern, const FontOptions *options)
 	FcPattern *fcfont = FcFontMatch(0, fcpat, &result);
 	ismatch = (result == FcResultMatch);
 	FcChar8 *foundfamily = 0;
-	if (ismatch) FcPatternGetString(fcfont, FC_FAMILY, 0, &foundfamily);
+	int ffidx = 0;
+	if (ismatch) FcPatternGetString(fcfont, FC_FAMILY,
+		ffidx++, &foundfamily);
 	if (ismatch && *patstr)
 	{
 	    FcChar8 *reqfamily = 0;
 	    FcPatternGetString(fcpat, FC_FAMILY, 0, &reqfamily);
-	    if (reqfamily && (!foundfamily ||
-			strcmp((const char *)reqfamily,
-			    (const char *)foundfamily)))
+	    if (reqfamily)
 	    {
-		ismatch = 0;
+		int familymatch = 0;
+		while (foundfamily)
+		{
+		    if (!strcmp((const char *)reqfamily,
+				(const char *)foundfamily))
+		    {
+			familymatch = 1;
+			break;
+		    }
+		    foundfamily = 0;
+		    FcPatternGetString(fcfont, FC_FAMILY,
+			    ffidx++, &foundfamily);
+		}
+		if (!familymatch) ismatch = 0;
 	    }
 	}
 	FcChar8 *fontfile = 0;
