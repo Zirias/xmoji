@@ -77,7 +77,7 @@ xmoji_DEFINES+=		-DTRACE_X11_REQUESTS
 endif
 
 ifeq ($(BUNDLED_FREETYPE),1)
-xmoji_PRECFLAGS+=	-I./ftbundle/root/include
+xmoji_PRECFLAGS+=	-I./ftbundle/root/include/freetype2
 xmoji_LDFLAGS+=		$(FREETYPE_TARGET)
 xmoji_LIBS+=		z
 xmoji_prebuild:		$(FREETYPE_TARGET)
