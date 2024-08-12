@@ -306,19 +306,18 @@ Font *Font_create(const char *pattern, const FontOptions *options)
 	return cached;
     }
     PSC_List *patterns = 0;
-    PSC_ListIterator *pi = 0;
+    size_t npats = 0;
     if (pattern)
     {
 	patterns = PSC_List_fromString(pattern, ",");
-	pi = PSC_List_iterator(patterns);
+	npats = PSC_List_size(patterns);
     }
 
     int ismatch = 0;
     double pixelsize = defaultpixelsize;
-    int defstep = 1;
-    while (!ismatch && ((pi && PSC_ListIterator_moveNext(pi)) || defstep--))
+    for (size_t step = 0; step <= npats; ++step)
     {
-	const char *patstr = defstep ? PSC_ListIterator_current(pi) : "";
+	const char *patstr = step < npats ? PSC_List_at(patterns, step) : "";
 	FcPattern *fcpat;
 	if (*patstr)
 	{
@@ -348,7 +347,7 @@ Font *Font_create(const char *pattern, const FontOptions *options)
 	int ffidx = 0;
 	if (ismatch) FcPatternGetString(fcfont, FC_FAMILY,
 		ffidx++, &foundfamily);
-	if (ismatch && *patstr)
+	if (ismatch && npats > 1 && step < npats-1)
 	{
 	    FcChar8 *reqfamily = 0;
 	    FcPatternGetString(fcpat, FC_FAMILY, 0, &reqfamily);
@@ -403,7 +402,6 @@ Font *Font_create(const char *pattern, const FontOptions *options)
 	    if (self)
 	    {
 		FcPatternDestroy(fcfont);
-		PSC_ListIterator_destroy(pi);
 		PSC_List_destroy(patterns);
 		PSC_HashTable_set(byPattern, patkey, self, 0);
 		if (id) PSC_HashTable_set(byId, id, self, 0);
@@ -419,7 +417,6 @@ Font *Font_create(const char *pattern, const FontOptions *options)
 	    }
 	}
     }
-    PSC_ListIterator_destroy(pi);
     PSC_List_destroy(patterns);
     Font_done();
     PSC_Log_fmt(PSC_L_ERROR, "No matching font found for `%s'", patkey);
