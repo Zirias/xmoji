@@ -7,6 +7,7 @@
 #include "xrdb.h"
 
 #include <fontconfig/fontconfig.h>
+#include FT_CONFIG_OPTIONS_H
 #include FT_MODULE_H
 #include FT_OUTLINE_H
 #include <math.h>
@@ -323,6 +324,9 @@ Font *Font_create(const char *pattern, const FontOptions *options)
 	{
 	    PSC_Log_fmt(PSC_L_DEBUG, "Looking for font: %s", patstr);
 	    fcpat = FcNameParse((FcChar8 *)patstr);
+#ifndef FT_CONFIG_OPTION_USE_PNG
+	    FcPatternAddBool(fcpat, FC_COLOR, FcFalse);
+#endif
 	    double reqsize = 0;
 	    double reqpxsize = 0;
 	    FcPatternGetDouble(fcpat, FC_SIZE, 0, &reqsize);
