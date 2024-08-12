@@ -36,13 +36,17 @@ endif
 FT_SRCDIR=	$(basename $(basename $(DISTFILES)))
 FT_BUILDSTAMP=	.$(FT_SRCDIR).build
 
+EXTRACT_.gz=	gzcat
+EXTRACT_.xz=	xzcat
+EXTRACT_CMD=	$(EXTRACT_$(suffix $(DISTFILES))) $(DISTFILES) | tar xf -
+
 all:	$(FT_BUILDSTAMP)
 
 wipedirs:
 	@find . -type d -name freetype-2.\* -exec rm -fr \{\} \+
 
 $(FT_SRCDIR)/configure: wipedirs
-	tar xf $(DISTFILES)
+	$(EXTRACT_CMD)
 
 $(FT_BUILDSTAMP): $(FT_SRCDIR)/configure
 	cd $(FT_SRCDIR) \
