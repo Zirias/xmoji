@@ -12,10 +12,10 @@ This is currently work in progress and should become the successor of my
 ## Features
 
 * Left-clicking an emoji sends it to whatever X11 application currently has
-  the keyboard focus using faked key press events. It automatically appends
-  a zero-width space and for ZWJ sequences prepends another ZWJ, which helps
-  some receiving X clients to get their display correct. This behavior will
-  be made configurable in a future release.
+  the keyboard focus using faked key press events. There are settings to
+  automatically append a zero-width space and for ZWJ sequences to prepend
+  another ZWJ, which might help some receiving X clients to get their display
+  correct.
 * Middle-clicking an emoji selects it, so it can be transferred using the X11
   "primary selection" mechanism (typically middle-click again where you want
   to insert it).
