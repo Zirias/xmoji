@@ -53,6 +53,7 @@ xmoji_BIN2CSTR_FILES=	icon256.h:icons/256x256/xmoji.png \
 			icon32.h:icons/32x32/xmoji.png \
 			icon16.h:icons/16x16/xmoji.png
 xmoji_EMOJIGEN_FILES=	emojidata.h:contrib/emoji-test.txt
+xmoji_LDFLAGS=		-Wl,--as-needed
 xmoji_LIBS=		m
 xmoji_PKGDEPS=		fontconfig \
 			harfbuzz \
@@ -75,6 +76,19 @@ ifeq ($(TRACE),1)
 xmoji_DEFINES+=		-DTRACE_X11_REQUESTS
 endif
 
+ifeq ($(BUNDLED_FREETYPE),1)
+xmoji_PRECFLAGS+=	-I./ftbundle/root/include
+xmoji_LDFLAGS+=		$(FREETYPE_TARGET)
+xmoji_LIBS+=		z
+xmoji_prebuild:		$(FREETYPE_TARGET)
+else
+ifeq ($(WITH_SVG),1)
+xmoji_PKGDEPS+=		freetype2 >= 24.2.18
+else
+xmoji_PKGDEPS+=		freetype2
+endif
+endif
+
 ifeq ($(BUNDLED_POSER),1)
 xmoji_STATICDEPS+=	posercore
 xmoji_PRECFLAGS+=	-I./poser/include
@@ -87,10 +101,7 @@ endif
 ifeq ($(WITH_SVG),1)
 xmoji_MODULES+=		nanosvg \
 			svghooks
-xmoji_PKGDEPS+=		freetype2 >= 24.2.18
 xmoji_DEFINES+=		-DWITH_SVG
-else
-xmoji_PKGDEPS+=		freetype2
 endif
 
 ifeq ($(WITH_KQUEUE),1)

@@ -216,6 +216,11 @@ The following build options are available:
   the code and location of the request that caused it is printed.
   For debugging only. Default: `off`.
 
+* `BUNDLED_FREETYPE` (bool): Build freetype2 and link it statically. For this
+  to work, download a freetype tarball and place it in `ftbundle/` first.
+  Use this when the installed freetype on your system doesn't match the
+  requirements, e.g. misses PNG support. Default: `off`.
+
 * `BUNDLED_POSER` (bool): Uses the bundled poser lib and links it statically.
   When disabled, poser must be installed and will be linked as a shared
   library. Default: `on`.
