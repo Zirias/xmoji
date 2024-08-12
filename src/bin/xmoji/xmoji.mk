@@ -81,7 +81,7 @@ xmoji_PRECFLAGS+=	-I./poser/include
 xmoji_LIBS+=		posercore
 xmoji_LDFLAGS+=		-pthread
 else
-xmoji_PKGDEPS+=		posercore
+xmoji_PKGDEPS+=		posercore >= 1.2
 endif
 
 ifeq ($(WITH_SVG),1)
