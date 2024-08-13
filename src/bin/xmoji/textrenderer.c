@@ -37,6 +37,7 @@ struct TextRenderer
     Selection selection;
     unsigned hblen;
     int noligatures;
+    int underline;
     int uploaded;
 };
 
@@ -75,6 +76,11 @@ Size TextRenderer_size(const TextRenderer *self)
 void TextRenderer_setNoLigatures(TextRenderer *self, int noLigatures)
 {
     self->noligatures = !!noLigatures;
+}
+
+void TextRenderer_setUnderline(TextRenderer *self, int px)
+{
+    self->underline = px;
 }
 
 void TextRenderer_setFont(TextRenderer *self, Font *font)
@@ -338,6 +344,22 @@ int TextRenderer_renderWithSelection(TextRenderer *self,
 		(const uint8_t *)self->glyphs),
 	    "TextRenderer: Cannot render glyphs for 0x%x",
 	    (unsigned)ownerpic);
+    if (self->underline)
+    {
+	uint16_t ulsx = 0;
+	uint16_t ulsy = 0;
+	if (X11Adapter_glitches() & XG_RENDER_SRC_OFFSET)
+	{
+	    ulsx = pos.x;
+	    ulsy = pos.y;
+	}
+	CHECK(xcb_render_composite(c, XCB_RENDER_PICT_OP_OVER, srcpic, 0,
+		    picture, ulsx, ulsy, 0, 0,
+		    self->glyphs[0].dx, self->glyphs[0].dy + self->underline,
+		    self->size.width, 1),
+		"TextRenderer: Cannot underline text for 0x%x",
+		(unsigned)ownerpic);
+    }
     self->glyphs[0].dx = odx;
     self->glyphs[0].dy = ody;
     return 0;

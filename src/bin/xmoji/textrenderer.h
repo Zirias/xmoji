@@ -17,6 +17,8 @@ Size TextRenderer_size(const TextRenderer *self)
     CMETHOD;
 void TextRenderer_setNoLigatures(TextRenderer *self, int noLigatures)
     CMETHOD;
+void TextRenderer_setUnderline(TextRenderer *self, int px)
+    CMETHOD;
 void TextRenderer_setFont(TextRenderer *self, Font *font);
 Font *TextRenderer_font(TextRenderer *self)
     CMETHOD;
