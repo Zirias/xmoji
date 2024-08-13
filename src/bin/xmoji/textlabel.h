@@ -23,6 +23,7 @@ TextLabel *TextLabel_createBase(void *derived, const char *name, void *parent);
 const UniStr *TextLabel_text(const void *self) CMETHOD;
 void TextLabel_setText(void *self, const UniStr *text) CMETHOD;
 void TextLabel_setColor(void *self, ColorRole color) CMETHOD;
+void TextLabel_setUnderline(void *self, int px) CMETHOD;
 void TextLabel_setRenderCallback(void *self, void *ctx,
 	RenderCallback callback) CMETHOD;
 

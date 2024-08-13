@@ -27,6 +27,7 @@ struct TextLabel
     void *renderctx;
     Size minSize;
     ColorRole color;
+    int underline;
 };
 
 static void freerenderer(void *renderer)
@@ -109,6 +110,7 @@ static int draw(void *obj, xcb_render_picture_t picture)
 		if (align & AH_RIGHT) linePos.x += lineMargin;
 		else if (align & AH_CENTER) linePos.x += lineMargin / 2;
 	    }
+	    TextRenderer_setUnderline(r, self->underline);
 	    rc = TextRenderer_render(r, picture, color, linePos);
 	}
 	pos.y += linespace;
@@ -137,6 +139,7 @@ TextLabel *TextLabel_createBase(void *derived, const char *name, void *parent)
     self->renderctx = 0;
     self->minSize = (Size){0, 0};
     self->color = COLOR_NORMAL;
+    self->underline = 0;
 
     return self;
 }
@@ -162,6 +165,16 @@ void TextLabel_setColor(void *self, ColorRole color)
     if (l->color != color)
     {
 	l->color = color;
+	Widget_invalidate(l);
+    }
+}
+
+void TextLabel_setUnderline(void *self, int underline)
+{
+    TextLabel *l = Object_instance(self);
+    if (l->underline != underline)
+    {
+	l->underline = underline;
 	Widget_invalidate(l);
     }
 }
