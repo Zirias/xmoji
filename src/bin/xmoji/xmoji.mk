@@ -44,6 +44,7 @@ xmoji_MODULES=		button \
 			window \
 			x11adapter \
 			x11app \
+			xdgopen \
 			xmoji \
 			xrdb \
 			xselection
