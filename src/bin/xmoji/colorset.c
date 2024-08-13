@@ -46,6 +46,8 @@ static const char *reskeys[COLOR_NUMROLES][2] = {
     { "Background", "selectedBackground" },
     { "Foreground", "tooltipForeground" },
     { "Background", "tooltipBackground" },
+    { "Foreground", "linkForeground" },
+    { "Foreground", "hoverForeground" },
     { "Border", "border" },
     { "Border", "tooltipBorder" }
 };
@@ -71,6 +73,8 @@ static const ColorSet defcolors = {
 	0x0000cdff,	// BG_SELECTED	    medium blue
 	0x000000ff,	// TOOLTIP	    black
 	0xffdeadff,	// BG_TOOLTIP	    navajo white
+	0x00008bff,	// LINK		    dark blue
+	0x0000ffff,	// HOVER	    blue
 	0xa9a9a9ff,	// BORDER	    dark gray
 	0x000000ff	// BORDER_TOOLTIP   black
     },	// ref: https://en.wikipedia.org/wiki/X11_color_names
