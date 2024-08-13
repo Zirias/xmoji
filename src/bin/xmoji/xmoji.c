@@ -8,6 +8,7 @@
 #include "emojihistory.h"
 #include "flowgrid.h"
 #include "hbox.h"
+#include "hyperlink.h"
 #include "icon.h"
 #include "icons.h"
 #include "imagelabel.h"
@@ -587,11 +588,12 @@ static int startup(void *app)
     Widget_show(label);
     HBox_addWidget(row, label);
     UniStr(author, U"Felix Palmen <felix@palmen-it.de>");
-    label = TextLabel_create("author", row);
-    TextLabel_setText(label, author);
-    Widget_setPadding(label, (Box){0, 0, 0, 0});
-    Widget_show(label);
-    HBox_addWidget(row, label);
+    HyperLink *link = HyperLink_create("author", row);
+    HyperLink_setLink(link, "mailto:felix@palmen-it.de");
+    TextLabel_setText(link, author);
+    Widget_setPadding(link, (Box){0, 0, 0, 0});
+    Widget_show(link);
+    HBox_addWidget(row, link);
     Widget_show(row);
     Table_addRow(table, row);
     row = TableRow_create(table);
@@ -604,11 +606,12 @@ static int startup(void *app)
     Widget_show(label);
     HBox_addWidget(row, label);
     UniStr(www, U"https://github.com/Zirias/xmoji");
-    label = TextLabel_create("www", row);
-    TextLabel_setText(label, www);
-    Widget_setPadding(label, (Box){0, 0, 0, 0});
-    Widget_show(label);
-    HBox_addWidget(row, label);
+    link = HyperLink_create("www", row);
+    HyperLink_setLink(link, "https://github.com/Zirias/xmoji");
+    TextLabel_setText(link, www);
+    Widget_setPadding(link, (Box){0, 0, 0, 0});
+    Widget_show(link);
+    HBox_addWidget(row, link);
     Widget_show(row);
     Table_addRow(table, row);
     Widget_show(table);

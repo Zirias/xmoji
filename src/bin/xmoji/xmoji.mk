@@ -18,6 +18,7 @@ xmoji_MODULES=		button \
 			flyout \
 			font \
 			hbox \
+			hyperlink \
 			icon \
 			icons \
 			imagelabel \
