@@ -117,9 +117,9 @@ static void parseemoji(size_t groupno)
     if (*c++ != '#') return;
     while (*c && *c != 'E') ++c;
     ++c;
-    while (isdigit(*c)) ++c;
+    while (isdigit((unsigned char)*c)) ++c;
     if (*c++ != '.') return;
-    while (isdigit(*c)) ++c;
+    while (isdigit((unsigned char)*c)) ++c;
     if (!isws(c)) return;
     skipws(c);
     if (!*c) return;

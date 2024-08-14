@@ -346,7 +346,7 @@ static int strequalslc(const char *a, const char *b)
 {
     for (;;)
     {
-	if (tolower(*a) != *b) return 0;
+	if (tolower((unsigned char)*a) != (unsigned char)*b) return 0;
 	if (!*a) return 1;
 	++a;
 	++b;
