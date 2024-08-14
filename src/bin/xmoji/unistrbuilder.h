@@ -2,7 +2,11 @@
 #define XMOJI_UNISTRBUILDER_H
 
 #include <poser/decl.h>
-#include <uchar.h>
+#include <stddef.h>
+#include <stdint.h>
+#ifndef char32_t
+#define char32_t uint32_t
+#endif
 
 C_CLASS_DECL(UniStr);
 C_CLASS_DECL(UniStrBuilder);

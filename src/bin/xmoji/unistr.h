@@ -4,7 +4,11 @@
 #include "macros.h"
 
 #include <poser/decl.h>
-#include <uchar.h>
+#include <stddef.h>
+#include <stdint.h>
+#ifndef char32_t
+#define char32_t uint32_t
+#endif
 
 C_CLASS_DECL(PSC_List);
 
