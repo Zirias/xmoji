@@ -1,4 +1,6 @@
+#ifdef __linux__
 #define _POSIX_C_SOURCE 200809L
+#endif
 
 /* Feature test hack ahead!
  *
