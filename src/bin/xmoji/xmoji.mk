@@ -117,4 +117,8 @@ ifeq ($(WITH_INOTIFY),1)
 xmoji_DEFINES+=		-DWITH_INOTIFY
 endif
 
+ifeq ($(HAVE_CHAR32_T),1)
+xmoji_DEFINES+=		-DHAVE_CHAR32_T
+endif
+
 $(call binrules,xmoji)

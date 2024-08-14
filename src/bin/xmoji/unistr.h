@@ -1,10 +1,11 @@
 #ifndef XMOJI_UNISTR_H
 #define XMOJI_UNISTR_H
 
+#include "char32.h"
 #include "macros.h"
 
 #include <poser/decl.h>
-#include <uchar.h>
+#include <stddef.h>
 
 C_CLASS_DECL(PSC_List);
 
