@@ -27,7 +27,7 @@ DISTCLEANDIRS=		tools/bin
 NODIST=			poser/zimk
 
 define checkfunc
-$(shell echo "#include <$1>\nint (*f)(void) = $2;" | \
+$(shell printf "#include <$1>\nint (*f)(void) = $2;" | \
 	$(or $(CC),cc) -xc -c -o/dev/null - 2>/dev/null && echo 1)
 endef
 HAVE_KQUEUE=		$(call checkfunc,sys/event.h,kqueue)
