@@ -103,6 +103,13 @@ static char *getLocale(void)
 {
     char *lc = setlocale(LC_ALL, "");
     if (!lc) lc = "C";
+    char *lcsep = strchr(lc, '/');
+    while (lcsep)
+    {
+	lc = lcsep+1;
+	lcsep = strchr(lc, '/');
+    }
+    if (!*lc) lc = "C";
     char *lcdot = strchr(lc, '.');
     if (!lcdot || strcmp(lcdot+1, "UTF-8"))
     {
