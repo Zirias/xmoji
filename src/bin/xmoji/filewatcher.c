@@ -17,6 +17,9 @@
 #    define _BSD_SOURCE
 #  endif
 #endif
+#ifdef __NetBSD__
+#define statfs statvfs
+#endif
 
 #include "filewatcher.h"
 
