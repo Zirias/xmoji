@@ -1,22 +1,16 @@
+/* In this module, we want a mix of POSIX APIs, BSD APIs and non-portable
+ * things like kqueue/inotify.
+ *
+ * Most C libraries show everything by default, so this just works. GNU glibc
+ * hides everything that's not standard C when compiling for a specific
+ * standard C version, except when the glibc-specific _DEFAULT_SOURCE is
+ * defined, so define that here.
+ *
+ * Defining standard feature test macros is not an option because many C
+ * libraries would hide everything else when one is defined.
+ */
 #define _DEFAULT_SOURCE
 
-/* Feature test hack ahead!
- *
- * We want to define _POSIX_C_SOURCE because some toolchains (notably GNU)
- * require that to access POSIX APIs when compiling for a specific C standard
- * version. As it disables any other extensions by default and we need some
- * BSD specific APIs on BSD systems, we also define _BSD_SOURCE.
- *
- * Unfortunately, FreeBSD headers don't support this, so we force visibility
- * of BSD APIs by defining the *private* __BSD_VISIBLE on FreeBSD.
- */
-#ifdef __FreeBSD__
-#  define __BSD_VISIBLE 1
-#else
-#  ifndef __linux__
-#    define _BSD_SOURCE
-#  endif
-#endif
 #ifdef __NetBSD__
 #define statfs statvfs
 #endif
