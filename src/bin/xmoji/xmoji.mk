@@ -84,10 +84,17 @@ xmoji_LDFLAGS+=		$(FREETYPE_TARGET)
 xmoji_LIBS+=		z
 xmoji_prebuild:		$(FREETYPE_TARGET)
 else
+ifneq ($(FTLIBDIR),)
+xmoji_LDFLAGS+=		-L$(FTLIBDIR) $(FTLIBDIR)/libfreetype.so
+ifneq ($(FTINCDIR),)
+xmoji_CFLAGS+=		-I$(FTINCDIR)
+endif
+else
 ifeq ($(WITH_SVG),1)
 xmoji_PKGDEPS+=		freetype2 >= 24.2.18
 else
 xmoji_PKGDEPS+=		freetype2
+endif
 endif
 endif
 
