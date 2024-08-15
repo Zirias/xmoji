@@ -85,7 +85,8 @@ xmoji_LIBS+=		z
 xmoji_prebuild:		$(FREETYPE_TARGET)
 else
 ifneq ($(FTLIBDIR),)
-xmoji_LDFLAGS+=		-L$(FTLIBDIR) $(FTLIBDIR)/libfreetype.so
+xmoji_LDFLAGS+=		-L$(FTLIBDIR)
+_xmoji_LINK+=		$(FTLIBDIR)/libfreetype.so
 ifneq ($(FTINCDIR),)
 xmoji_CFLAGS+=		-I$(FTINCDIR)
 endif
