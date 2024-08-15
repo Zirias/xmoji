@@ -3,8 +3,10 @@
 
 #if defined(__clang__)
 #  define xmoji___compiler clang
+#  define xmoji___unknown xmoji___suppress(-Wunknown-warning-option)
 #elif defined(__GNUC__)
 #  define xmoji___compiler GCC
+#  define xmoji___unknown xmoji___suppress(-Wpragmas)
 #endif
 #ifdef xmoji___compiler
 #  define xmoji___pragma(x) _Pragma(#x)
@@ -12,7 +14,8 @@
 #  define xmoji___diagprag(x) xmoji___diagprag1(xmoji___compiler, x)
 #  define xmoji___suppress1(x) xmoji___diagprag(ignored x)
 #  define xmoji___suppress(x) xmoji___suppress1(#x)
-#  define SUPPRESS(x) xmoji___diagprag(push) xmoji___suppress(-W##x)
+#  define SUPPRESS(x) xmoji___diagprag(push) \
+    xmoji___unknown xmoji___suppress(-W##x)
 #  define ENDSUPPRESS xmoji___diagprag(pop)
 #else
 #  define SUPPRESS(x)

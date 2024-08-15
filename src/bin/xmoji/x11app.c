@@ -1,5 +1,6 @@
 #include "x11app.h"
 
+#include "suppress.h"
 #include "widget.h"
 #include "window.h"
 #include "x11adapter.h"
@@ -117,7 +118,9 @@ static char *getLocale(void)
     {
 	char utf8lc[32];
 	if (lcdot) *lcdot = 0;
+	SUPPRESS(format-truncation)
 	snprintf(utf8lc, sizeof utf8lc, "%s.UTF-8", lc);
+	ENDSUPPRESS
 	PSC_Log_fmt(PSC_L_WARNING, "Configured locale doesn't use UTF-8 "
 		"encoding, trying `%s' instead", utf8lc);
 	lc = setlocale(LC_CTYPE, utf8lc);
