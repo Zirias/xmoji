@@ -101,15 +101,17 @@ static void destroy(void *obj)
 
 static char *getLocale(void)
 {
+    char lcctype[32];
     char *lc = setlocale(LC_ALL, "");
     if (!lc) lc = "C";
     char *lcsep = strchr(lc, '/');
-    while (lcsep)
+    if (lcsep)
     {
-	lc = lcsep+1;
+	snprintf(lcctype, sizeof lcctype, "%s", lcsep + 1);
+	lc = lcctype;
 	lcsep = strchr(lc, '/');
+	if (lcsep) *lcsep = 0;
     }
-    if (!*lc) lc = "C";
     char *lcdot = strchr(lc, '.');
     if (!lcdot || strcmp(lcdot+1, "UTF-8"))
     {
@@ -118,11 +120,11 @@ static char *getLocale(void)
 	snprintf(utf8lc, sizeof utf8lc, "%s.UTF-8", lc);
 	PSC_Log_fmt(PSC_L_WARNING, "Configured locale doesn't use UTF-8 "
 		"encoding, trying `%s' instead", utf8lc);
-	lc = setlocale(LC_ALL, utf8lc);
+	lc = setlocale(LC_CTYPE, utf8lc);
     }
     if (lc)
     {
-	PSC_Log_fmt(PSC_L_INFO, "Starting with locale `%s'", lc);
+	PSC_Log_fmt(PSC_L_INFO, "Starting with LC_CTYPE `%s'", lc);
 	return PSC_copystr(lc);
     }
     PSC_Log_msg(PSC_L_ERROR, "Couldn't set locale");
@@ -176,9 +178,9 @@ X11App *app(void)
 X11App *X11App_createBase(void *derived, int argc, char **argv)
 {
     if (instance) return 0;
+    initPoser(argc, argv);
     char *locale = getLocale();
     if (!locale) return 0;
-    initPoser(argc, argv);
 
     X11App *self = PSC_malloc(sizeof *self);
     CREATEBASE(Object);
