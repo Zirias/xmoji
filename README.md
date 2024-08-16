@@ -6,8 +6,11 @@ renders its GUI using XRender requests.
 
 ![Xmoji in fvwm3](.github/screenshots/xmoji.png?raw=true)
 
-This is currently work in progress and should become the successor of my
-[qXmoji](https://github.com/Zirias/qxmoji) tool which used Qt for its GUI.
+This the successor of my [qXmoji](https://github.com/Zirias/qxmoji) tool which
+used Qt for its GUI. Some of qXmoji's features (notably translations) are still missing though.
+
+[![Packaging status](https://repology.org/badge/vertical-allrepos/xmoji.svg)](
+https://repology.org/project/xmoji/versions)
 
 ## Features
 
