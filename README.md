@@ -112,6 +112,10 @@ names. The following colors are available:
   tooltips. Default: `black`.
 * `tooltipBackground` (class `Background`): Background color for
   tooltips. Default: `navajo white`.
+* `linkForeground` (class `Foreground`): Foreground color for hyperlinks.
+  Default: `dark blue`.
+* `hoverForeground` (class `Foreground`): Foreground color for hovered items,
+  used with hyperlinks. Default: `blue`.
 * `border` (class `Border`): Color for borders. Default: `dark gray`.
 * `tooltipBorder` (class `Border`): Color for the border of tooltips.
   Default: `black`.
