@@ -138,6 +138,8 @@ scroll bar and a dark color scheme:
     Xmoji*selectedBackground: #77ddff
     Xmoji*tooltipForeground: light cyan
     Xmoji*tooltipBackground: dark slate gray
+    Xmoji*linkForeground: dodger blue
+    Xmoji*hoverForeground: cyan
     Xmoji*tooltipBorder: light sea green
     Xmoji*scrollBarWidth: 12
     Xmoji*scrollBarMinHeight: 25
