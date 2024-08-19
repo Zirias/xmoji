@@ -13,4 +13,6 @@ void X11App_addWindow(X11App *self, Window *window)
 void X11App_removeWindow(X11App *self, Window *window)
     CMETHOD ATTR_NONNULL((2));
 
+void X11App_setWmProperties(Window *window) ATTR_NONNULL((1));
+
 #endif

@@ -1,3 +1,5 @@
+#define _POSIX_C_SOURCE 200112L
+
 #include "x11app.h"
 
 #include "suppress.h"
@@ -10,6 +12,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 static void destroy(void *obj);
 
@@ -30,6 +33,11 @@ struct X11App
     AppLocale locale;
     char *name;
     char **argv;
+    char *hostprop;
+    char *cmdprop;
+    size_t hostproplen;
+    size_t cmdproplen;
+    uint32_t pidprop;
     int argc;
     int quitting;
 };
@@ -98,6 +106,8 @@ static void destroy(void *obj)
     PSC_Event_unregister(PSC_Service_shutdown(), self, svshutdown, 0);
     PSC_Event_unregister(PSC_Service_startup(), self, svstartup, 0);
     PSC_Event_unregister(PSC_Service_prestartup(), self, svprestartup, 0);
+    free(self->cmdprop);
+    free(self->hostprop);
     free(self->name);
     free(self->locale.lc_messages);
     free(self->locale.lc_ctype);
@@ -320,4 +330,50 @@ void X11App_showWaitCursor(void)
 	Window_showWaitCursor(win);
     }
     PSC_ListIterator_destroy(i);
+}
+
+void X11App_setWmProperties(Window *win)
+{
+    if (!instance) return;
+    if (!instance->hostprop)
+    {
+	long maxlen = sysconf(_SC_HOST_NAME_MAX);
+	if (maxlen < 0) maxlen = 1024;
+	instance->hostprop = PSC_malloc(maxlen + 1);
+	gethostname(instance->hostprop, maxlen + 1);
+	instance->hostprop[maxlen] = 0;
+	instance->hostproplen = strlen(instance->hostprop);
+	if (instance->hostproplen < (size_t)maxlen)
+	{
+	    instance->hostprop = PSC_realloc(instance->hostprop,
+		    instance->hostproplen + 1);
+	}
+	instance->cmdproplen = 0;
+	for (int i = 0; i < instance->argc; ++i)
+	{
+	    instance->cmdproplen += strlen(instance->argv[i]) + 1;
+	}
+	instance->cmdprop = PSC_malloc(instance->cmdproplen);
+	size_t pos = 0;
+	for (int i = 0; i < instance->argc; ++i)
+	{
+	    size_t argvlen = strlen(instance->argv[i]) + 1;
+	    memcpy(instance->cmdprop + pos, instance->argv[i], argvlen);
+	    pos += argvlen;
+	}
+	instance->pidprop = getpid();
+    }
+    xcb_connection_t *c = X11Adapter_connection();
+    xcb_window_t w = Window_id(win);
+    CHECK(xcb_change_property(c, XCB_PROP_MODE_REPLACE, w,
+		XCB_ATOM_WM_CLIENT_MACHINE, XCB_ATOM_STRING, 8,
+		instance->hostproplen, instance->hostprop),
+	    "Cannot set WM_CLIENT_MACHINE for 0x%x", (unsigned)w);
+    CHECK(xcb_change_property(c, XCB_PROP_MODE_REPLACE, w,
+		XCB_ATOM_WM_COMMAND, XCB_ATOM_STRING, 8,
+		instance->cmdproplen, instance->cmdprop),
+	    "Cannot set WM_COMMAND for 0x%x", (unsigned)w);
+    CHECK(xcb_change_property(c, XCB_PROP_MODE_REPLACE, w,
+		A(_NET_WM_PID), XCB_ATOM_CARDINAL, 32, 1, &instance->pidprop),
+	    "Cannot set _NET_WM_PID for 0x%x", (unsigned)w);
 }

@@ -36,6 +36,8 @@ typedef enum XGlitch
     X(_NET_WM_ICON) \
     X(_NET_WM_ICON_NAME) \
     X(_NET_WM_NAME) \
+    X(_NET_WM_PID) \
+    X(_NET_WM_PING) \
     X(_NET_WM_STATE) \
     X(_NET_WM_STATE_HIDDEN) \
     X(_NET_WM_STATE_SKIP_TASKBAR) \

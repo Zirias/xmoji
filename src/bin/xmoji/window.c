@@ -557,6 +557,16 @@ static void clientmsg(void *receiver, void *sender, void *args)
     {
 	Window_close(self);
     }
+    else if (ev->data.data32[0] == A(_NET_WM_PING))
+    {
+	xcb_connection_t *c = X11Adapter_connection();
+	xcb_window_t root = X11Adapter_screen()->root;
+	ev->window = root;
+	CHECK(xcb_send_event(c, 0, root,
+		    XCB_EVENT_MASK_SUBSTRUCTURE_NOTIFY |
+		    XCB_EVENT_MASK_SUBSTRUCTURE_REDIRECT, (const char *)ev),
+		"Cannot answer _NET_WM_PING for 0x%x", (unsigned)self->w);
+    }
 }
 
 static void requestError(void *receiver, void *sender, void *args)
@@ -910,10 +920,12 @@ Window *Window_createBase(void *derived, const char *name,
 		    XCB_ATOM_WM_HINTS, XCB_ATOM_WM_HINTS, 32,
 		    sizeof hints >> 2, &hints),
 		"Cannot set window manager hints on 0x%x", (unsigned)self->w);
-	xcb_atom_t protocols[2] = { A(WM_DELETE_WINDOW), A(WM_TAKE_FOCUS) };
+	X11App_setWmProperties(self);
+	xcb_atom_t protocols[3] = {
+	    A(_NET_WM_PING), A(WM_DELETE_WINDOW), A(WM_TAKE_FOCUS) };
 	CHECK(xcb_change_property(c, XCB_PROP_MODE_REPLACE, self->w,
 		    A(WM_PROTOCOLS), XCB_ATOM_ATOM, 32,
-		    (flags & WF_REJECT_FOCUS) ? 2 : 1, protocols),
+		    (flags & WF_REJECT_FOCUS) ? 3 : 2, protocols),
 		"Cannot set supported protocols on 0x%x", (unsigned)self->w);
 	xcb_atom_t wmtype;
 	switch (wtype)
