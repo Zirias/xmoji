@@ -1096,17 +1096,23 @@ void Window_setTitle(void *self, const char *title)
     {
 	w->title = PSC_copystr(title);
 	char *latintitle = LATIN1(w->title);
-	xcb_change_property(c, XCB_PROP_MODE_REPLACE, w->w, XCB_ATOM_WM_NAME,
-		XCB_ATOM_STRING, 8, strlen(latintitle), latintitle);
-	xcb_change_property(c, XCB_PROP_MODE_REPLACE, w->w, A(_NET_WM_NAME),
-		A(UTF8_STRING), 8, strlen(w->title), w->title);
+	CHECK(xcb_change_property(c, XCB_PROP_MODE_REPLACE, w->w,
+		    XCB_ATOM_WM_NAME, XCB_ATOM_STRING,
+		    8, strlen(latintitle), latintitle),
+		"Cannot set latin1 title for 0x%x", (unsigned)w->w);
+	CHECK(xcb_change_property(c, XCB_PROP_MODE_REPLACE, w->w,
+		    A(_NET_WM_NAME), A(UTF8_STRING),
+		    8, strlen(w->title), w->title),
+		"Cannot set utf8 title for 0x%x", (unsigned)w->w);
 	free(latintitle);
     }
     else
     {
 	w->title = 0;
-	xcb_delete_property(c, w->w, XCB_ATOM_WM_NAME);
-	xcb_delete_property(c, w->w, A(_NET_WM_NAME));
+	CHECK(xcb_delete_property(c, w->w, XCB_ATOM_WM_NAME),
+		"Cannot delete latin1 title for 0x%x", (unsigned)w->w);
+	CHECK(xcb_delete_property(c, w->w, A(_NET_WM_NAME)),
+		"Cannot delete utf8 title for 0x%x", (unsigned)w->w);
     }
     if (!w->iconName) Window_setIconName(self, title);
 }
@@ -1132,18 +1138,22 @@ void Window_setIconName(void *self, const char *iconName)
     {
 	if (iconName) w->iconName = PSC_copystr(iconName);
 	char *latinIconName = LATIN1(newname);
-	xcb_change_property(c, XCB_PROP_MODE_REPLACE, w->w,
-		XCB_ATOM_WM_ICON_NAME, XCB_ATOM_STRING, 8,
-		strlen(latinIconName), latinIconName);
-	xcb_change_property(c, XCB_PROP_MODE_REPLACE, w->w,
-		A(_NET_WM_ICON_NAME), A(UTF8_STRING), 8, strlen(newname),
-		newname);
+	CHECK(xcb_change_property(c, XCB_PROP_MODE_REPLACE, w->w,
+		    XCB_ATOM_WM_ICON_NAME, XCB_ATOM_STRING, 8,
+		    strlen(latinIconName), latinIconName),
+		"Cannot set latin1 icon name for 0x%x", (unsigned)w->w);
+	CHECK(xcb_change_property(c, XCB_PROP_MODE_REPLACE, w->w,
+		    A(_NET_WM_ICON_NAME), A(UTF8_STRING), 8,
+		    strlen(newname), newname),
+		"Cannot set utf8 icon name for 0x%x", (unsigned)w->w);
 	free(latinIconName);
     }
     else
     {
-	xcb_delete_property(c, w->w, XCB_ATOM_WM_ICON_NAME);
-	xcb_delete_property(c, w->w, A(_NET_WM_ICON_NAME));
+	CHECK(xcb_delete_property(c, w->w, XCB_ATOM_WM_ICON_NAME),
+		"Cannot delete latin1 icon name for 0x%x", (unsigned)w->w);
+	CHECK(xcb_delete_property(c, w->w, A(_NET_WM_ICON_NAME)),
+		"Cannot delete utf8 icon name for 0x%x", (unsigned)w->w);
     }
 }
 
