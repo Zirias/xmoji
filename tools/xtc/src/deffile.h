@@ -14,8 +14,8 @@ typedef struct DefFile DefFile;
 
 DefFile *DefFile_create(const char *filename);
 size_t DefFile_len(const DefFile *self);
-DefEntry *DefFile_byId(const DefFile *self, unsigned id);
-DefEntry *DefFile_byKey(const DefFile *self, const char *key);
+const DefEntry *DefFile_byId(const DefFile *self, unsigned id);
+const DefEntry *DefFile_byKey(const DefFile *self, const char *key);
 const char *DefEntry_from(const DefEntry *self);
 const char *DefEntry_to(const DefEntry *self);
 DefType DefEntry_type(const DefEntry *self);

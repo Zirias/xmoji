@@ -1,5 +1,7 @@
 #include "deffile.h"
 
+#include "xmalloc.h"
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -27,20 +29,6 @@ static unsigned char hash(const char *key)
     size_t h = 5381;
     while (*key) h += (h << 5) + ((unsigned char)*key++);
     return h;
-}
-
-static void *xmalloc(size_t sz)
-{
-    void *p = malloc(sz);
-    if (!p) abort();
-    return p;
-}
-
-static void *xrealloc(void *p, size_t sz)
-{
-    p = realloc(p, sz);
-    if (!p) abort();
-    return p;
 }
 
 DefFile *DefFile_create(const char *filename)
@@ -186,13 +174,13 @@ size_t DefFile_len(const DefFile *self)
     return self->len;
 }
 
-DefEntry *DefFile_byId(const DefFile *self, unsigned id)
+const DefEntry *DefFile_byId(const DefFile *self, unsigned id)
 {
     if (id > self->len) return 0;
     return self->entries + id;
 }
 
-DefEntry *DefFile_byKey(const DefFile *self, const char *key)
+const DefEntry *DefFile_byKey(const DefFile *self, const char *key)
 {
     DefEntry *entry = self->bucket[hash(key)];
     while (entry)
