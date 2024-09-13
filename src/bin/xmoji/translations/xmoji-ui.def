@@ -1,0 +1,193 @@
+$w$about
+.
+About
+.
+
+$w$aboutdesc
+.
+About Xmoji
+.
+
+$w$settings
+.
+Settings
+.
+
+$w$settingsdesc
+.
+Configure runtime settings
+.
+
+$w$quit
+.
+Quit
+.
+
+$w$quitdesc
+.
+Exit the application
+.
+
+$w$searchText
+.
+Search
+.
+
+$w$clickToSearch
+.
+Click to type and search ...
+.
+
+$w$recentText
+.
+Recently used
+.
+
+$c$aboutDlgTitle
+.
+About Xmoji
+.
+
+$w$abouttxt
+.
+X11 Emoji Keyboard
+.
+
+$w$licenselbl
+.
+License:
+.
+
+$w$authorlbl
+.
+Author:
+.
+
+$w$ok
+.
+OK
+.
+
+$c$settingsDlgTitle
+.
+Xmoji settings
+.
+
+$w$scaleDesc
+.
+Scale factor for the size of the emoji font.
+Tiny means the default text character size.
+.
+
+$w$scale
+.
+Emoji scale:
+.
+
+$w$scaleTiny
+.
+Tiny
+.
+
+$w$scaleSmall
+.
+Small
+.
+
+$w$scaleMedium
+.
+Medium
+.
+
+$w$scaleLarge
+.
+Large
+.
+
+$w$scaleHuge
+.
+Huge
+.
+
+$w$injectFlagsDesc
+.
+These are workarounds/hacks to help some clients receiving the
+faked key press events to correctly display emojis.
+
+* Pre-ZWJ: If the emoji is a ZWJ sequence, prepend another
+ZWJ. This is nonstandard, but helps some clients. If none of
+the space options is active, a ZW space is also prepended.
+* Add space: Add a regular space after each emoji
+* Add ZW space: Add a zero-width space after each emoji
+.
+
+$w$injectFlags
+.
+Key injection flags:
+.
+
+$w$flagsNone
+.
+None
+.
+
+$w$flagsSpace
+.
+Add space
+.
+
+$w$flagsZws
+.
+Add ZW space
+.
+
+$w$flagsZwj
+.
+Pre-ZWJ
+.
+
+$w$flagsZwjSpace
+.
+Pre-ZWJ + add space
+.
+
+$w$flagsZwjZws
+.
+Pre-ZWJ + add ZW space
+.
+
+$w$waitBeforeDesc
+.
+Sending emojis as faked X11 key events requires temporarily
+changing the keyboard mapping.
+This is the time (in milliseconds) to wait after changing the
+mapping and before sending the key press events.
+This might help prevent possible race condition bugs in
+clients between applying the new mapping and processing
+the events.
+.
+
+$w$waitBefore
+.
+Wait before sending keys (ms):
+.
+
+$w$waitAfterDesc
+.
+Sending emojis as faked X11 key events requires temporarily
+changing the keyboard mapping.
+This is the time (in milliseconds) to wait after sending the
+key press events and before resetting the keyboard mapping.
+Some clients might apply a new keyboard map before processing
+all queued events, so if you see completely unrelated
+characters instead of the expected emojis, try increasing this
+value.
+Note that if you see multiple emojis instead of just one, this
+value is unrelated, but the client has issues correctly
+interpreting an emoji consisting of multiple codepoints.
+.
+
+$w$waitAfter
+.
+Wait after sending keys (ms):
+.
