@@ -5,7 +5,8 @@ GEN_TEXTS_tool=		$(XTC_TARGET)
 GEN_TEXTS_args=		source $(basename $1) XMU $2
 
 xmoji_VERSION=		0.7
-xmoji_DEFINES=		-DVERSION=\"$(xmoji_VERSION)\"
+xmoji_DEFINES=		-DLOCALEDIR=\"$(localedir)\" \
+			-DVERSION=\"$(xmoji_VERSION)\"
 xmoji_MODULES=		button \
 			colorset \
 			command \
@@ -41,6 +42,7 @@ xmoji_MODULES=		button \
 			textrenderer \
 			texts \
 			tooltip \
+			translator \
 			unistr \
 			unistrbuilder \
 			vbox \

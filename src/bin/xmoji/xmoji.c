@@ -21,6 +21,8 @@
 #include "table.h"
 #include "textbox.h"
 #include "textlabel.h"
+#include "texts.h"
+#include "translator.h"
 #include "unistr.h"
 #include "valuetypes.h"
 #include "vbox.h"
@@ -42,6 +44,7 @@ typedef struct Xmoji
     Object base;
     const char *cfgfile;
     Config *config;
+    Translator *uitexts;
     Font *emojiFont;
     Font *scaledEmojiFont;
     Window *aboutDialog;
@@ -60,6 +63,7 @@ static void destroy(void *app)
     Xmoji *self = app;
     Font_destroy(self->scaledEmojiFont);
     Font_destroy(self->emojiFont);
+    Translator_destroy(self->uitexts);
     Config_destroy(self->config);
     free(self);
 }
@@ -329,21 +333,22 @@ static int startup(void *app)
     PSC_Event_register(Config_waitAfterChanged(self->config), self,
 	    onwaitafterchanged, 0);
 
+    /* Load translations */
+    Translator *tr = Translator_create("xmoji-ui", LOCALEDIR, XMU_get);
+    self->uitexts = tr;
+
     /* Initialize commands */
-    UniStr(about, U"About");
-    UniStr(aboutdesc, U"About Xmoji");
-    Command *aboutCommand = Command_create(about, aboutdesc, self);
+    Command *aboutCommand = Command_create(
+	    TR(tr, XMU_txt_about), TR(tr, XMU_txt_aboutdesc), self);
     PSC_Event_register(Command_triggered(aboutCommand), self, onabout, 0);
 
-    UniStr(settings, U"Settings");
-    UniStr(settingsdesc, U"Configure runtime settings");
-    Command *settingsCommand = Command_create(settings, settingsdesc, self);
+    Command *settingsCommand = Command_create(
+	    TR(tr, XMU_txt_settings), TR(tr, XMU_txt_settingsdesc), self);
     PSC_Event_register(Command_triggered(settingsCommand), self,
 	    onsettings, 0);
 
-    UniStr(quit, U"Quit");
-    UniStr(quitdesc, U"Exit the application");
-    Command *quitCommand = Command_create(quit, quitdesc, self);
+    Command *quitCommand = Command_create(
+	    TR(tr, XMU_txt_quit), TR(tr, XMU_txt_quitdesc), self);
     PSC_Event_register(Command_triggered(quitCommand), self, onquit, 0);
 
     /* Create main menu */
@@ -387,9 +392,8 @@ static int startup(void *app)
     /* Create search tab */
     TextLabel *groupLabel = TextLabel_create(0, tabs);
     UniStr(searchEmoji, U"\x1f50d");
-    UniStr(searchText, U"Search");
     TextLabel_setText(groupLabel, searchEmoji);
-    Widget_setTooltip(groupLabel, searchText, 0);
+    Widget_setTooltip(groupLabel, TR(tr, XMU_txt_searchText), 0);
     Widget_show(groupLabel);
 
     VBox *box = VBox_create(tabs);
@@ -397,8 +401,7 @@ static int startup(void *app)
     Widget_setPadding(box, (Box){0, 2, 0, 0});
     TextBox *search = TextBox_create("searchBox", box);
     TextBox_setMaxLen(search, 32);
-    UniStr(clickToSearch, U"Click to type and search ...");
-    TextBox_setPlaceholder(search, clickToSearch);
+    TextBox_setPlaceholder(search, TR(tr, XMU_txt_clickToSearch));
     TextBox_setGrab(search, 1);
     TextBox_setClearBtn(search, 1);
     Widget_setFontResName(search, 0, 0, 0);
@@ -430,9 +433,8 @@ static int startup(void *app)
 	    onhistorychanged, 0);
     groupLabel = TextLabel_create(0, tabs);
     UniStr(recentEmoji, U"\x23f3");
-    UniStr(recentText, U"Recently used");
     TextLabel_setText(groupLabel, recentEmoji);
-    Widget_setTooltip(groupLabel, recentText, 0);
+    Widget_setTooltip(groupLabel, TR(tr, XMU_txt_recentText), 0);
     Widget_show(groupLabel);
 
     scroll = ScrollBox_create(0, tabs);
@@ -522,7 +524,7 @@ static int startup(void *app)
     /* Create "About" dialog */
     Window *aboutDlg = Window_create("aboutDialog",
 	    WF_WINDOW_DIALOG|WF_FIXED_SIZE, win);
-    Window_setTitle(aboutDlg, "About Xmoji");
+    Window_setTitle(aboutDlg, TR(tr, XMU_txt_aboutDlgTitle));
     Icon_apply(appIcon, aboutDlg);
     Widget_setFontResName(aboutDlg, 0, 0, 0);
     Font *deffont = Widget_font(aboutDlg);
@@ -550,9 +552,8 @@ static int startup(void *app)
     Widget_setExpand(label, 0);
     Widget_show(label);
     VBox_addWidget(box, label);
-    UniStr(abouttxt, U"X11 Emoji Keyboard");
     label = TextLabel_create("aboutText", box);
-    TextLabel_setText(label, abouttxt);
+    TextLabel_setText(label, TR(tr, XMU_txt_abouttxt));
     Widget_setAlign(label, AV_MIDDLE);
     Widget_setExpand(label, 0);
     Widget_show(label);
@@ -564,9 +565,8 @@ static int startup(void *app)
     TableRow *row = TableRow_create(table);
     HBox_setSpacing(row, 6);
     Widget_setPadding(row, (Box){0, 0, 0, 0});
-    UniStr(licenselbl, U"License:");
     label = TextLabel_create("licenseLabel", row);
-    TextLabel_setText(label, licenselbl);
+    TextLabel_setText(label, TR(tr, XMU_txt_licenselbl));
     Widget_setPadding(label, (Box){0, 0, 0, 0});
     Widget_show(label);
     HBox_addWidget(row, label);
@@ -581,9 +581,8 @@ static int startup(void *app)
     row = TableRow_create(table);
     HBox_setSpacing(row, 6);
     Widget_setPadding(row, (Box){0, 0, 0, 0});
-    UniStr(authorlbl, U"Author:");
     label = TextLabel_create("authorLabel", row);
-    TextLabel_setText(label, authorlbl);
+    TextLabel_setText(label, TR(tr, XMU_txt_authorlbl));
     Widget_setPadding(label, (Box){0, 0, 0, 0});
     Widget_show(label);
     HBox_addWidget(row, label);
@@ -618,7 +617,7 @@ static int startup(void *app)
     VBox_addWidget(box, table);
 
     Button *button = Button_create("okButton", box);
-    UniStr(ok, U"OK");
+    const UniStr *ok = TR(tr, XMU_txt_ok);
     Button_setText(button, ok);
     Widget_setAlign(button, AH_RIGHT|AV_BOTTOM);
     Widget_show(button);
@@ -635,33 +634,24 @@ static int startup(void *app)
     /* Create "Settings" dialog */
     Window *settingsDlg = Window_create("settingsDialog",
 	    WF_WINDOW_DIALOG|WF_FIXED_SIZE, win);
-    Window_setTitle(settingsDlg, "Xmoji settings");
+    Window_setTitle(settingsDlg, TR(tr, XMU_txt_settingsDlgTitle));
     Icon_apply(appIcon, settingsDlg);
     Widget_setFontResName(settingsDlg, 0, 0, 0);
     table = Table_create(settingsDlg);
 
     row = TableRow_create(table);
-    UniStr(scaleDesc,
-	    U"Scale factor for the size of the emoji font.\n"
-	    U"Tiny means the default text character size.");
-    Widget_setTooltip(row, scaleDesc, 0);
+    Widget_setTooltip(row, TR(tr, XMU_txt_scaleDesc), 0);
     label = TextLabel_create("scaleLabel", row);
-    UniStr(scale, U"Emoji scale:");
-    TextLabel_setText(label, scale);
+    TextLabel_setText(label, TR(tr, XMU_txt_scale));
     Widget_setAlign(label, AH_RIGHT|AV_MIDDLE);
     Widget_show(label);
     HBox_addWidget(row, label);
     Dropdown *dd = Dropdown_create("scaleBox", row);
-    UniStr(scaleTiny, U"Tiny");
-    Dropdown_addOption(dd, scaleTiny);
-    UniStr(scaleSmall, U"Small");
-    Dropdown_addOption(dd, scaleSmall);
-    UniStr(scaleMedium, U"Medium");
-    Dropdown_addOption(dd, scaleMedium);
-    UniStr(scaleLarge, U"Large");
-    Dropdown_addOption(dd, scaleLarge);
-    UniStr(scaleHuge, U"Huge");
-    Dropdown_addOption(dd, scaleHuge);
+    Dropdown_addOption(dd, TR(tr, XMU_txt_scaleTiny));
+    Dropdown_addOption(dd, TR(tr, XMU_txt_scaleSmall));
+    Dropdown_addOption(dd, TR(tr, XMU_txt_scaleMedium));
+    Dropdown_addOption(dd, TR(tr, XMU_txt_scaleLarge));
+    Dropdown_addOption(dd, TR(tr, XMU_txt_scaleHuge));
     Dropdown_select(dd, Config_scale(self->config));
     Widget_show(dd);
     HBox_addWidget(row, dd);
@@ -670,35 +660,19 @@ static int startup(void *app)
     Widget_show(row);
     Table_addRow(table, row);
     row = TableRow_create(table);
-    UniStr(injectFlagsDesc,
-	    U"These are workarounds/hacks to help some clients receiving the\n"
-	    U"faked key press events to correctly display emojis.\n"
-	    U"\n"
-	    U"* Pre-ZWJ: If the emoji is a ZWJ sequence, prepend another\n"
-	    U"ZWJ. This is nonstandard, but helps some clients. If none of\n"
-	    U"the space options is active, a ZW space is also prepended.\n"
-	    U"* Add space: Add a regular space after each emoji\n"
-	    U"* Add ZW space: Add a zero-width space after each emoji");
-    Widget_setTooltip(row, injectFlagsDesc, 0);
+    Widget_setTooltip(row, TR(tr, XMU_txt_injectFlagsDesc), 0);
     label = TextLabel_create("injectFlagsLabel", row);
-    UniStr(injectFlags, U"Key injection flags:");
-    TextLabel_setText(label, injectFlags);
+    TextLabel_setText(label, TR(tr, XMU_txt_injectFlags));
     Widget_setAlign(label, AH_RIGHT|AV_MIDDLE);
     Widget_show(label);
     HBox_addWidget(row, label);
     dd = Dropdown_create("injectFlagsBox", row);
-    UniStr(flagsNone, U"None");
-    Dropdown_addOption(dd, flagsNone);
-    UniStr(flagsSpace, U"Add space");
-    Dropdown_addOption(dd, flagsSpace);
-    UniStr(flagsZws, U"Add ZW space");
-    Dropdown_addOption(dd, flagsZws);
-    UniStr(flagsZwj, U"Pre-ZWJ");
-    Dropdown_addOption(dd, flagsZwj);
-    UniStr(flagsZwjSpace, U"Pre-ZWJ + add space");
-    Dropdown_addOption(dd, flagsZwjSpace);
-    UniStr(flagsZwjZws, U"Pre-ZWJ + add ZW space");
-    Dropdown_addOption(dd, flagsZwjZws);
+    Dropdown_addOption(dd, TR(tr, XMU_txt_flagsNone));
+    Dropdown_addOption(dd, TR(tr, XMU_txt_flagsSpace));
+    Dropdown_addOption(dd, TR(tr, XMU_txt_flagsZws));
+    Dropdown_addOption(dd, TR(tr, XMU_txt_flagsZwj));
+    Dropdown_addOption(dd, TR(tr, XMU_txt_flagsZwjSpace));
+    Dropdown_addOption(dd, TR(tr, XMU_txt_flagsZwjZws));
     Dropdown_select(dd, flagsindex(Config_injectorFlags(self->config)));
     Widget_show(dd);
     HBox_addWidget(row, dd);
@@ -707,18 +681,9 @@ static int startup(void *app)
     Widget_show(row);
     Table_addRow(table, row);
     row = TableRow_create(table);
-    UniStr(waitBeforeDesc,
-	    U"Sending emojis as faked X11 key events requires temporarily\n"
-	    U"changing the keyboard mapping.\n"
-	    U"This is the time (in milliseconds) to wait after changing the\n"
-	    U"mapping and before sending the key press events.\n"
-	    U"This might help prevent possible race condition bugs in\n"
-	    U"clients between applying the new mapping and processing\n"
-	    U"the events.");
-    Widget_setTooltip(row, waitBeforeDesc, 0);
+    Widget_setTooltip(row, TR(tr, XMU_txt_waitBeforeDesc), 0);
     label = TextLabel_create("waitBeforeLabel", row);
-    UniStr(waitBefore, U"Wait before sending keys (ms):");
-    TextLabel_setText(label, waitBefore);
+    TextLabel_setText(label, TR(tr, XMU_txt_waitBefore));
     Widget_setAlign(label, AH_RIGHT);
     Widget_show(label);
     HBox_addWidget(row, label);
@@ -732,22 +697,9 @@ static int startup(void *app)
     Widget_show(row);
     Table_addRow(table, row);
     row = TableRow_create(table);
-    UniStr(waitAfterDesc,
-	    U"Sending emojis as faked X11 key events requires temporarily\n"
-	    U"changing the keyboard mapping.\n"
-	    U"This is the time (in milliseconds) to wait after sending the\n"
-	    U"key press events and before resetting the keyboard mapping.\n"
-	    U"Some clients might apply a new keyboard map before processing\n"
-	    U"all queued events, so if you see completely unrelated\n"
-	    U"characters instead of the expected emojis, try increasing this\n"
-	    U"value.\n"
-	    U"Note that if you see multiple emojis instead of just one, this\n"
-	    U"value is unrelated, but the client has issues correctly\n"
-	    U"interpreting an emoji consisting of multiple codepoints.");
-    Widget_setTooltip(row, waitAfterDesc, 0);
+    Widget_setTooltip(row, TR(tr, XMU_txt_waitAfterDesc), 0);
     label = TextLabel_create("waitAfterLabel", row);
-    UniStr(waitAfter, U"Wait after sending keys (ms):");
-    TextLabel_setText(label, waitAfter);
+    TextLabel_setText(label, TR(tr, XMU_txt_waitAfter));
     Widget_setAlign(label, AH_RIGHT);
     Widget_show(label);
     HBox_addWidget(row, label);
