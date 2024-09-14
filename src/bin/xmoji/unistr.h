@@ -22,10 +22,11 @@ typedef struct UniStr
  * declares 'static const *UniStr name' and initializes it to "value".
  */
 
-#define UniStr(n,x) static const UniStr n ## _v = { \
+#define UniStrVal(n,x) static const UniStr n ## _v = { \
 	.len = (sizeof x >> 2) - 1, \
 	.str = (char32_t *)x, \
-	.refcnt = -1 }; \
+	.refcnt = -1 }
+#define UniStr(n,x) UniStrVal(n,x); \
 	static const UniStr *n = & n ## _v
 
 /* constructor */

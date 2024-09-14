@@ -33,6 +33,8 @@ icon256.h
 icon48.h
 icon32.h
 icon16.h
+texts.c
+texts.h
 xmoji.desktop
 .freetype-2.*.build
 freetype-2.*

@@ -93,13 +93,13 @@ static int dosource(int argc, char **argv)
 	switch (DefEntry_type(entry))
 	{
 	    case DT_CHAR:
-		fprintf(data, "static const char *%s = \"", from);
+		fprintf(data, "static const char %s[] = \"", from);
 		fputcstr(data, to);
 		fputs("\";\n", data);
 		break;
 
 	    case DT_CHAR32:
-		fprintf(data, "UniStr(%s, U\"", from);
+		fprintf(data, "UniStrVal(%s, U\"", from);
 		fputcstr(data, to);
 		fputs("\");\n", data);
 		break;
@@ -113,7 +113,14 @@ static int dosource(int argc, char **argv)
     for (unsigned i = 0; i < DefFile_len(df); ++i)
     {
 	const DefEntry *entry = DefFile_byId(df, i);
-	fprintf(data, i ? ",\n    %s" : "\n    %s", DefEntry_from(entry));
+	static const char *valfmt[] = {
+	    ",\n    %s",
+	    "\n    %s",
+	    ",\n    &%s_v",
+	    "\n    &%s_v"
+	};
+	int fidx = ((DefEntry_type(entry) == DT_CHAR32) << 1) + !i;
+	fprintf(data, valfmt[fidx], DefEntry_from(entry));
     }
     fprintf(data, "\n};\n\nconst void *%s_get(unsigned id)\n"
 	    "{\n"

@@ -1,6 +1,8 @@
 GEN_BIN2CSTR_tool=	$(BIN2CSTR_TARGET)
 GEN_BIN2CSTR_args=	$1 $2
 GEN_EMOJIGEN_tool=	$(EMOJIGEN_TARGET)
+GEN_TEXTS_tool=		$(XTC_TARGET)
+GEN_TEXTS_args=		source $(basename $1) XMU $2
 
 xmoji_VERSION=		0.7
 xmoji_DEFINES=		-DVERSION=\"$(xmoji_VERSION)\"
@@ -37,6 +39,7 @@ xmoji_MODULES=		button \
 			textbox \
 			textlabel \
 			textrenderer \
+			texts \
 			tooltip \
 			unistr \
 			unistrbuilder \
@@ -49,12 +52,13 @@ xmoji_MODULES=		button \
 			xmoji \
 			xrdb \
 			xselection
-xmoji_GEN=		BIN2CSTR EMOJIGEN
+xmoji_GEN=		BIN2CSTR EMOJIGEN TEXTS
 xmoji_BIN2CSTR_FILES=	icon256.h:icons/256x256/xmoji.png \
 			icon48.h:icons/48x48/xmoji.png \
 			icon32.h:icons/32x32/xmoji.png \
 			icon16.h:icons/16x16/xmoji.png
 xmoji_EMOJIGEN_FILES=	emojidata.h:contrib/emoji-test.txt
+xmoji_TEXTS_FILES=	texts.c:translations/xmoji-ui.def
 xmoji_LDFLAGS=		-Wl,--as-needed
 xmoji_LIBS=		m
 xmoji_PKGDEPS=		fontconfig \
