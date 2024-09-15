@@ -11,6 +11,7 @@
 struct DefEntry
 {
     DefEntry *next;
+    char *key;
     char *from;
     char *to;
     DefType type;
@@ -36,14 +37,16 @@ DefFile *DefFile_create(const char *filename)
     FILE *f = fopen(filename, "r");
     if (!f)
     {
-	fprintf(stderr, "Error opening `%s' for reading.", filename);
+	fprintf(stderr, "Error opening `%s' for reading\n", filename);
 	return 0;
     }
 
-    enum { PS_START, PS_FROM, PS_TO } parsestate = PS_START;
+    enum { PS_START, PS_KEY, PS_FROM, PS_TO } parsestate = PS_START;
     static char buf[1024];
+    char *key = 0;
     char *from = 0;
     char *to = 0;
+    size_t keylen = 0;
     size_t fromlen = 0;
     size_t tolen = 0;
     size_t linelen = 0;
@@ -72,7 +75,8 @@ DefFile *DefFile_create(const char *filename)
 		if (buf[0] != '$') continue;
 		if (buf[2] != '$')
 		{
-		    fprintf(stderr, "%s:%u: malformed line", filename, lineno);
+		    fprintf(stderr, "%s:%u: malformed line\n",
+			    filename, lineno);
 		    goto error;
 		}
 		switch (buf[1])
@@ -82,29 +86,39 @@ DefFile *DefFile_create(const char *filename)
 		    case 'w':
 			type = DT_CHAR32; break;
 		    default:
-			fprintf(stderr, "%s:%u: malformed line",
+			fprintf(stderr, "%s:%u: malformed line\n",
 				filename, lineno);
 			goto error;
 		}
-		fromlen = strlen(buf+3);
-		if (fromlen)
+		keylen = strlen(buf+3);
+		if (keylen)
 		{
-		    from = xmalloc(fromlen+1);
-		    memcpy(from, buf+3, fromlen+1);
+		    key = xmalloc(keylen+1);
+		    memcpy(key, buf+3, keylen+1);
 		}
-		else from = 0;
-		parsestate = PS_FROM;
+		else
+		{
+		    fprintf(stderr, "%s:%u: missing key\n", filename, lineno);
+		    goto error;
+		}
+		parsestate = haveeol ? PS_FROM : PS_KEY;
+		break;
+
+	    case PS_KEY:
+		linelen = strlen(buf);
+		newlen = keylen + linelen;
+		if (newlen != keylen)
+		{
+		    key = xrealloc(key, newlen+1);
+		    memcpy(key+keylen, buf, linelen+1);
+		    keylen = newlen;
+		}
+		if (haveeol) parsestate = PS_FROM;
 		break;
 
 	    case PS_FROM:
 		if (hadeol && buf[0] == '.' && !buf[1])
 		{
-		    if (!fromlen)
-		    {
-			fprintf(stderr, "%s:%u: empty original text or id",
-				filename, lineno);
-			goto error;
-		    }
 		    parsestate = PS_TO;
 		    cleareol = 1;
 		    continue;
@@ -128,13 +142,15 @@ DefFile *DefFile_create(const char *filename)
 				capa * sizeof *self->entries);
 		    }
 		    DefEntry *entry = self->entries + self->len;
-		    unsigned char bucket = hash(from);
+		    unsigned char bucket = hash(key);
 		    entry->next = self->bucket[bucket];
 		    self->bucket[bucket] = entry;
+		    entry->key = key;
 		    entry->from = from;
 		    entry->to = to;
 		    entry->type = type;
 		    entry->id = self->len++;
+		    key = 0;
 		    from = 0;
 		    to = 0;
 		    fromlen = 0;
@@ -185,10 +201,15 @@ const DefEntry *DefFile_byKey(const DefFile *self, const char *key)
     DefEntry *entry = self->bucket[hash(key)];
     while (entry)
     {
-	if (!strcmp(entry->from, key)) break;
+	if (!strcmp(entry->key, key)) break;
 	entry = entry->next;
     }
     return entry;
+}
+
+const char *DefEntry_key(const DefEntry *self)
+{
+    return self->key;
 }
 
 const char *DefEntry_from(const DefEntry *self)

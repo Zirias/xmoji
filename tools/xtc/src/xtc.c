@@ -10,7 +10,7 @@ static void usage(const char *name)
 {
     fprintf(stderr, "usage: %s source outname namespace strings.def\n"
 		    "       %s update lang strings.def\n"
-		    "       %s compile strings.bin strings.def\n",
+		    "       %s compile outdir lang strings.def\n",
 		    name, name, name);
     exit(EXIT_FAILURE);
 }
@@ -87,19 +87,19 @@ static int dosource(int argc, char **argv)
     for (unsigned i = 0; i < DefFile_len(df); ++i)
     {
 	const DefEntry *entry = DefFile_byId(df, i);
-	const char *from = DefEntry_from(entry);
+	const char *key = DefEntry_key(entry);
 	const char *to = DefEntry_to(entry);
-	fprintf(hdr, "    %s_txt_%s,\n", argv[3], from);
+	fprintf(hdr, "    %s_txt_%s,\n", argv[3], key);
 	switch (DefEntry_type(entry))
 	{
 	    case DT_CHAR:
-		fprintf(data, "static const char %s[] = \"", from);
+		fprintf(data, "static const char %s[] = \"", key);
 		fputcstr(data, to);
 		fputs("\";\n", data);
 		break;
 
 	    case DT_CHAR32:
-		fprintf(data, "UniStrVal(%s, U\"", from);
+		fprintf(data, "UniStrVal(%s, U\"", key);
 		fputcstr(data, to);
 		fputs("\");\n", data);
 		break;
@@ -120,7 +120,7 @@ static int dosource(int argc, char **argv)
 	    "\n    &%s_v"
 	};
 	int fidx = ((DefEntry_type(entry) == DT_CHAR32) << 1) + !i;
-	fprintf(data, valfmt[fidx], DefEntry_from(entry));
+	fprintf(data, valfmt[fidx], DefEntry_key(entry));
     }
     fprintf(data, "\n};\n\nconst void *%s_get(unsigned id)\n"
 	    "{\n"
@@ -133,6 +133,7 @@ static int dosource(int argc, char **argv)
 done:
     if (data) fclose(data);
     if (hdr) fclose(hdr);
+    free(namebuf);
     DefFile_destroy(df);
     return rc;
 }
