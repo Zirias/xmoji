@@ -35,14 +35,8 @@ static int read32le(unsigned *val, FILE *in)
 
 static char *xctname(const char *name, const char *lang)
 {
-    char *undsc = strchr(lang, '_');
-    char *at = strchr(lang, '@');
-
-    size_t langlen = 0;
-    if (undsc) langlen = (size_t)(undsc - lang);
-    else if (at) langlen = (size_t)(at - lang);
-    else langlen = strlen(lang);
     size_t nmlen = strlen(name);
+    size_t langlen = strcspn(lang, "_.@");
 
     size_t xctlen = sizeof TRANSDIR + nmlen + langlen + 5;
     char *xctnm = PSC_malloc(xctlen+1);
