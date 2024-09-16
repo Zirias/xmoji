@@ -334,7 +334,8 @@ static int startup(void *app)
 	    onwaitafterchanged, 0);
 
     /* Load translations */
-    Translator *tr = Translator_create("xmoji-ui", LOCALEDIR, XMU_get);
+    Translator *tr = Translator_create("xmoji-ui",
+	    X11App_lcMessages(), XMU_get);
     self->uitexts = tr;
 
     /* Initialize commands */

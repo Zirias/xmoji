@@ -16,6 +16,7 @@ defaults.mk
 *.prg
 *.html
 *.path-cache
+*.xct
 /*.cfg
 /bin/
 /lib/

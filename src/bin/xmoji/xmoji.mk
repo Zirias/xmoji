@@ -3,6 +3,9 @@ GEN_BIN2CSTR_args=	$1 $2
 GEN_EMOJIGEN_tool=	$(EMOJIGEN_TARGET)
 GEN_TEXTS_tool=		$(XTC_TARGET)
 GEN_TEXTS_args=		source $(basename $1) XMU $2
+GEN_TRANS_tool=		$(XTC_TARGET)
+GEN_TRANS_args=		compile $(dir $1) \
+			$(lastword $(subst -, ,$(basename $1))) $2
 
 xmoji_VERSION=		0.7
 xmoji_DEFINES=		-DLOCALEDIR=\"$(localedir)\" \
@@ -60,7 +63,10 @@ xmoji_BIN2CSTR_FILES=	icon256.h:icons/256x256/xmoji.png \
 			icon32.h:icons/32x32/xmoji.png \
 			icon16.h:icons/16x16/xmoji.png
 xmoji_EMOJIGEN_FILES=	emojidata.h:contrib/emoji-test.txt
+xmoji_transdir=		$(xmoji_datadir)/translations
 xmoji_TEXTS_FILES=	texts.c:translations/xmoji-ui.def
+xmoji_TRANSLATIONS=	xmoji-ui
+xmoji_LANGUAGES=	de
 xmoji_LDFLAGS=		-Wl,--as-needed
 xmoji_LIBS=		m
 xmoji_PKGDEPS=		fontconfig \
@@ -79,6 +85,7 @@ xmoji_SUB_LIST=		bindir=$(bindir)
 xmoji_ICONSIZES=	16x16 32x32 48x48 256x256
 xmoji_DESKTOPFILE=	xmoji
 xmoji_DOCS=		README.md
+xmoji_PREBUILD=		#
 
 ifeq ($(TRACE),1)
 xmoji_DEFINES+=		-DTRACE_X11_REQUESTS
@@ -114,6 +121,17 @@ else
 xmoji_PKGDEPS+=		posercore >= 1.2
 endif
 
+ifeq ($(WITH_NLS),1)
+xmoji_GEN+=		TRANS
+xmoji_TRANS_FILES=	$(foreach \
+	t,$(xmoji_TRANSLATIONS),$(foreach l,$(xmoji_LANGUAGES),\
+	translations/$t-$l.xct:translations/$t.def:translations/$t-$l.def))
+xmoji_EXTRADIRS=	trans
+xmoji_trans_FILES=	$(filter %.xct,$(subst :, ,$(xmoji_TRANS_FILES)))
+xmoji_DEFINES+=		-DWITH_NLS -DTRANSDIR=\"$(xmoji_transdir)\"
+xmoji_PREBUILD+=	$(addprefix $(xmoji_SRCDIR)/,$(xmoji_trans_FILES))
+endif
+
 ifeq ($(WITH_SVG),1)
 xmoji_MODULES+=		nanosvg \
 			svghooks
@@ -136,3 +154,4 @@ xmoji_DEFINES+=		-DHAVE_CHAR32_T
 endif
 
 $(call binrules,xmoji)
+xmoji_prebuild:		$(xmoji_PREBUILD)

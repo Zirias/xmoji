@@ -377,3 +377,9 @@ void X11App_setWmProperties(Window *win)
 		A(_NET_WM_PID), XCB_ATOM_CARDINAL, 32, 1, &instance->pidprop),
 	    "Cannot set _NET_WM_PID for 0x%x", (unsigned)w);
 }
+
+const char *X11App_lcMessages(void)
+{
+    if (!instance) return 0;
+    return instance->locale.lc_messages;
+}

@@ -41,4 +41,6 @@ void X11Error_ignore(X11Error *self) CMETHOD;
 
 void X11App_showWaitCursor(void);
 
+const char *X11App_lcMessages(void);
+
 #endif
