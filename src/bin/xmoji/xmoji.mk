@@ -155,3 +155,8 @@ endif
 
 $(call binrules,xmoji)
 xmoji_prebuild:		$(xmoji_PREBUILD)
+
+update-translations:	$(xmoji_SRCDIR)/translations/xmoji-ui.def $(XTC_TARGET)
+	$(foreach l,$(xmoji_LANGUAGES),$(XTC_TARGET) update $l $<;)
+
+.PHONY:	update-translations
