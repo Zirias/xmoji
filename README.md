@@ -234,6 +234,11 @@ The following build options are available:
   When disabled, poser must be installed and will be linked as a shared
   library. Default: `on`.
 
+* `WITH_NLS` (bool): Support loading translations for the current locale
+  (from `LC_MESSAGES`) at runtime and build/install the existing translation
+  files. See [TRANSLATE](TRANSLATE.md) for how to add new translations.
+  Default: `on`.
+
 * `WITH_SVG` (bool): Enable support for fonts with SVG glyphs. When enabled,
   freetype >= 2.12 is required and the bundled
   [nanosvg](https://github.com/memononen/nanosvg) is built for rasterizing
