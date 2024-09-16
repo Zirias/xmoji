@@ -1,6 +1,6 @@
 #include "deffile.h"
 
-#include "xmalloc.h"
+#include "util.h"
 
 #include <stdio.h>
 #include <stdlib.h>

@@ -1,7 +1,8 @@
 #define _POSIX_C_SOURCE 200112L
 
+#include "compiler.h"
 #include "deffile.h"
-#include "xmalloc.h"
+#include "util.h"
 
 #include <errno.h>
 #include <ctype.h>
@@ -9,15 +10,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
-
-static void usage(const char *name)
-{
-    fprintf(stderr, "usage: %s source outname namespace strings.def\n"
-		    "       %s update lang strings.def\n"
-		    "       %s compile outdir lang strings.def\n",
-		    name, name, name);
-    exit(EXIT_FAILURE);
-}
 
 static void fputcstr(FILE *f, const char *str)
 {
@@ -40,23 +32,6 @@ static void fputcstr(FILE *f, const char *str)
 		fputc(*c, f);
 	}
     }
-}
-
-static char *applylang(const char *filename, const char *lang)
-{
-    char *dot = strrchr(filename, '.');
-    size_t nmlen = strlen(filename);
-    size_t baselen = dot ? (size_t)(dot - filename) : nmlen;
-    size_t extlen = dot ? nmlen - baselen : 0;
-    size_t langlen = strlen(lang);
-    size_t reslen = nmlen + langlen + 1;
-    char *res = xmalloc(reslen+1);
-    memcpy(res, filename, baselen);
-    res[baselen] = '-';
-    memcpy(res+baselen+1, lang, langlen);
-    if (extlen) memcpy(res+baselen+langlen+1, dot, extlen);
-    res[reslen] = 0;
-    return res;
 }
 
 static int dosource(int argc, char **argv)
@@ -165,7 +140,7 @@ static int doupdate(int argc, char **argv)
     int rc = EXIT_FAILURE;
     const char *lang = argv[2];
     const char *defname = argv[3];
-    char *langname = applylang(defname, lang);
+    char *langname = derivename(defname, lang, 0, 0);
     DefFile *df = 0;
     DefFile *ldf = 0;
     FILE *out = 0;
@@ -266,13 +241,6 @@ done:
     DefFile_destroy(df);
     free(langname);
     return rc;
-}
-
-static int docompile(int argc, char **argv)
-{
-    (void)argc;
-    (void)argv;
-    return EXIT_FAILURE;
 }
 
 int main(int argc, char **argv)

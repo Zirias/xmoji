@@ -1,5 +1,6 @@
-xtc_MODULES=	deffile \
-		xmalloc \
+xtc_MODULES=	compiler \
+		deffile \
+		util \
 		xtc
 
 $(call binrules,xtc)
