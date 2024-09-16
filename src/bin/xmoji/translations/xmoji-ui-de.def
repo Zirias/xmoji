@@ -1,0 +1,259 @@
+$w$about
+About
+.
+Über
+.
+
+$w$aboutdesc
+About Xmoji
+.
+Über Xmoji
+.
+
+$w$settings
+Settings
+.
+Einstellungen
+.
+
+$w$settingsdesc
+Configure runtime settings
+.
+Laufzeiteinstellungen anpassen
+.
+
+$w$quit
+Quit
+.
+Beenden
+.
+
+$w$quitdesc
+Exit the application
+.
+Applikation verlassen
+.
+
+$w$searchText
+Search
+.
+Suchen
+.
+
+$w$clickToSearch
+Click to type and search ...
+.
+Hier klicken um zu tippen und suchen ...
+.
+
+$w$recentText
+Recently used
+.
+Zuletzt verwendet
+.
+
+$c$aboutDlgTitle
+About Xmoji
+.
+Über Xmoji
+.
+
+$w$abouttxt
+X11 Emoji Keyboard
+.
+X11 Emoji-Tastatur
+.
+
+$w$licenselbl
+License:
+.
+Lizenz:
+.
+
+$w$authorlbl
+Author:
+.
+Autor:
+.
+
+$w$ok
+OK
+.
+OK
+.
+
+$c$settingsDlgTitle
+Xmoji settings
+.
+Xmoji Einstellungen
+.
+
+$w$scaleDesc
+Scale factor for the size of the emoji font.
+Tiny means the default text character size.
+.
+Skalierungsfaktor für die Größe der Emoji Schriftart.
+Winzig bedeutet die gleiche Größe wie ein Textzeichen.
+.
+
+$w$scale
+Emoji scale:
+.
+Emoji-Skalierung:
+.
+
+$w$scaleTiny
+Tiny
+.
+Winzig
+.
+
+$w$scaleSmall
+Small
+.
+Klein
+.
+
+$w$scaleMedium
+Medium
+.
+Mittel
+.
+
+$w$scaleLarge
+Large
+.
+Groß
+.
+
+$w$scaleHuge
+Huge
+.
+Riesig
+.
+
+$w$injectFlagsDesc
+These are workarounds/hacks to help some clients receiving the
+faked key press events to correctly display emojis.
+
+* Pre-ZWJ: If the emoji is a ZWJ sequence, prepend another
+ZWJ. This is nonstandard, but helps some clients. If none of
+the space options is active, a ZW space is also prepended.
+* Add space: Add a regular space after each emoji
+* Add ZW space: Add a zero-width space after each emoji
+.
+Diese Flags sind Workarounds um manche empfangenden Clients dabei
+zu unterstützen, die simulierten Tastaturereignisse korrekt zu
+interpretieren.
+
+* Pre-ZWJ: Wenn das Emoji eine ZWJ-Sequenz ist, stelle ein weiteres
+ZWJ (zero-width joiner) voran. Das ist nicht standardkonform, hilft
+aber manchen Clients. Wenn keine der Trenn-Optionen aktiv ist wird
+außerdem ein Nullbreitentrenner (ZW space) vorangestellt.
+* Trenner: Zusätzliches Leerzeichen nach jedem Emoji
+* NullTrenner: Zusätzlicher Nullbreitentrenner (ZW space) nach
+jedem Emoji
+.
+
+$w$injectFlags
+Key injection flags:
+.
+Tastatursimulationsflags:
+.
+
+$w$flagsNone
+None
+.
+Keine
+.
+
+$w$flagsSpace
+Add space
+.
+Trenner
+.
+
+$w$flagsZws
+Add ZW space
+.
+NullTrenner
+.
+
+$w$flagsZwj
+Pre-ZWJ
+.
+Pre-ZWJ
+.
+
+$w$flagsZwjSpace
+Pre-ZWJ + add space
+.
+Pre-ZWJ + Trenner
+.
+
+$w$flagsZwjZws
+Pre-ZWJ + add ZW space
+.
+Pre-ZWJ + NullTrenner
+.
+
+$w$waitBeforeDesc
+Sending emojis as faked X11 key events requires temporarily
+changing the keyboard mapping.
+This is the time (in milliseconds) to wait after changing the
+mapping and before sending the key press events.
+This might help prevent possible race condition bugs in
+clients between applying the new mapping and processing
+the events.
+.
+Um Emojis als simulierte Tastaturereignisse zu senden muss
+die Tastaturbelegung zeitweilig geändert werden.
+Diese Einstellung ist die Wartezeit (in Millisekunden) nach
+Anpassung der Tastaturbelegung und bevor die simulierten
+Ereignisse verschickt werden.
+Die Wartezeit kann Fehlern durch Wettlaufsituationen (Race
+conditions) zwischen der Anwendung der neuen Tastaturbelegung
+und der Verarbeitung der Ereignisse vorbeugen.
+.
+
+$w$waitBefore
+Wait before sending keys (ms):
+.
+Wartezeit vor Ereignissen (ms):
+.
+
+$w$waitAfterDesc
+Sending emojis as faked X11 key events requires temporarily
+changing the keyboard mapping.
+This is the time (in milliseconds) to wait after sending the
+key press events and before resetting the keyboard mapping.
+Some clients might apply a new keyboard map before processing
+all queued events, so if you see completely unrelated
+characters instead of the expected emojis, try increasing this
+value.
+Note that if you see multiple emojis instead of just one, this
+value is unrelated, but the client has issues correctly
+interpreting an emoji consisting of multiple codepoints.
+.
+Um Emojis als simulierte Tastaturereignisse zu senden muss
+die Tastaturbelegung zeitweilig geändert werden.
+Diese Einstellung ist die Wartezeit (in Millisekunden) nach
+Versenden der simulierten Ereignisse und bevor die
+Tastaturbelegung wieder zurückgesetzt wird.
+Manche Clients wenden Änderungen der Tastaturbelegung sofort
+an, auch bevor alle gepufferten Ereignisse abgearbeitet wurden.
+Sollten also in einer Anwendung völlig andere Zeichen als die
+erwarteten Emojis erscheinen, kann es helfen, diese Wartezeit
+zu erhöhen.
+Sollten allerdings mehrere Emojis erscheinen obwohl nur eines
+versendet wurde, wird diese Einstellung nicht helfen. In diesem
+Fall hat der empfangende Client Schwierigkeiten, Emojis, die
+aus mehr als einem Codepoint bestehen, korrekt zu verarbeiten.
+.
+
+$w$waitAfter
+Wait after sending keys (ms):
+.
+Wartezeit nach Ereignissen (ms):
+.
+
