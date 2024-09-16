@@ -1,7 +1,9 @@
 [Desktop Entry]
 Name=Xmoji
 GenericName=X11 Emoji Keyboard
+GenericName[de]=X11 Emoji-Tastatur
 Comment=Enter emojis faking keyboard input
+Comment[de]=Emojieingabe durch simulierte Tastaturereignisse
 Exec=%%bindir%%/xmoji
 Icon=xmoji
 StartupNotify=true
