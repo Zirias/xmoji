@@ -1,10 +1,14 @@
+#define _POSIX_C_SOURCE 200112L
+
 #include "deffile.h"
 #include "xmalloc.h"
 
+#include <errno.h>
 #include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
 
 static void usage(const char *name)
 {
@@ -38,6 +42,23 @@ static void fputcstr(FILE *f, const char *str)
     }
 }
 
+static char *applylang(const char *filename, const char *lang)
+{
+    char *dot = strrchr(filename, '.');
+    size_t nmlen = strlen(filename);
+    size_t baselen = dot ? (size_t)(dot - filename) : nmlen;
+    size_t extlen = dot ? nmlen - baselen : 0;
+    size_t langlen = strlen(lang);
+    size_t reslen = nmlen + langlen + 1;
+    char *res = xmalloc(reslen+1);
+    memcpy(res, filename, baselen);
+    res[baselen] = '-';
+    memcpy(res+baselen+1, lang, langlen);
+    if (extlen) memcpy(res+baselen+langlen+1, dot, extlen);
+    res[reslen] = 0;
+    return res;
+}
+
 static int dosource(int argc, char **argv)
 {
     if (argc != 5) usage(argv[0]);
@@ -50,21 +71,21 @@ static int dosource(int argc, char **argv)
     DefFile *df = DefFile_create(argv[4]);
     if (!df)
     {
-	fprintf(stderr, "Error reading `%s'.", argv[4]);
+	fprintf(stderr, "Error reading `%s'\n", argv[4]);
 	goto done;
     }
     memcpy(namebuf+namelen, ".c", 3);
     data = fopen(namebuf, "w");
     if (!data)
     {
-	fprintf(stderr, "Error opening `%s' for writing.", namebuf);
+	fprintf(stderr, "Error opening `%s' for writing\n", namebuf);
 	goto done;
     }
     memcpy(namebuf+namelen, ".h", 3);
     hdr = fopen(namebuf, "w");
     if (!hdr)
     {
-	fprintf(stderr, "Error opening `%s' for writing.", namebuf);
+	fprintf(stderr, "Error opening `%s' for writing\n", namebuf);
 	goto done;
     }
 
@@ -140,9 +161,111 @@ done:
 
 static int doupdate(int argc, char **argv)
 {
-    (void)argc;
-    (void)argv;
-    return EXIT_FAILURE;
+    if (argc != 4) usage(argv[0]);
+    int rc = EXIT_FAILURE;
+    const char *lang = argv[2];
+    const char *defname = argv[3];
+    char *langname = applylang(defname, lang);
+    DefFile *df = 0;
+    DefFile *ldf = 0;
+    FILE *out = 0;
+
+    df = DefFile_create(defname);
+    if (!df)
+    {
+	fprintf(stderr, "Error reading `%s'\n", defname);
+	goto done;
+    }
+
+    struct stat st;
+    errno = 0;
+    if (stat(langname, &st) == 0)
+    {
+	ldf = DefFile_create(langname);
+	if (!ldf)
+	{
+	    fprintf(stderr, "Error reading `%s'\n"
+		    "Try manually fixing or deleting that file\n", langname);
+	    goto done;
+	}
+    }
+    else if (errno != ENOENT)
+    {
+	fprintf(stderr, "Cannot stat `%s'\n"
+		"Check permissions and filesystem consistency\n", langname);
+	goto done;
+    }
+
+    unsigned deflen = DefFile_len(df);
+    unsigned langlen = 0;
+    if (ldf) langlen = DefFile_len(ldf);
+
+    if (langlen == deflen)
+    {
+	int changed = 0;
+	for (unsigned i = 0; i < deflen; ++i)
+	{
+	    const DefEntry *entry = DefFile_byId(df, i);
+	    const DefEntry *lentry = DefFile_byKey(ldf, DefEntry_key(entry));
+	    if (!lentry || strcmp(DefEntry_to(entry), DefEntry_from(lentry)))
+	    {
+		changed = 1;
+		break;
+	    }
+	}
+	if (!changed)
+	{
+	    rc = EXIT_SUCCESS;
+	    goto done;
+	}
+    }
+
+    out = fopen(langname, "w");
+    if (!out)
+    {
+	fprintf(stderr, "Error opening `%s' for writing\n", langname);
+	goto done;
+    }
+
+    unsigned updated = 0;
+    for (unsigned i = 0; i < deflen; ++i)
+    {
+	const DefEntry *entry = DefFile_byId(df, i);
+	static const char typechar[] = { 'c', 'w' };
+	const char *key = DefEntry_key(entry);
+	const char *from = DefEntry_to(entry);
+	const char *to = 0;
+	if (ldf)
+	{
+	    const DefEntry *lentry = DefFile_byKey(ldf, key);
+	    if (lentry && !strcmp(from, DefEntry_from(lentry)))
+	    {
+		to = DefEntry_to(lentry);
+	    }
+	}
+	if (to)
+	{
+	    fprintf(out, "$%c$%s\n%s\n.\n%s\n.\n\n",
+		    typechar[DefEntry_type(entry)], key, from, to);
+	}
+	else
+	{
+	    fprintf(out, "$%c$%s\n%s\n.\n.\n\n",
+		    typechar[DefEntry_type(entry)], key, from);
+	    ++updated;
+	}
+    }
+
+    printf("Updated or added %u translations in `%s'\n"
+	    "Edit this file to complete the translation\n", updated, langname);
+    rc = EXIT_SUCCESS;
+
+done:
+    if (out) fclose(out);
+    DefFile_destroy(ldf);
+    DefFile_destroy(df);
+    free(langname);
+    return rc;
 }
 
 static int docompile(int argc, char **argv)

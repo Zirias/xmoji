@@ -54,7 +54,7 @@ DefFile *DefFile_create(const char *filename)
     DefType type = DT_CHAR;
     int haveeol = 0;
     int hadeol = 0;
-    int cleareol = 0;
+    int firstline = 0;
 
     DefFile *self = xmalloc(sizeof *self);
     memset(self, 0, sizeof *self);
@@ -63,8 +63,6 @@ DefFile *DefFile_create(const char *filename)
     for (unsigned lineno = 0; fgets(buf, sizeof buf, f); lineno += haveeol)
     {
 	hadeol = haveeol;
-	if (cleareol) hadeol = 0;
-	cleareol = 0;
 	char *nl = strchr(buf, '\n');
 	haveeol = !!nl;
 	*nl = 0;
@@ -102,6 +100,7 @@ DefFile *DefFile_create(const char *filename)
 		    goto error;
 		}
 		parsestate = haveeol ? PS_FROM : PS_KEY;
+		firstline = 1;
 		break;
 
 	    case PS_KEY:
@@ -120,9 +119,11 @@ DefFile *DefFile_create(const char *filename)
 		if (hadeol && buf[0] == '.' && !buf[1])
 		{
 		    parsestate = PS_TO;
-		    cleareol = 1;
+		    firstline = 1;
 		    continue;
 		}
+		if (firstline) hadeol = 0;
+		firstline = 0;
 		linelen = strlen(buf);
 		newlen = fromlen + linelen + hadeol;
 		if (newlen == fromlen) continue;
@@ -158,6 +159,8 @@ DefFile *DefFile_create(const char *filename)
 		    parsestate = PS_START;
 		    continue;
 		}
+		if (firstline) hadeol = 0;
+		firstline = 0;
 		linelen = strlen(buf);
 		newlen = tolen + linelen + hadeol;
 		if (newlen == tolen) continue;
