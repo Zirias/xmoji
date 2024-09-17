@@ -311,3 +311,38 @@ Wait after sending keys (ms):
 Wartezeit nach Ereignissen (ms):
 .
 
+$w$searchModeDesc
+Select whether searching will look for the original english emoji
+names, the translated emoji names, or both. If no translation is
+loaded, the original names are always considered.
+.
+Auswählen, ob die Suche nach den originalen englischen
+Emoji-Namen, den übersetzten Namen, oder beidem suchen
+soll. Wenn keine Übersetzung geladen ist, werden die
+originalen Namen immer durchsucht.
+.
+
+$w$searchMode
+Emoji search mode:
+.
+Emoji Suchmodus:
+.
+
+$w$searchModeOriginal
+Original/English
+.
+Original/Englisch
+.
+
+$w$searchModeTranslated
+Translated
+.
+Übersetzt
+.
+
+$w$searchModeBoth
+Both
+.
+Beides
+.
+

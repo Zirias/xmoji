@@ -57,6 +57,9 @@ typedef struct Xmoji
     Dropdown *injectFlagsBox;
     SpinBox *waitBeforeBox;
     SpinBox *waitAfterBox;
+#ifdef WITH_NLS
+    Dropdown *searchModeBox;
+#endif
 } Xmoji;
 
 static void destroy(void *app)
@@ -134,12 +137,17 @@ static void onsearch(void *receiver, void *sender, void *args)
     Xmoji *self = receiver;
     const UniStr *str = args;
     size_t nresults = 0;
+#ifdef WITH_NLS
+    EmojiSearchMode mode = Config_emojiSearchMode(self->config);
+#else
+    EmojiSearchMode mode = ESM_ORIG;
+#endif
     const Emoji *results[MAXSEARCHRESULTS];
     Widget_unselect(self->tabs);
     if (str && UniStr_len(str) >= 3)
     {
 	nresults = Emoji_search(results, MAXSEARCHRESULTS, str,
-		self->emojitexts, Config_emojiSearchMode(self->config));
+		self->emojitexts, mode);
     }
     for (size_t i = 0; i < MAXSEARCHRESULTS; ++i)
     {
@@ -323,6 +331,38 @@ static void onwaitafterboxchanged(void *receiver, void *sender, void *args)
     Config_setWaitAfter(self->config, *ms);
 }
 
+#ifdef WITH_NLS
+static unsigned searchmodeindex(EmojiSearchMode mode)
+{
+    unsigned index = mode - 1;
+    if (index > 2) index = 2;
+    return index;
+}
+
+static void onsearchmodechanged(void *receiver, void *sender, void *args)
+{
+    (void)sender;
+
+    Xmoji *self = receiver;
+    ConfigChangedEventArgs *ea = args;
+
+    if (ea->external)
+    {
+	Dropdown_select(self->searchModeBox,
+		searchmodeindex(Config_emojiSearchMode(self->config)));
+    }
+}
+
+static void onsearchmodeboxchanged(void *receiver, void *sender, void *args)
+{
+    (void)sender;
+
+    Xmoji *self = receiver;
+    unsigned *val = args;
+    Config_setEmojiSearchMode(self->config, *val + 1);
+}
+#endif
+
 static int startup(void *app)
 {
     Xmoji *self = Object_instance(app);
@@ -337,6 +377,10 @@ static int startup(void *app)
 	    onwaitbeforechanged, 0);
     PSC_Event_register(Config_waitAfterChanged(self->config), self,
 	    onwaitafterchanged, 0);
+#ifdef WITH_NLS
+    PSC_Event_register(Config_emojiSearchModeChanged(self->config), self,
+	    onsearchmodechanged, 0);
+#endif
 
     /* Load translations */
     Translator *tr = Translator_create("xmoji-ui",
@@ -721,6 +765,26 @@ static int startup(void *app)
 	    onwaitafterboxchanged, 0);
     Widget_show(row);
     Table_addRow(table, row);
+#ifdef WITH_NLS
+    row = TableRow_create(table);
+    Widget_setTooltip(row, TR(tr, XMU_txt_searchModeDesc), 0);
+    label = TextLabel_create("searchModeLabel", row);
+    TextLabel_setText(label, TR(tr, XMU_txt_searchMode));
+    Widget_setAlign(label, AH_RIGHT|AV_MIDDLE);
+    Widget_show(label);
+    HBox_addWidget(row, label);
+    dd = Dropdown_create("searchModeBox", row);
+    Dropdown_addOption(dd, TR(tr, XMU_txt_searchModeOriginal));
+    Dropdown_addOption(dd, TR(tr, XMU_txt_searchModeTranslated));
+    Dropdown_addOption(dd, TR(tr, XMU_txt_searchModeBoth));
+    Dropdown_select(dd, searchmodeindex(Config_emojiSearchMode(self->config)));
+    Widget_show(dd);
+    HBox_addWidget(row, dd);
+    self->searchModeBox = dd;
+    PSC_Event_register(Dropdown_selected(dd), self, onsearchmodeboxchanged, 0);
+    Widget_show(row);
+    Table_addRow(table, row);
+#endif
     row = TableRow_create(table);
     Widget *dummy = Widget_create("dummy", row);
     HBox_addWidget(row, dummy);

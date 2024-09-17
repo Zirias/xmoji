@@ -191,3 +191,31 @@ $w$waitAfter
 .
 Wait after sending keys (ms):
 .
+
+$w$searchModeDesc
+.
+Select whether searching will look for the original english emoji
+names, the translated emoji names, or both. If no translation is
+loaded, the original names are always considered.
+.
+
+$w$searchMode
+.
+Emoji search mode:
+.
+
+$w$searchModeOriginal
+.
+Original/English
+.
+
+$w$searchModeTranslated
+.
+Translated
+.
+
+$w$searchModeBoth
+.
+Both
+.
+
