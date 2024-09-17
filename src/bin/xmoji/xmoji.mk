@@ -1,6 +1,7 @@
 GEN_BIN2CSTR_tool=	$(BIN2CSTR_TARGET)
 GEN_BIN2CSTR_args=	$1 $2
 GEN_EMOJIGEN_tool=	$(EMOJIGEN_TARGET)
+GEN_EMOJIGEN_args=	source $1 $2
 GEN_TEXTS_tool=		$(XTC_TARGET)
 GEN_TEXTS_args=		source $(basename $1) XMU $2
 GEN_TRANS_tool=		$(XTC_TARGET)
