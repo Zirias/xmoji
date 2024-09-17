@@ -21,8 +21,9 @@ void usage(const char *name)
 {
     fprintf(stderr, "usage: %s source outname emoji-test.txt\n"
 		    "       %s groupnames strings.def strings.def.in emoji-test.txt\n"
+		    "       %s emojinames strings.def emoji-test.txt\n"
 		    "       %s translate strings-lang.def emoji-test.txt lang.xml [lang.xml ...]\n",
-		    name, name, name);
+		    name, name, name, name);
     exit(EXIT_FAILURE);
 }
 

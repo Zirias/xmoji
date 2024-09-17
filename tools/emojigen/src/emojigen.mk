@@ -1,4 +1,5 @@
 emojigen_MODULES=	emojigen \
+			emojinames \
 			emojireader \
 			groupnames \
 			sourcegen \
