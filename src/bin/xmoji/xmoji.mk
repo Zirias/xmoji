@@ -4,6 +4,10 @@ GEN_EMOJIGEN_tool=	$(EMOJIGEN_TARGET)
 GEN_EMOJIGEN_args=	source $1 $2
 GEN_EMOJIGRP_tool=	$(EMOJIGEN_TARGET)
 GEN_EMOJIGRP_args=	groupnames $1 $2 $3
+GEN_EMOJINM_tool=	$(EMOJIGEN_TARGET)
+GEN_EMOJINM_args=	emojinames $1 $2
+GEN_EMOJITRANS_tool=	$(EMOJIGEN_TARGET)
+GEN_EMOJITRANS_args=	translate $1 $2 $3 $4
 GEN_TEXTS_tool=		$(XTC_TARGET)
 GEN_TEXTS_args=		source $(basename $1) XMU $2
 GEN_TRANS_tool=		$(XTC_TARGET)
@@ -71,7 +75,7 @@ xmoji_EMOJIGEN_FILES=	emojidata.h:$(xmoji_EMOJIDATA)
 xmoji_EMOJIGRP_FILES=	$(xmoji_UITXT):$(xmoji_UITXT).in:$(xmoji_EMOJIDATA)
 xmoji_transdir=		$(xmoji_datadir)/translations
 xmoji_TEXTS_FILES=	texts.c:$(xmoji_UITXT)
-xmoji_TRANSLATIONS=	xmoji-ui
+xmoji_TRANSLATIONS=	xmoji-ui xmoji-emojis
 xmoji_LANGUAGES=	de
 xmoji_LDFLAGS=		-Wl,--as-needed
 xmoji_LIBS=		m
@@ -128,7 +132,14 @@ xmoji_PKGDEPS+=		posercore >= 1.2
 endif
 
 ifeq ($(WITH_NLS),1)
-xmoji_GEN+=		TRANS
+xmoji_GEN+=		EMOJINM EMOJITRANS TRANS
+xmoji_EMOJINM_FILES=	translations/xmoji-emojis.def:$(xmoji_EMOJIDATA)
+xmoji_CLDR=		contrib/cldr/annotations
+xmoji_cldrfiles=	$(xmoji_CLDR)/$1.xml:$(xmoji_CLDR)Derived/$1.xml
+xmoji_emojitexts=	translations/xmoji-emojis-$1.def:$(xmoji_EMOJIDATA)
+xmoji_emojitrans=	$(call xmoji_emojitexts,$1):$(call xmoji_cldrfiles,$1)
+xmoji_EMOJITRANS_FILES=	$(foreach l,$(xmoji_LANGUAGES),$(call \
+			xmoji_emojitrans,$l):translations/xmoji-emojis.def)
 xmoji_TRANS_FILES=	$(foreach \
 	t,$(xmoji_TRANSLATIONS),$(foreach l,$(xmoji_LANGUAGES),\
 	translations/$t-$l.xct:translations/$t.def:translations/$t-$l.def))

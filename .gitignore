@@ -37,6 +37,8 @@ icon16.h
 texts.c
 texts.h
 xmoji.desktop
+xmoji-emojis.def
+xmoji-emojis-*.def
 xmoji-ui.def
 .freetype-2.*.build
 freetype-2.*
