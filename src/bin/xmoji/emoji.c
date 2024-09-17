@@ -88,7 +88,7 @@ size_t Emoji_search(const Emoji **results, size_t maxresults,
 	if (mode & ESM_ORIG)
 	{
 	    const UniStr *name = NTR(tr, emojis[i].name);
-	    if (UniStr_containslc(name, pattern))
+	    if (name && UniStr_containslc(name, pattern))
 	    {
 		results[nresults++] = emojis + i;
 		continue;
@@ -96,8 +96,8 @@ size_t Emoji_search(const Emoji **results, size_t maxresults,
 	}
 	if (mode & ESM_TRANS)
 	{
-	    const UniStr *name = TR(tr, emojis[i].name);
-	    if (UniStr_containslc(name, pattern))
+	    const UniStr *name = FTR(tr, emojis[i].name);
+	    if (name && UniStr_containslc(name, pattern))
 	    {
 		results[nresults++] = emojis + i;
 		continue;

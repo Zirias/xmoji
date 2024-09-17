@@ -116,6 +116,13 @@ Translator *Translator_create(const char *name, const char *lang,
     return self;
 }
 
+const void *Translator_getText(const Translator *self, unsigned id)
+{
+    const char *text = Translator_getTranslation(self, id);
+    if (!text) text = Translator_getOriginal(self, id);
+    return text;
+}
+
 const void *Translator_getTranslation(const Translator *self, unsigned id)
 {
 #ifdef WITH_NLS
@@ -125,7 +132,7 @@ const void *Translator_getTranslation(const Translator *self, unsigned id)
 	return self->translations[id].str;
     }
 #endif
-    return self->gettext(id);
+    return 0;
 }
 
 const void *Translator_getOriginal(const Translator *self, unsigned id)
