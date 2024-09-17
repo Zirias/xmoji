@@ -1,6 +1,7 @@
 #ifndef XMOJI_CONFIG_H
 #define XMOJI_CONFIG_H
 
+#include "emoji.h"
 #include "emojifont.h"
 #include "keyinjector.h"
 
@@ -34,6 +35,10 @@ PSC_Event *Config_waitBeforeChanged(Config *self) CMETHOD ATTR_RETNONNULL;
 unsigned Config_waitAfter(const Config *self) CMETHOD;
 void Config_setWaitAfter(Config *self, unsigned ms) CMETHOD;
 PSC_Event *Config_waitAfterChanged(Config *self) CMETHOD ATTR_RETNONNULL;
+
+EmojiSearchMode Config_emojiSearchMode(const Config *self) CMETHOD;
+void Config_setEmojiSearchMode(Config *self, EmojiSearchMode mode) CMETHOD;
+PSC_Event *Config_emojiSearchModeChanged(Config *self) CMETHOD ATTR_RETNONNULL;
 
 void Config_destroy(Config *self);
 

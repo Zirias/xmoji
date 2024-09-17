@@ -139,7 +139,7 @@ static void onsearch(void *receiver, void *sender, void *args)
     if (str && UniStr_len(str) >= 3)
     {
 	nresults = Emoji_search(results, MAXSEARCHRESULTS, str,
-		self->emojitexts, ESM_ORIG|ESM_TRANS);
+		self->emojitexts, Config_emojiSearchMode(self->config));
     }
     for (size_t i = 0; i < MAXSEARCHRESULTS; ++i)
     {

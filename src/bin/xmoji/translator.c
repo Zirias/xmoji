@@ -131,6 +131,7 @@ const void *Translator_getTranslation(const Translator *self, unsigned id)
     {
 	return self->translations[id].str;
     }
+    else if (!self->translations) return self->gettext(id);
 #endif
     return 0;
 }

@@ -20,6 +20,7 @@
 #define DEF_INJECTORFLAGS   IF_NONE
 #define DEF_WAITBEFORE	    50
 #define DEF_WAITAFTER	    100
+#define DEF_SEARCHMODE	    ESM_TRANS
 
 enum ConfigKey
 {
@@ -27,6 +28,7 @@ enum ConfigKey
     CFG_INJECTORFLAGS,
     CFG_WAITBEFORE,
     CFG_WAITAFTER,
+    CFG_SEARCHMODE,
     CFG_HISTORY
 };
 
@@ -35,6 +37,7 @@ static const char *keys[] = {
     "injectorFlags",
     "waitBefore",
     "waitAfter",
+    "searchMode",
     "history"
 };
 
@@ -43,12 +46,14 @@ static void readHistory(Config *self);
 static void readInjectorFlags(Config *self);
 static void readWaitBefore(Config *self);
 static void readWaitAfter(Config *self);
+static void readSearchMode(Config *self);
 
 static void (*const readers[])(Config *) = {
     readScale,
     readInjectorFlags,
     readWaitBefore,
     readWaitAfter,
+    readSearchMode,
     readHistory
 };
 
@@ -63,6 +68,7 @@ struct Config
     InjectorFlags injectorFlags;
     unsigned waitBefore;
     unsigned waitAfter;
+    EmojiSearchMode searchMode;
 };
 
 static void readHistory(Config *self)
@@ -170,6 +176,26 @@ static void readWaitAfter(Config *self)
 	{
 	    ConfigChangedEventArgs ea = { 1 };
 	    PSC_Event_raise(self->changed[CFG_WAITAFTER], 0, &ea);
+	}
+    }
+}
+
+static void readSearchMode(Config *self)
+{
+    EmojiSearchMode mode = DEF_SEARCHMODE;
+    long modeval;
+    if (tryParseNum(&modeval, ConfigFile_get(self->cfg, keys[CFG_SEARCHMODE]))
+	    && modeval >= ESM_ORIG && modeval <= (ESM_TRANS|ESM_ORIG))
+    {
+	mode = modeval;
+    }
+    if (self->reading == 2 || mode != self->searchMode)
+    {
+	self->searchMode = mode;
+	if (self->reading < 2)
+	{
+	    ConfigChangedEventArgs ea = { 1 };
+	    PSC_Event_raise(self->changed[CFG_SEARCHMODE], 0, &ea);
 	}
     }
 }
@@ -431,6 +457,27 @@ void Config_setWaitAfter(Config *self, unsigned ms)
 PSC_Event *Config_waitAfterChanged(Config *self)
 {
     return self->changed[CFG_WAITAFTER];
+}
+
+EmojiSearchMode Config_emojiSearchMode(const Config *self)
+{
+    return self->searchMode;
+}
+
+void Config_setEmojiSearchMode(Config *self, EmojiSearchMode mode)
+{
+    if (self->searchMode == mode) return;
+    if ((int)mode < (int)ESM_ORIG ||
+	    (int)mode > (int)(ESM_ORIG|ESM_TRANS)) return;
+    writeNum(self, CFG_SEARCHMODE, mode);
+    self->searchMode = mode;
+    ConfigChangedEventArgs ea = { 0 };
+    PSC_Event_raise(self->changed[CFG_SEARCHMODE], 0, &ea);
+}
+
+PSC_Event *Config_emojiSearchModeChanged(Config *self)
+{
+    return self->changed[CFG_SEARCHMODE];
 }
 
 void Config_destroy(Config *self)
