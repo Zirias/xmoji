@@ -69,13 +69,15 @@ static void loadTranslations(Translator *self,
     self->translationslen = len;
     for (unsigned i = 0; i < len; ++i)
     {
-	if ((self->translations[i].type = fgetc(xct)) < 0) continue;
+	signed char byte = fgetc(xct);
+	if (byte < 0) continue;
+	self->translations[i].type = byte;
 	unsigned slen;
 	if (read32le(&slen, xct) < 0) goto done;
 	val = PSC_malloc(slen+1);
 	if (fread(val, 1, slen, xct) < slen) goto done;
 	val[slen] = 0;
-	switch (self->translations[i].type)
+	switch (byte)
 	{
 	    case 0:
 		self->translations[i].str = val;
