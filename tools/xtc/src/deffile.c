@@ -10,19 +10,19 @@
 
 struct DefEntry
 {
-    DefEntry *next;
     char *key;
     char *from;
     char *to;
     DefType type;
     unsigned id;
+    unsigned next;
 };
 
 struct DefFile
 {
     size_t len;
     DefEntry *entries;
-    DefEntry *bucket[256];
+    unsigned bucket[256];
 };
 
 static unsigned char hash(const char *key)
@@ -145,12 +145,12 @@ DefFile *DefFile_create(const char *filename)
 		    DefEntry *entry = self->entries + self->len;
 		    unsigned char bucket = hash(key);
 		    entry->next = self->bucket[bucket];
-		    self->bucket[bucket] = entry;
 		    entry->key = key;
 		    entry->from = from;
 		    entry->to = to;
 		    entry->type = type;
 		    entry->id = self->len++;
+		    self->bucket[bucket] = self->len;
 		    key = 0;
 		    from = 0;
 		    to = 0;
@@ -201,13 +201,15 @@ const DefEntry *DefFile_byId(const DefFile *self, unsigned id)
 
 const DefEntry *DefFile_byKey(const DefFile *self, const char *key)
 {
-    DefEntry *entry = self->bucket[hash(key)];
-    while (entry)
+    unsigned id = self->bucket[hash(key)];
+    while (id)
     {
-	if (!strcmp(entry->key, key)) break;
-	entry = entry->next;
+	const DefEntry *entry = DefFile_byId(self, id - 1);
+	if (!entry) return 0;
+	if (!strcmp(entry->key, key)) return entry;
+	id = entry->next;
     }
-    return entry;
+    return 0;
 }
 
 const char *DefEntry_key(const DefEntry *self)
