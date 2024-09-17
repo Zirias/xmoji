@@ -189,9 +189,7 @@ int main(void)
 	{
 	    printf("\\x%x", emoji->codepoints[j]);
 	}
-	printf("\", .refcnt = -1 }, "
-		"{ .len = %zu, .str = U\"%s\", .refcnt = -1 }, %u }",
-		emoji->namelen, emoji->name, emoji->variants);
+	printf("\", .refcnt = -1 }, %zu, %u }", groupsize+i, emoji->variants);
     }
     puts("\n};\n"
 	    "static const EmojiGroup groups[] = {");
@@ -199,11 +197,25 @@ int main(void)
     {
 	if (i) puts(",");
 	group = groups+i;
-	printf("    { emojis + %zu, %zu, "
-		"{ .len = %zu, .str = U\"%s\", .refcnt = -1 } }",
-		group->start, group->len, group->namelen, group->name);
+	printf("    { emojis + %zu, %zu, %zu}", group->start, group->len, i);
     }
-    puts("\n};");
+    puts("\n};\n"
+	    "static const UniStr XME_texts[] = {");
+
+    for (size_t i = 0; i < groupsize; ++i)
+    {
+	if (i) puts(",");
+	group = groups+i;
+	printf("\n    { .len = %zu, .str = U\"%s\", .refcnt = -1 }",
+		group->namelen, group->name);
+    }
+    for (size_t i = 0; i < emojisize; ++i)
+    {
+	Emoji *emoji = emojis+i;
+	printf(",\n    { .len = %zu, .str = U\"%s\", .refcnt = -1 }",
+		emoji->namelen, emoji->name);
+    }
+    printf("\n};\n#define XME_ntexts %zu\n", groupsize+emojisize);
 
     rc = EXIT_SUCCESS;
 done:

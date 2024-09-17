@@ -1,5 +1,6 @@
 #include "emoji.h"
 
+#include "translator.h"
 #include "unistr.h"
 
 #include <poser/core.h>
@@ -9,7 +10,7 @@ struct Emoji
 {
     const EmojiGroup *group;
     const UniStr str;
-    const UniStr name;
+    const unsigned name;
     const unsigned variants;
 };
 
@@ -17,7 +18,7 @@ struct EmojiGroup
 {
     const Emoji *first;
     const size_t len;
-    const UniStr name;
+    const unsigned name;
 };
 
 #include "emojidata.h"
@@ -32,9 +33,9 @@ const EmojiGroup *EmojiGroup_at(size_t index)
     return groups + index;
 }
 
-const UniStr *EmojiGroup_name(const EmojiGroup *self)
+unsigned EmojiGroup_name(const EmojiGroup *self)
 {
-    return &self->name;
+    return self->name;
 }
 
 size_t EmojiGroup_len(const EmojiGroup *self)
@@ -67,9 +68,9 @@ const UniStr *Emoji_str(const Emoji *self)
     return &self->str;
 }
 
-const UniStr *Emoji_name(const Emoji *self)
+unsigned Emoji_name(const Emoji *self)
 {
-    return &self->name;
+    return self->name;
 }
 
 unsigned Emoji_variants(const Emoji *self)
@@ -78,17 +79,37 @@ unsigned Emoji_variants(const Emoji *self)
 }
 
 size_t Emoji_search(const Emoji **results, size_t maxresults,
-	const UniStr *pattern)
+	const UniStr *pattern, const Translator *tr, EmojiSearchMode mode)
 {
     size_t nresults = 0;
     for (size_t i = 0; nresults < maxresults
 	    && i < sizeof emojis / sizeof *emojis; ++i)
     {
-	if (UniStr_containslc(&emojis[i].name, pattern))
+	if (mode & ESM_ORIG)
 	{
-	    results[nresults++] = emojis + i;
+	    const UniStr *name = NTR(tr, emojis[i].name);
+	    if (UniStr_containslc(name, pattern))
+	    {
+		results[nresults++] = emojis + i;
+		continue;
+	    }
+	}
+	if (mode & ESM_TRANS)
+	{
+	    const UniStr *name = TR(tr, emojis[i].name);
+	    if (UniStr_containslc(name, pattern))
+	    {
+		results[nresults++] = emojis + i;
+		continue;
+	    }
 	}
     }
     return nresults;
+}
+
+const void *XME_get(unsigned id)
+{
+    if (id >= XME_ntexts) return 0;
+    return XME_texts + id;
 }
 

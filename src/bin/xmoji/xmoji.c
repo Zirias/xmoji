@@ -45,6 +45,7 @@ typedef struct Xmoji
     const char *cfgfile;
     Config *config;
     Translator *uitexts;
+    Translator *emojitexts;
     Font *emojiFont;
     Font *scaledEmojiFont;
     Window *aboutDialog;
@@ -63,6 +64,7 @@ static void destroy(void *app)
     Xmoji *self = app;
     Font_destroy(self->scaledEmojiFont);
     Font_destroy(self->emojiFont);
+    Translator_destroy(self->emojitexts);
     Translator_destroy(self->uitexts);
     Config_destroy(self->config);
     free(self);
@@ -136,7 +138,8 @@ static void onsearch(void *receiver, void *sender, void *args)
     Widget_unselect(self->tabs);
     if (str && UniStr_len(str) >= 3)
     {
-	nresults = Emoji_search(results, MAXSEARCHRESULTS, str);
+	nresults = Emoji_search(results, MAXSEARCHRESULTS, str,
+		self->emojitexts, ESM_ORIG|ESM_TRANS);
     }
     for (size_t i = 0; i < MAXSEARCHRESULTS; ++i)
     {
@@ -144,7 +147,8 @@ static void onsearch(void *receiver, void *sender, void *args)
 	if (i < nresults)
 	{
 	    Button_setText(button, Emoji_str(results[i]));
-	    Widget_setTooltip(button, Emoji_name(results[i]), 0);
+	    Widget_setTooltip(button, TR(self->emojitexts,
+			Emoji_name(results[i])), 0);
 	    Widget_show(button);
 	}
 	else Widget_hide(button);
@@ -164,7 +168,8 @@ static void onhistorychanged(void *receiver, void *sender, void *args)
 	if (emoji)
 	{
 	    Button_setText(button, Emoji_str(emoji));
-	    Widget_setTooltip(button, Emoji_name(emoji), 0);
+	    Widget_setTooltip(button, TR(self->emojitexts,
+			Emoji_name(emoji)), 0);
 	    Widget_show(button);
 	}
 	else Widget_hide(button);
@@ -337,6 +342,9 @@ static int startup(void *app)
     Translator *tr = Translator_create("xmoji-ui",
 	    X11App_lcMessages(), XMU_get);
     self->uitexts = tr;
+    Translator *etr = Translator_create("xmoji-emojis",
+	    X11App_lcMessages(), XME_get);
+    self->emojitexts = etr;
 
     /* Initialize commands */
     Command *aboutCommand = Command_create(
@@ -451,7 +459,7 @@ static int startup(void *app)
 	{
 	    havehistory = 1;
 	    Button_setText(emojiButton, Emoji_str(emoji));
-	    Widget_setTooltip(emojiButton, Emoji_name(emoji), 0);
+	    Widget_setTooltip(emojiButton, TR(etr, Emoji_name(emoji)), 0);
 	    Widget_show(emojiButton);
 	}
 	PSC_Event_register(Button_clicked(emojiButton), self, kbinject, 0);
@@ -471,7 +479,7 @@ static int startup(void *app)
 	const EmojiGroup *group = EmojiGroup_at(groupidx);
 	groupLabel = TextLabel_create(0, tabs);
 	TextLabel_setText(groupLabel, Emoji_str(EmojiGroup_emojiAt(group, 0)));
-	Widget_setTooltip(groupLabel, EmojiGroup_name(group), 0);
+	Widget_setTooltip(groupLabel, TR(etr, EmojiGroup_name(group)), 0);
 	Widget_show(groupLabel);
 
 	scroll = ScrollBox_create(0, tabs);
@@ -487,7 +495,7 @@ static int startup(void *app)
 	    {
 		EmojiButton *emojiButton = EmojiButton_create(0, grid);
 		Button_setText(emojiButton, Emoji_str(emoji));
-		Widget_setTooltip(emojiButton, Emoji_name(emoji), 0);
+		Widget_setTooltip(emojiButton, TR(etr, Emoji_name(emoji)), 0);
 		Widget_show(emojiButton);
 		PSC_Event_register(Button_clicked(emojiButton), self,
 			kbinject, 0);
@@ -500,7 +508,7 @@ static int startup(void *app)
 	    {
 		EmojiButton *emojiButton = EmojiButton_create(0, neutral);
 		Button_setText(emojiButton, Emoji_str(emoji));
-		Widget_setTooltip(emojiButton, Emoji_name(emoji), 0);
+		Widget_setTooltip(emojiButton, TR(etr, Emoji_name(emoji)), 0);
 		Widget_show(emojiButton);
 		PSC_Event_register(Button_clicked(emojiButton), self,
 			kbinject, 0);
