@@ -161,6 +161,7 @@ static void onsearch(void *receiver, void *sender, void *args)
 	}
 	else Widget_hide(button);
     }
+    Widget_invalidate(self->searchGrid);
 }
 
 static void onhistorychanged(void *receiver, void *sender, void *args)
