@@ -39,8 +39,7 @@ int dosource(int argc, char **argv)
 	{
 	    fprintf(out, "\\x%x", emoji->codepoints[j]);
 	}
-	fprintf(out, "\", .refcnt = -1 }, %zu, %u }",
-		groupsize+i, emoji->variants);
+	fprintf(out, "\", .refcnt = -1 }, %zu, %u }", i, emoji->variants);
     }
     fputs("\n};\n"
 	    "static const EmojiGroup groups[] = {", out);
@@ -54,20 +53,14 @@ int dosource(int argc, char **argv)
     fputs("\n};\n"
 	    "static const UniStr XME_texts[] = {", out);
 
-    for (size_t i = 0; i < groupsize; ++i)
-    {
-	if (i) fputc(',', out);
-	const EmojiGroup *group = EmojiGroup_at(i);
-	fprintf(out, "\n    { .len = %zu, .str = U\"%s\", .refcnt = -1 }",
-		group->namelen, group->name);
-    }
     for (size_t i = 0; i < emojisize; ++i)
     {
+	if (i) fputc(',', out);
 	const Emoji *emoji = Emoji_at(i);
-	fprintf(out, ",\n    { .len = %zu, .str = U\"%s\", .refcnt = -1 }",
+	fprintf(out, "\n    { .len = %zu, .str = U\"%s\", .refcnt = -1 }",
 		emoji->namelen, emoji->name);
     }
-    fprintf(out, "\n};\n#define XME_ntexts %zu\n", groupsize+emojisize);
+    fputs("\n};\n", out);
 
     rc = EXIT_SUCCESS;
 done:

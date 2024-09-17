@@ -109,7 +109,7 @@ size_t Emoji_search(const Emoji **results, size_t maxresults,
 
 const void *XME_get(unsigned id)
 {
-    if (id >= XME_ntexts) return 0;
+    if (id >= sizeof XME_texts / sizeof *XME_texts) return 0;
     return XME_texts + id;
 }
 

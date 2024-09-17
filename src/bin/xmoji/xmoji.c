@@ -479,7 +479,7 @@ static int startup(void *app)
 	const EmojiGroup *group = EmojiGroup_at(groupidx);
 	groupLabel = TextLabel_create(0, tabs);
 	TextLabel_setText(groupLabel, Emoji_str(EmojiGroup_emojiAt(group, 0)));
-	Widget_setTooltip(groupLabel, TR(etr, EmojiGroup_name(group)), 0);
+	Widget_setTooltip(groupLabel, TR(tr, EmojiGroup_name(group)), 0);
 	Widget_show(groupLabel);
 
 	scroll = ScrollBox_create(0, tabs);

@@ -2,6 +2,8 @@ GEN_BIN2CSTR_tool=	$(BIN2CSTR_TARGET)
 GEN_BIN2CSTR_args=	$1 $2
 GEN_EMOJIGEN_tool=	$(EMOJIGEN_TARGET)
 GEN_EMOJIGEN_args=	source $1 $2
+GEN_EMOJIGRP_tool=	$(EMOJIGEN_TARGET)
+GEN_EMOJIGRP_args=	groupnames $1 $2 $3
 GEN_TEXTS_tool=		$(XTC_TARGET)
 GEN_TEXTS_args=		source $(basename $1) XMU $2
 GEN_TRANS_tool=		$(XTC_TARGET)
@@ -58,14 +60,17 @@ xmoji_MODULES=		button \
 			xmoji \
 			xrdb \
 			xselection
-xmoji_GEN=		BIN2CSTR EMOJIGEN TEXTS
+xmoji_UITXT=		translations/xmoji-ui.def
+xmoji_EMOJIDATA=	contrib/emoji-test.txt
+xmoji_GEN=		BIN2CSTR EMOJIGEN EMOJIGRP TEXTS
 xmoji_BIN2CSTR_FILES=	icon256.h:icons/256x256/xmoji.png \
 			icon48.h:icons/48x48/xmoji.png \
 			icon32.h:icons/32x32/xmoji.png \
 			icon16.h:icons/16x16/xmoji.png
-xmoji_EMOJIGEN_FILES=	emojidata.h:contrib/emoji-test.txt
+xmoji_EMOJIGEN_FILES=	emojidata.h:$(xmoji_EMOJIDATA)
+xmoji_EMOJIGRP_FILES=	$(xmoji_UITXT):$(xmoji_UITXT).in:$(xmoji_EMOJIDATA)
 xmoji_transdir=		$(xmoji_datadir)/translations
-xmoji_TEXTS_FILES=	texts.c:translations/xmoji-ui.def
+xmoji_TEXTS_FILES=	texts.c:$(xmoji_UITXT)
 xmoji_TRANSLATIONS=	xmoji-ui
 xmoji_LANGUAGES=	de
 xmoji_LDFLAGS=		-Wl,--as-needed
@@ -155,9 +160,9 @@ xmoji_DEFINES+=		-DHAVE_CHAR32_T
 endif
 
 $(call binrules,xmoji)
-xmoji_prebuild:		$(xmoji_PREBUILD)
 
-update-translations:	$(xmoji_SRCDIR)/translations/xmoji-ui.def $(XTC_TARGET)
+xmoji_prebuild:		$(xmoji_PREBUILD)
+update-translations:	$(xmoji_SRCDIR)/$(xmoji_UITXT) $(XTC_TARGET)
 	$(foreach l,$(xmoji_LANGUAGES),$(XTC_TARGET) update $l $<;)
 
 .PHONY:	update-translations

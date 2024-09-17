@@ -37,6 +37,7 @@ icon16.h
 texts.c
 texts.h
 xmoji.desktop
+xmoji-ui.def
 .freetype-2.*.build
 freetype-2.*
 /ftbundle/root
