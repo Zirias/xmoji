@@ -94,7 +94,8 @@ xmoji_SUB_FILES=	xmoji.desktop
 xmoji_SUB_LIST=		bindir=$(bindir)
 xmoji_ICONSIZES=	16x16 32x32 48x48 256x256
 xmoji_DESKTOPFILE=	xmoji
-xmoji_DOCS=		README.md
+xmoji_DOCS=		README.md \
+			TRANSLATE.md
 xmoji_PREBUILD=		#
 
 ifeq ($(TRACE),1)
