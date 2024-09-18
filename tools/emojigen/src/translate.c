@@ -79,7 +79,7 @@ static size_t fromutf8(char32_t *ucs4, size_t sz, const char *utf8)
 static void readTranslations(TranslationBucket *buckets, FILE *in)
 {
     static char line[1024];
-    static char utf8[32];
+    static char utf8[48];
     static char32_t ucs4[16];
 
     while (fgets(line, sizeof line, in))
@@ -93,13 +93,14 @@ static void readTranslations(TranslationBucket *buckets, FILE *in)
 	while (*e && *e != '"') ++e;
 	if (*e != '"') continue;
 	size_t utf8len = e - c;
-	if (utf8len > 31) continue;
+	if (utf8len > 47) continue;
 	memcpy(utf8, c, utf8len);
 	utf8[utf8len] = 0;
 	c = e+1;
 	skipws(c);
 	if (!match(c, "type=\"tts\"")) continue;
 	skipws(c);
+	if (match(c, "draft=\"contributed\"")) skipws(c);
 	if (*c != '>') continue;
 	e = ++c;
 	while (*e && *e != '<') ++e;
