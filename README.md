@@ -66,6 +66,9 @@ individual widgets.
   Default: `10`.
 * `scrollBarMinHeight` (no class): Minimum height in pixels for scroll
   bars. Default: `16`.
+* `tooltipDelay` (no class): Delay in milliseconds before a tooltip is
+  displayed, `0` disables display of tooltips.
+  Default: `1500`, Max: `10000`.
 
 ### Colors
 
@@ -126,7 +129,8 @@ names. The following colors are available:
 ### Example
 
 The following X resources configure a different emoji font, a slightly larger
-scroll bar and a dark color scheme:
+scroll bar, a dark color scheme and a shorter delay before displaying emoji
+names (by scoping the value only to EmojiButton):
 
     Xmoji*emojiFont: Twitter Color Emoji
     Xmoji*Foreground: #c8c6c5
@@ -146,6 +150,7 @@ scroll bar and a dark color scheme:
     Xmoji*tooltipBorder: light sea green
     Xmoji*scrollBarWidth: 12
     Xmoji*scrollBarMinHeight: 25
+    Xmoji*EmojiButton.tooltipDelay: 500
 
 ## Runtime configuration
 
