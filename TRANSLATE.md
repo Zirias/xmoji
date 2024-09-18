@@ -19,6 +19,14 @@ In case you don't want to use github, you can also just clone the original
 repository and create your local branch (same as above with `Zirias` instead
 of `__JohnDoe__`).
 
+### Obtain translated emoji names
+
+First navigate to the latest release (at the time of writing `release-45`)
+of the [Unicode CLDR](https://github.com/unicode-org/cldr). From the tree
+(there's a link on the release page), fetch the `xy.xml` files from
+`common/annotations` and `common/annotationsDerived` and place them in the
+respective directories in `src/bin/xmoji/contrib/cldr`.
+
 ### Add the new language
 
 In `src/bin/xmoji/xmoji.mk`, add `xy` to the `xmoji_LANGUAGES` variable.
@@ -50,12 +58,14 @@ Edit `src/bin/xmoji/xmoji.desktop.in` and add `GenericName[xy]` and
 `Comment[xy]` entries. Please keep the language codes here sorted
 alphabetically as well.
 
+**IMPORTANT**: Both files you edit must use **UTF-8** text encoding.
+
 ### Finish
 
 Now, building and installing Xmoji should give you a version fully localized
 for "Xylophone".
 
-`git add` the new file `src/bin/xmoji/translations/xmoji-ui-xy.def`,
+`git add` the new CLDR files, `src/bin/xmoji/translations/xmoji-ui-xy.def`,
 `src/bin/xmoji/xmoji.mk` and `src/bin/xmoji/xmoji.desktop.in`, create a
 commit, and please, send a pull request, thank you very much! 🤩
 
