@@ -301,7 +301,11 @@ void Widget_setTooltip(void *self, const UniStr *tooltip, unsigned delay)
 	XRdb *rdb = X11Adapter_resources();
 	delay = XRdb_int(rdb, XRdbKey(Widget_resname(self), "tooltipDelay"),
 		XRQF_OVERRIDES, 1500, 0, 10000);
-	if (!delay) return;
+	if (!delay)
+	{
+	    w->tooltip = 0;
+	    return;
+	}
     }
     w->tooltip = Tooltip_create(tooltip, w, delay);
 }
