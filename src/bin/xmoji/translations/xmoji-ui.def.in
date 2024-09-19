@@ -194,9 +194,17 @@ Wait after sending keys (ms):
 
 $w$searchModeDesc
 .
-Select whether searching will look for the original english emoji
-names, the translated emoji names, or both. If no translation is
-loaded, the original names are always considered.
+Configures how searching for emojis works.
+* Base: Only consider the base name (in front of an optional colon)
+of an emoji for searching. E.g. the "woman: red hair" emoji won't
+be matched when searching for "red".
+* Full: Search in the full name of the emoji. This still excludes
+skin colors, because the search always returns them grouped.
+* Original/English: Search in the english emoji names
+* Translated: Search in the translated emoji names
+* Both: Search in english and translated names
+When no translation is loaded or Xmoji is built without NLS support,
+the search always uses the english names.
 .
 
 $w$searchMode
@@ -206,16 +214,31 @@ Emoji search mode:
 
 $w$searchModeOriginal
 .
-Original/English
+Base + Original/English
 .
 
 $w$searchModeTranslated
 .
-Translated
+Base + Translated
 .
 
 $w$searchModeBoth
 .
-Both
+Base + Both
+.
+
+$w$searchModeFullOriginal
+.
+Full + Original/English
+.
+
+$w$searchModeFullTranslated
+.
+Full + Translated
+.
+
+$w$searchModeFullBoth
+.
+Full + Both
 .
 

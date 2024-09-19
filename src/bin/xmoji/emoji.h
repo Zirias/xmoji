@@ -13,7 +13,8 @@ typedef enum EmojiSearchMode
 {
     ESM_NONE	= 0,
     ESM_ORIG	= 1 << 0,   // search in original (english) names
-    ESM_TRANS	= 1 << 1    // search in translated names (current locale)
+    ESM_TRANS	= 1 << 1,   // search in translated names (current locale)
+    ESM_FULL	= 1 << 2    // search in text after colon
 } EmojiSearchMode;
 
 size_t EmojiGroup_numGroups(void) ATTR_CONST;

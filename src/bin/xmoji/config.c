@@ -185,7 +185,8 @@ static void readSearchMode(Config *self)
     EmojiSearchMode mode = DEF_SEARCHMODE;
     long modeval;
     if (tryParseNum(&modeval, ConfigFile_get(self->cfg, keys[CFG_SEARCHMODE]))
-	    && modeval >= ESM_ORIG && modeval <= (ESM_TRANS|ESM_ORIG))
+	    && modeval >= ESM_ORIG && modeval <= (ESM_FULL|ESM_TRANS|ESM_ORIG)
+	    && modeval != ESM_FULL)
     {
 	mode = modeval;
     }
@@ -467,8 +468,9 @@ EmojiSearchMode Config_emojiSearchMode(const Config *self)
 void Config_setEmojiSearchMode(Config *self, EmojiSearchMode mode)
 {
     if (self->searchMode == mode) return;
-    if ((int)mode < (int)ESM_ORIG ||
-	    (int)mode > (int)(ESM_ORIG|ESM_TRANS)) return;
+    if ((int)mode < (int)ESM_ORIG
+	    || (int)mode > (int)(ESM_FULL|ESM_ORIG|ESM_TRANS)
+	    || (int)mode == ESM_FULL) return;
     writeNum(self, CFG_SEARCHMODE, mode);
     self->searchMode = mode;
     ConfigChangedEventArgs ea = { 0 };

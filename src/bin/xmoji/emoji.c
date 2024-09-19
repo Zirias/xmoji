@@ -78,14 +78,19 @@ unsigned Emoji_variants(const Emoji *self)
     return self->variants;
 }
 
-static int match(const UniStr *emojiName, const UniStr *pattern)
+static int match(const UniStr *emojiName, const UniStr *pattern,
+	EmojiSearchMode mode)
 {
     int matches = 0;
     if (emojiName)
     {
-	UniStr *baseName = UniStr_cut(emojiName, U":");
-	matches = (baseName && UniStr_containslc(baseName, pattern));
-	UniStr_destroy(baseName);
+	if (mode & ESM_FULL) matches = UniStr_containslc(emojiName, pattern);
+	else
+	{
+	    UniStr *baseName = UniStr_cut(emojiName, U":");
+	    matches = (baseName && UniStr_containslc(baseName, pattern));
+	    UniStr_destroy(baseName);
+	}
     }
     return matches;
 }
@@ -100,13 +105,16 @@ size_t Emoji_search(const Emoji **results, size_t resultsz, size_t maxresults,
     {
 	int matches = 0;
 	if (havebasevariant && !emojis[i].variants) matches = 2;
-	if (!matches && (mode & ESM_ORIG))
+	else if (emojis[i].variants)
 	{
-	    matches = match(NTR(tr, emojis[i].name), pattern);
-	}
-	if (!matches && (mode & ESM_TRANS))
-	{
-	    matches = match(FTR(tr, emojis[i].name), pattern);
+	    if (!matches && (mode & ESM_ORIG))
+	    {
+		matches = match(NTR(tr, emojis[i].name), pattern, mode);
+	    }
+	    if (!matches && (mode & ESM_TRANS))
+	    {
+		matches = match(FTR(tr, emojis[i].name), pattern, mode);
+	    }
 	}
 	if (matches)
 	{

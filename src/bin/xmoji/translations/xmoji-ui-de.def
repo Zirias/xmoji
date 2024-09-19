@@ -312,14 +312,29 @@ Wartezeit nach Ereignissen (ms):
 .
 
 $w$searchModeDesc
-Select whether searching will look for the original english emoji
-names, the translated emoji names, or both. If no translation is
-loaded, the original names are always considered.
+Configures how searching for emojis works.
+* Base: Only consider the base name (in front of an optional colon)
+of an emoji for searching. E.g. the "woman: red hair" emoji won't
+be matched when searching for "red".
+* Full: Search in the full name of the emoji. This still excludes
+skin colors, because the search always returns them grouped.
+* Original/English: Search in the english emoji names
+* Translated: Search in the translated emoji names
+* Both: Search in english and translated names
+When no translation is loaded or Xmoji is built without NLS support,
+the search always uses the english names.
 .
-Auswählen, ob die Suche nach den originalen englischen
-Emoji-Namen, den übersetzten Namen, oder beidem suchen
-soll. Wenn keine Übersetzung geladen ist, werden die
-originalen Namen immer durchsucht.
+Legt fest, wie die Emojisuche funktioniert.
+* Basis: Es wird nur im Basisnamen (vor einem möglichen Doppelpunkt)
+eines Emojis gesucht. Eine Suche nach "rot" findet z.B. nicht das
+Emoji "Frau: rote Haare".
+* Voll: Der vollständige Name eines Emojis wird durchsucht. Hautfarben
+sind immer noch ausgenommen, weil die Suche diese immer gruppiert.
+* Original/Englisch: Der englische Name wird durchsucht.
+* Übersetzt: Der übersetzte Name wird durchsucht.
+* Beides: Gesucht wird im englischen und im übersetzten Namen.
+Wenn keine Übersetzungen geladen sind oder Xmoji ohne NLS Support
+gebaut wurde, wird immer der englische Name durchsucht.
 .
 
 $w$searchMode
@@ -329,20 +344,38 @@ Emoji Suchmodus:
 .
 
 $w$searchModeOriginal
-Original/English
+Base + Original/English
 .
-Original/Englisch
+Basis + Original/Englisch
 .
 
 $w$searchModeTranslated
-Translated
+Base + Translated
 .
-Übersetzt
+Basis + Übersetzt
 .
 
 $w$searchModeBoth
-Both
+Base + Both
 .
-Beides
+Basis + Beides
+.
+
+$w$searchModeFullOriginal
+Full + Original/English
+.
+Voll + Original/Englisch
+.
+
+$w$searchModeFullTranslated
+Full + Translated
+.
+Voll + Übersetzt
+.
+
+$w$searchModeFullBoth
+Full + Both
+.
+Voll + Beides
 .
 
