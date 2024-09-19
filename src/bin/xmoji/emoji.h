@@ -29,9 +29,9 @@ const EmojiGroup *Emoji_group(const Emoji *self) CMETHOD ATTR_PURE;
 const UniStr *Emoji_str(const Emoji *self) CMETHOD ATTR_PURE;
 unsigned Emoji_name(const Emoji *self) CMETHOD ATTR_PURE;
 unsigned Emoji_variants(const Emoji *self) CMETHOD ATTR_PURE;
-size_t Emoji_search(const Emoji **results, size_t maxresults,
+size_t Emoji_search(const Emoji **results, size_t resultsz, size_t maxresults,
 	const UniStr *pattern, const Translator *tr, EmojiSearchMode mode)
-    ATTR_NONNULL((1)) ATTR_NONNULL((3)) ATTR_NONNULL((4));
+    ATTR_NONNULL((1)) ATTR_NONNULL((4)) ATTR_NONNULL((5));
 
 const void *XME_get(unsigned id);
 

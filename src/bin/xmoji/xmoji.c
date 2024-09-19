@@ -32,7 +32,8 @@
 #include <poser/core.h>
 #include <stdlib.h>
 
-#define MAXSEARCHRESULTS 64
+#define MAXSEARCHRESULTS 100
+#define SEARCHRESULTSZ 1024
 
 static int startup(void *app);
 static void destroy(void *app);
@@ -135,27 +136,36 @@ static void onsearch(void *receiver, void *sender, void *args)
 
     Xmoji *self = receiver;
     const UniStr *str = args;
-    size_t nresults = 0;
+    size_t resultsz = 0;
 #ifdef WITH_NLS
     EmojiSearchMode mode = Config_emojiSearchMode(self->config);
 #else
     EmojiSearchMode mode = ESM_ORIG;
 #endif
-    const Emoji *results[MAXSEARCHRESULTS];
+    const Emoji *results[SEARCHRESULTSZ];
     Widget_unselect(self->tabs);
     if (str && UniStr_len(str) >= 3)
     {
-	nresults = Emoji_search(results, MAXSEARCHRESULTS, str,
-		self->emojitexts, mode);
+	resultsz = Emoji_search(results, SEARCHRESULTSZ, MAXSEARCHRESULTS,
+		str, self->emojitexts, mode);
     }
+    size_t ridx = 0;
     for (size_t i = 0; i < MAXSEARCHRESULTS; ++i)
     {
 	void *button = FlowGrid_widgetAt(self->searchGrid, i);
-	if (i < nresults)
+	EmojiButton_clearVariants(button);
+	if (ridx < resultsz)
 	{
-	    Button_setText(button, Emoji_str(results[i]));
-	    Widget_setTooltip(button, TR(self->emojitexts,
-			Emoji_name(results[i])), 0);
+	    EmojiButton_setEmoji(button, results[ridx]);
+	    if (Emoji_variants(results[ridx]) > 1)
+	    {
+		EmojiButton_addVariant(button, results[ridx]);
+		while (++ridx < resultsz && !Emoji_variants(results[ridx]))
+		{
+		    EmojiButton_addVariant(button, results[ridx]);
+		}
+	    }
+	    else ++ridx;
 	    Widget_show(button);
 	}
 	else Widget_hide(button);

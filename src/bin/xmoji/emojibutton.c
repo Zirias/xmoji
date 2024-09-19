@@ -320,3 +320,14 @@ void EmojiButton_addVariant(void *self, const Emoji *variant)
     Widget_show(vb);
     ++b->nvariants;
 }
+
+void EmojiButton_clearVariants(void *self)
+{
+    EmojiButton *b = Object_instance(self);
+    if (!b->nvariants) return;
+    for (unsigned i = 0; i < b->nvariants; ++i)
+    {
+	Widget_hide(b->variants[i]);
+    }
+    b->nvariants = 0;
+}

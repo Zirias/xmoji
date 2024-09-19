@@ -90,16 +90,16 @@ static int match(const UniStr *emojiName, const UniStr *pattern)
     return matches;
 }
 
-size_t Emoji_search(const Emoji **results, size_t maxresults,
+size_t Emoji_search(const Emoji **results, size_t resultsz, size_t maxresults,
 	const UniStr *pattern, const Translator *tr, EmojiSearchMode mode)
 {
+    size_t resultlen = 0;
     size_t nresults = 0;
     int havebasevariant = 0;
-    for (size_t i = 0; nresults < maxresults
-	    && i < sizeof emojis / sizeof *emojis; ++i)
+    for (size_t i = 0; i < sizeof emojis / sizeof *emojis; ++i)
     {
 	int matches = 0;
-	if (havebasevariant && emojis[i].variants != 1) matches = 1;
+	if (havebasevariant && !emojis[i].variants) matches = 2;
 	if (!matches && (mode & ESM_ORIG))
 	{
 	    matches = match(NTR(tr, emojis[i].name), pattern);
@@ -108,10 +108,19 @@ size_t Emoji_search(const Emoji **results, size_t maxresults,
 	{
 	    matches = match(FTR(tr, emojis[i].name), pattern);
 	}
-	if (matches) results[nresults++] = emojis + i;
+	if (matches)
+	{
+	    if (matches == 1)
+	    {
+		if (++nresults > maxresults) break;
+		if (resultlen + emojis[i].variants > resultsz) break;
+		havebasevariant = 1;
+	    }
+	    results[resultlen++] = emojis + i;
+	}
 	else if (emojis[i].variants) havebasevariant = 0;
     }
-    return nresults;
+    return resultlen;
 }
 
 const void *XME_get(unsigned id)
