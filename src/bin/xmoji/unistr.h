@@ -84,6 +84,18 @@ PSC_List *UniStr_splitByUtf8(const UniStr *self, const char *delim)
 PSC_List *UniStr_splitByUtf32(const UniStr *self, const char32_t *delim)
     CMETHOD ATTR_NONNULL((2)) ATTR_RETNONNULL;
 
+#define UniStr_cut(s,x) _Generic(&x, \
+	U32LPT(x): UniStr_cutByUtf32, \
+	const U32LPT(x): UniStr_cutByUtf32, \
+	char **: UniStr_cutByUtf8, \
+	const char **: UniStr_cutByUtf8, \
+	char32_t **: UniStr_cutByUtf32, \
+	const char32_t **: UniStr_cutByUtf32)(s, x)
+UniStr *UniStr_cutByUtf8(const UniStr *self, const char *delims)
+    CMETHOD ATTR_NONNULL((2)) ATTR_RETNONNULL;
+UniStr *UniStr_cutByUtf32(const UniStr *self, const char32_t *delims)
+    CMETHOD ATTR_NONNULL((2)) ATTR_RETNONNULL;
+
 /* destructor */
 
 void UniStr_destroy(UniStr *self);

@@ -267,6 +267,38 @@ done:
     return split;
 }
 
+UniStr *UniStr_cutByUtf8(const UniStr *self, const char *delims)
+{
+    if (!self->len) return UniStr_ref(self);
+    size_t delimslen = strlen(delims);
+    char32_t *utf32delims = 0;
+    toutf32(&utf32delims, 0, delims, delimslen);
+    UniStr *cut = UniStr_cutByUtf32(self, utf32delims);
+    free(utf32delims);
+    return cut;
+}
+
+UniStr *UniStr_cutByUtf32(const UniStr *self, const char32_t *delims)
+{
+    if (!self->len) return UniStr_ref(self);
+    size_t cutlen = 0;
+    while (self->str[cutlen])
+    {
+	const char32_t *d = delims;
+	while (*d) if (self->str[cutlen] == *d++) goto done;
+	++cutlen;
+    }
+done:
+    if (cutlen < self->len)
+    {
+	char32_t *cutstr = PSC_malloc((cutlen + 1) * sizeof *cutstr);
+	memcpy(cutstr, self->str, cutlen);
+	cutstr[cutlen] = 0;
+	return create(cutstr, cutlen);
+    }
+    return UniStr_ref(self);
+}
+
 void UniStr_destroy(UniStr *self)
 {
     if (!self || self->refcnt < 0 || --self->refcnt) return;
