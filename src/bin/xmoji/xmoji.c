@@ -119,15 +119,14 @@ static void onsettingsok(void *receiver, void *sender, void *args)
     Window_close(self->settingsDialog);
 }
 
-static void kbinject(void *receiver, void *sender, void *args)
+static void oninjected(void *receiver, void *sender, void *args)
 {
-    (void)args;
+    (void)sender;
 
     Xmoji *self = receiver;
-    Button *b = sender;
-    KeyInjector_inject(Button_text(b));
+    const UniStr *txt = args;
     Widget_unselect(self->tabs);
-    EmojiHistory_record(Config_history(self->config), Button_text(b));
+    EmojiHistory_record(Config_history(self->config), txt);
 }
 
 static void onsearch(void *receiver, void *sender, void *args)
@@ -184,17 +183,6 @@ static void onhistorychanged(void *receiver, void *sender, void *args)
 	else Widget_hide(button);
     }
     Widget_invalidate(self->recentGrid);
-}
-
-static void onpasted(void *receiver, void *sender, void *args)
-{
-    (void)sender;
-
-    Xmoji *self = receiver;
-    PastedEventArgs *ea = args;
-    if (ea->content.type != XST_TEXT) return;
-    Widget_unselect(self->tabs);
-    EmojiHistory_record(Config_history(self->config), ea->content.data);
 }
 
 static void onscalechanged(void *receiver, void *sender, void *args)
@@ -468,9 +456,11 @@ static int startup(void *app)
     Widget_setPadding(grid, (Box){0, 0, 0, 0});
     for (unsigned i = 0; i < MAXSEARCHRESULTS; ++i)
     {
-	EmojiButton *emojiButton = EmojiButton_create(0, grid);
-	PSC_Event_register(Button_clicked(emojiButton), self, kbinject, 0);
-	PSC_Event_register(Widget_pasted(emojiButton), self, onpasted, 0);
+	EmojiButton *emojiButton = EmojiButton_create(0, etr, grid);
+	PSC_Event_register(EmojiButton_injected(emojiButton),
+		self, oninjected, 0);
+	PSC_Event_register(EmojiButton_pasted(emojiButton),
+		self, oninjected, 0);
 	FlowGrid_addWidget(grid, emojiButton);
     }
     Widget_show(grid);
@@ -499,7 +489,7 @@ static int startup(void *app)
     for (unsigned i = 0; i < HISTSIZE; ++i)
     {
 	const Emoji *emoji = EmojiHistory_at(history, i);
-	EmojiButton *emojiButton = EmojiButton_create(0, grid);
+	EmojiButton *emojiButton = EmojiButton_create(0, 0, grid);
 	if (emoji)
 	{
 	    havehistory = 1;
@@ -507,8 +497,10 @@ static int startup(void *app)
 	    Widget_setTooltip(emojiButton, TR(etr, Emoji_name(emoji)), 0);
 	    Widget_show(emojiButton);
 	}
-	PSC_Event_register(Button_clicked(emojiButton), self, kbinject, 0);
-	PSC_Event_register(Widget_pasted(emojiButton), self, onpasted, 0);
+	PSC_Event_register(EmojiButton_injected(emojiButton),
+		self, oninjected, 0);
+	PSC_Event_register(EmojiButton_pasted(emojiButton),
+		self, oninjected, 0);
 	FlowGrid_addWidget(grid, emojiButton);
     }
     Widget_show(grid);
@@ -538,28 +530,19 @@ static int startup(void *app)
 	    const Emoji *emoji = EmojiGroup_emojiAt(group, idx);
 	    if (Emoji_variants(emoji))
 	    {
-		EmojiButton *emojiButton = EmojiButton_create(0, grid);
-		Button_setText(emojiButton, Emoji_str(emoji));
-		Widget_setTooltip(emojiButton, TR(etr, Emoji_name(emoji)), 0);
+		EmojiButton *emojiButton = EmojiButton_create(0, etr, grid);
+		EmojiButton_setEmoji(emojiButton, emoji);
 		Widget_show(emojiButton);
-		PSC_Event_register(Button_clicked(emojiButton), self,
-			kbinject, 0);
-		PSC_Event_register(Widget_pasted(emojiButton), self,
-			onpasted, 0);
+		PSC_Event_register(EmojiButton_injected(emojiButton),
+			self, oninjected, 0);
+		PSC_Event_register(EmojiButton_pasted(emojiButton),
+			self, oninjected, 0);
 		FlowGrid_addWidget(grid, emojiButton);
 		neutral = emojiButton;
 	    }
 	    if (Emoji_variants(emoji) != 1 && neutral)
 	    {
-		EmojiButton *emojiButton = EmojiButton_create(0, neutral);
-		Button_setText(emojiButton, Emoji_str(emoji));
-		Widget_setTooltip(emojiButton, TR(etr, Emoji_name(emoji)), 0);
-		Widget_show(emojiButton);
-		PSC_Event_register(Button_clicked(emojiButton), self,
-			kbinject, 0);
-		PSC_Event_register(Widget_pasted(emojiButton), self,
-			onpasted, 0);
-		EmojiButton_addVariant(neutral, emojiButton);
+		EmojiButton_addVariant(neutral, emoji);
 	    }
 	}
 	Widget_show(grid);

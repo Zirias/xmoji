@@ -1,15 +1,20 @@
 #include "emojibutton.h"
 
+#include "emoji.h"
 #include "flowgrid.h"
 #include "flyout.h"
+#include "keyinjector.h"
 #include "pen.h"
 #include "shape.h"
 #include "textlabel.h"
 #include "textrenderer.h"
+#include "translator.h"
 #include "unistr.h"
 
 #include <poser/core.h>
 #include <stdlib.h>
+
+#define MAXEMOJIVARIANTS 32
 
 static void destroy(void *obj);
 static int draw(void *obj, xcb_render_picture_t picture);
@@ -25,12 +30,17 @@ static MetaEmojiButton mo = MetaEmojiButton_init(
 struct EmojiButton
 {
     Object base;
+    const Translator *tr;
+    PSC_Event *injected;
+    PSC_Event *pasted;
     FlowGrid *flowgrid;
     Flyout *flyout;
     Shape *triangle;
     Pen *pen;
+    EmojiButton *variants[MAXEMOJIVARIANTS];
     Size trianglesize;
     int selected;
+    unsigned nvariants;
 };
 
 static void destroy(void *obj)
@@ -38,6 +48,8 @@ static void destroy(void *obj)
     EmojiButton *self = obj;
     Pen_destroy(self->pen);
     Shape_destroy(self->triangle);
+    PSC_Event_destroy(self->pasted);
+    PSC_Event_destroy(self->injected);
     free(self);
 }
 
@@ -127,7 +139,7 @@ static xcb_render_picture_t renderTriangle(void *obj,
 
 static void prerender(EmojiButton *self, Size newSize)
 {
-    if (self->flyout && newSize.width && newSize.height
+    if (self->nvariants && newSize.width && newSize.height
 	    && newSize.width != self->trianglesize.width
 	    && newSize.height != self->trianglesize.height)
     {
@@ -145,7 +157,7 @@ static int draw(void *obj, xcb_render_picture_t picture)
     EmojiButton *self = Object_instance(obj);
     int rc = 0;
     Object_bcall(rc, Widget, draw, self, picture);
-    if (rc == 0 && picture && self->flyout)
+    if (rc == 0 && picture && self->nvariants)
     {
 	xcb_connection_t *c = X11Adapter_connection();
 	if (!self->pen) self->pen = Pen_create();
@@ -191,7 +203,7 @@ static int clicked(void *obj, const ClickEvent *event)
 	Widget_invalidate(self);
 	return 1;
     }
-    if (self->flyout && event->button == MB_RIGHT)
+    if (self->nvariants && event->button == MB_RIGHT)
     {
 	Widget_show(self->flowgrid);
 	Flyout_popup(self->flyout, self);
@@ -200,6 +212,26 @@ static int clicked(void *obj, const ClickEvent *event)
     int rc = 0;
     Object_bcall(rc, Widget, clicked, self, event);
     return rc;
+}
+
+static void onclicked(void *receiver, void *sender, void *args)
+{
+    (void)args;
+
+    EmojiButton *self = receiver;
+    const UniStr *txt = Button_text(sender);
+    KeyInjector_inject(txt);
+    PSC_Event_raise(self->injected, 0, (void *)txt);
+}
+
+static void onpasted(void *receiver, void *sender, void *args)
+{
+    (void)sender;
+
+    EmojiButton *self = receiver;
+    PastedEventArgs *ea = args;
+    if (ea->content.type != XST_TEXT) return;
+    PSC_Event_raise(self->pasted, 0, ea->content.data);
 }
 
 static void sizeChanged(void *receiver, void *sender, void *args)
@@ -213,16 +245,14 @@ static void sizeChanged(void *receiver, void *sender, void *args)
 }
 
 EmojiButton *EmojiButton_createBase(void *derived,
-	const char *name, void *parent)
+	const char *name, const Translator *tr, void *parent)
 {
     EmojiButton *self = PSC_malloc(sizeof *self);
+    memset(self, 0, sizeof *self);
     CREATEBASE(Button, name, parent);
-    self->flowgrid = 0;
-    self->flyout = 0;
-    self->triangle = 0;
-    self->pen = 0;
-    self->trianglesize = (Size){0, 0};
-    self->selected = 0;
+    self->injected = PSC_Event_create(self);
+    self->pasted = PSC_Event_create(self);
+    self->tr = tr;
 
     Button_setBorderWidth(self, 0);
     Button_setLabelPadding(self, (Box){1, 1, 1, 1});
@@ -233,14 +263,38 @@ EmojiButton *EmojiButton_createBase(void *derived,
     Widget_setLocalUnselect(self, 1);
     TextLabel_setRenderCallback(Button_label(self), self, renderCallback);
 
+    PSC_Event_register(Button_clicked(self), self, onclicked, 0);
+    PSC_Event_register(Widget_pasted(self), self, onpasted, 0);
     PSC_Event_register(Widget_sizeChanged(self), self, sizeChanged, 0);
 
     return self;
 }
 
-void EmojiButton_addVariant(void *self, EmojiButton *variant)
+PSC_Event *EmojiButton_injected(void *self)
 {
     EmojiButton *b = Object_instance(self);
+    return b->injected;
+}
+
+PSC_Event *EmojiButton_pasted(void *self)
+{
+    EmojiButton *b = Object_instance(self);
+    return b->pasted;
+}
+
+void EmojiButton_setEmoji(void *self, const Emoji *emoji)
+{
+    EmojiButton *b = Object_instance(self);
+    Button_setText(b, Emoji_str(emoji));
+    Widget_setTooltip(b, b->tr
+	    ? TR(b->tr, Emoji_name(emoji))
+	    : XME_get(Emoji_name(emoji)), 0);
+}
+
+void EmojiButton_addVariant(void *self, const Emoji *variant)
+{
+    EmojiButton *b = Object_instance(self);
+    if (b->nvariants == MAXEMOJIVARIANTS) return;
     if (!b->flyout)
     {
 	b->flyout = Flyout_create(0, b);
@@ -253,5 +307,16 @@ void EmojiButton_addVariant(void *self, EmojiButton *variant)
 	Font *font = Widget_font(b);
 	if (font) Widget_setFont(b->flowgrid, font);
     }
-    FlowGrid_addWidget(b->flowgrid, variant);
+    EmojiButton *vb = b->variants[b->nvariants];
+    if (!vb)
+    {
+	vb = EmojiButton_create(0, b->tr, b);
+	PSC_Event_register(Button_clicked(vb), self, onclicked, 0);
+	PSC_Event_register(Widget_pasted(vb), self, onpasted, 0);
+	b->variants[b->nvariants] = vb;
+	FlowGrid_addWidget(b->flowgrid, vb);
+    }
+    EmojiButton_setEmoji(vb, variant);
+    Widget_show(vb);
+    ++b->nvariants;
 }
