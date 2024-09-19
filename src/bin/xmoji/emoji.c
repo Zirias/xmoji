@@ -94,11 +94,13 @@ size_t Emoji_search(const Emoji **results, size_t maxresults,
 	const UniStr *pattern, const Translator *tr, EmojiSearchMode mode)
 {
     size_t nresults = 0;
+    int havebasevariant = 0;
     for (size_t i = 0; nresults < maxresults
 	    && i < sizeof emojis / sizeof *emojis; ++i)
     {
 	int matches = 0;
-	if (mode & ESM_ORIG)
+	if (havebasevariant && emojis[i].variants != 1) matches = 1;
+	if (!matches && (mode & ESM_ORIG))
 	{
 	    matches = match(NTR(tr, emojis[i].name), pattern);
 	}
@@ -106,11 +108,8 @@ size_t Emoji_search(const Emoji **results, size_t maxresults,
 	{
 	    matches = match(FTR(tr, emojis[i].name), pattern);
 	}
-	if (matches)
-	{
-	    results[nresults++] = emojis + i;
-	    continue;
-	}
+	if (matches) results[nresults++] = emojis + i;
+	else if (emojis[i].variants) havebasevariant = 0;
     }
     return nresults;
 }
