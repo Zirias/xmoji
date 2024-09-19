@@ -212,6 +212,11 @@ X11App *X11App_createBase(void *derived, int argc, char **argv)
     self->locale = locale;
     self->name = getName(argc, argv);
     self->argv = argv;
+    self->hostprop = 0;
+    self->cmdprop = 0;
+    self->hostproplen = 0;
+    self->cmdproplen = 0;
+    self->pidprop = 0;
     self->argc = argc;
     self->quitting = 0;
 
