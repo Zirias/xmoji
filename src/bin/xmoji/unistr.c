@@ -292,7 +292,7 @@ done:
     if (cutlen < self->len)
     {
 	char32_t *cutstr = PSC_malloc((cutlen + 1) * sizeof *cutstr);
-	memcpy(cutstr, self->str, cutlen);
+	memcpy(cutstr, self->str, cutlen * sizeof *cutstr);
 	cutstr[cutlen] = 0;
 	return create(cutstr, cutlen);
     }
