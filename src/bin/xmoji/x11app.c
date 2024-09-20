@@ -1,4 +1,8 @@
-#define _POSIX_C_SOURCE 200112L
+#define _XOPEN_SOURCE 600
+/* #define _POSIX_C_SOURCE 200112L
+ * for gethostname() on NetBSD, where it's only exposed as part of XPG4.2,
+ * although specified in POSIX since POSIX.1-2001
+ */
 
 #include "x11app.h"
 
