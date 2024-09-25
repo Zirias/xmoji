@@ -14,7 +14,7 @@ GEN_TRANS_tool=		$(XTC_TARGET)
 GEN_TRANS_args=		compile $(dir $1) \
 			$(lastword $(subst -, ,$(basename $1))) $2
 
-xmoji_VERSION=		0.7
+xmoji_VERSION=		0.8
 xmoji_DEFINES=		-DLOCALEDIR=\"$(localedir)\" \
 			-DVERSION=\"$(xmoji_VERSION)\"
 xmoji_MODULES=		button \
