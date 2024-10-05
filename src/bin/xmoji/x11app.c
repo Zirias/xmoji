@@ -60,9 +60,12 @@ static void svprestartup(void *receiver, void *sender, void *args)
 {
     (void)receiver;
     (void)sender;
-    (void)args;
 
     PSC_Service_setTickInterval(0);
+    PSC_EAStartup *ea = args;
+    PSC_EAStartup_return(ea, X11Adapter_init(instance->argc, instance->argv,
+		instance->locale.lc_ctype, instance->name,
+		Object_className(instance)) ? EXIT_FAILURE : EXIT_SUCCESS);
 }
 
 static void svstartup(void *receiver, void *sender, void *args)
@@ -161,9 +164,14 @@ done:
 static void initPoser(int argc, char **argv)
 {
     PSC_LogLevel loglevel = PSC_L_WARNING;
+    int foreground = 0;
     for (int i = 1; i < argc; ++i)
     {
-	if (loglevel < PSC_L_INFO && !strcmp(argv[i], "-v"))
+	if (!foreground && !strcmp(argv[i], "-f"))
+	{
+	    foreground = 1;
+	}
+	else if (loglevel < PSC_L_INFO && !strcmp(argv[i], "-v"))
 	{
 	    loglevel = PSC_L_INFO;
 	}
@@ -172,7 +180,7 @@ static void initPoser(int argc, char **argv)
 	    loglevel = PSC_L_DEBUG;
 	}
     }
-    PSC_RunOpts_foreground();
+    if (foreground) PSC_RunOpts_foreground();
     PSC_Log_setFileLogger(stderr);
     PSC_Log_setMaxLogLevel(loglevel);
 }
@@ -234,12 +242,9 @@ X11App *X11App_createBase(void *derived, int argc, char **argv)
 int X11App_run(void)
 {
     if (!instance) return EXIT_FAILURE;
-    int rc = X11Adapter_init(instance->argc, instance->argv,
-	    instance->locale.lc_ctype, instance->name,
-	    Object_className(instance));
-    if (rc == 0) rc = PSC_Service_run();
+    int rc = PSC_Service_run();
     Object_destroy(instance);
-    return rc ? EXIT_FAILURE : EXIT_SUCCESS;
+    return rc;
 }
 
 void X11App_quit(void)
