@@ -16,6 +16,7 @@
 #include "menu.h"
 #include "pixmap.h"
 #include "scrollbox.h"
+#include "singleinstance.h"
 #include "spinbox.h"
 #include "tabbox.h"
 #include "table.h"
@@ -44,6 +45,7 @@ typedef struct Xmoji
 {
     Object base;
     const char *cfgfile;
+    SingleInstance *instance;
     Config *config;
     Translator *uitexts;
     Translator *emojitexts;
@@ -69,6 +71,7 @@ static void destroy(void *app)
     Translator_destroy(self->emojitexts);
     Translator_destroy(self->uitexts);
     Config_destroy(self->config);
+    SingleInstance_destroy(self->instance);
     free(self);
 }
 
@@ -374,6 +377,9 @@ static int startup(void *app)
 	    onwaitafterchanged, 0);
     PSC_Event_register(Config_emojiSearchModeChanged(self->config), self,
 	    onsearchmodechanged, 0);
+
+    self->instance = SingleInstance_create();
+    if (!SingleInstance_start(self->instance)) return -1;
 
     /* Load translations */
     Translator *tr = Translator_create("xmoji-ui",

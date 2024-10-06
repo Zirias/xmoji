@@ -42,6 +42,7 @@ xmoji_MODULES=		button \
 			pixmap \
 			scrollbox \
 			shape \
+			singleinstance \
 			spinbox \
 			surface \
 			tabbox \

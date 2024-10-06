@@ -79,7 +79,8 @@ static void svstartup(void *receiver, void *sender, void *args)
     PSC_EAStartup *ea = args;
     int rc = 0;
     Object_vcall(rc, X11App, startup, instance);
-    if (rc != 0) PSC_EAStartup_return(ea, EXIT_FAILURE);
+    if (rc == EXIT_FAILURE) PSC_EAStartup_return(ea, EXIT_FAILURE);
+    if (rc != 0) PSC_Service_quit();
 }
 
 static void svshutdown(void *receiver, void *sender, void *args)
@@ -203,6 +204,38 @@ static char *getName(int argc, char **argv)
 	else nm = argv[0];
     }
     return PSC_copystr(*nm ? nm : "x11app");
+}
+
+static void ensureWmProps(void)
+{
+    if (!instance->hostprop)
+    {
+	long maxlen = sysconf(_SC_HOST_NAME_MAX);
+	if (maxlen < 0) maxlen = 1024;
+	instance->hostprop = PSC_malloc(maxlen + 1);
+	gethostname(instance->hostprop, maxlen + 1);
+	instance->hostprop[maxlen] = 0;
+	instance->hostproplen = strlen(instance->hostprop);
+	if (instance->hostproplen < (size_t)maxlen)
+	{
+	    instance->hostprop = PSC_realloc(instance->hostprop,
+		    instance->hostproplen + 1);
+	}
+	instance->cmdproplen = 0;
+	for (int i = 0; i < instance->argc; ++i)
+	{
+	    instance->cmdproplen += strlen(instance->argv[i]) + 1;
+	}
+	instance->cmdprop = PSC_malloc(instance->cmdproplen);
+	size_t pos = 0;
+	for (int i = 0; i < instance->argc; ++i)
+	{
+	    size_t argvlen = strlen(instance->argv[i]) + 1;
+	    memcpy(instance->cmdprop + pos, instance->argv[i], argvlen);
+	    pos += argvlen;
+	}
+	instance->pidprop = getpid();
+    }
 }
 
 X11App *app(void)
@@ -349,34 +382,7 @@ void X11App_showWaitCursor(void)
 void X11App_setWmProperties(Window *win)
 {
     if (!instance) return;
-    if (!instance->hostprop)
-    {
-	long maxlen = sysconf(_SC_HOST_NAME_MAX);
-	if (maxlen < 0) maxlen = 1024;
-	instance->hostprop = PSC_malloc(maxlen + 1);
-	gethostname(instance->hostprop, maxlen + 1);
-	instance->hostprop[maxlen] = 0;
-	instance->hostproplen = strlen(instance->hostprop);
-	if (instance->hostproplen < (size_t)maxlen)
-	{
-	    instance->hostprop = PSC_realloc(instance->hostprop,
-		    instance->hostproplen + 1);
-	}
-	instance->cmdproplen = 0;
-	for (int i = 0; i < instance->argc; ++i)
-	{
-	    instance->cmdproplen += strlen(instance->argv[i]) + 1;
-	}
-	instance->cmdprop = PSC_malloc(instance->cmdproplen);
-	size_t pos = 0;
-	for (int i = 0; i < instance->argc; ++i)
-	{
-	    size_t argvlen = strlen(instance->argv[i]) + 1;
-	    memcpy(instance->cmdprop + pos, instance->argv[i], argvlen);
-	    pos += argvlen;
-	}
-	instance->pidprop = getpid();
-    }
+    ensureWmProps();
     xcb_connection_t *c = X11Adapter_connection();
     xcb_window_t w = Window_id(win);
     CHECK(xcb_change_property(c, XCB_PROP_MODE_REPLACE, w,
@@ -392,8 +398,21 @@ void X11App_setWmProperties(Window *win)
 	    "Cannot set _NET_WM_PID for 0x%x", (unsigned)w);
 }
 
+const char *X11App_name(void)
+{
+    if (!instance) return 0;
+    return instance->name;
+}
+
 const char *X11App_lcMessages(void)
 {
     if (!instance) return 0;
     return instance->locale.lc_messages;
+}
+
+const char *X11App_hostname(void)
+{
+    if (!instance) return 0;
+    ensureWmProps();
+    return instance->hostprop;
 }
