@@ -1312,3 +1312,33 @@ void Window_showWaitCursor(void *self)
 	    "Cannot change cursor for 0x%x", (unsigned)w->w);
     xcb_flush(c);
 }
+
+void Window_raise(void *self, int force)
+{
+    Window *w = Object_instance(self);
+    xcb_connection_t *c = X11Adapter_connection();
+    static const uint32_t above = XCB_STACK_MODE_ABOVE;
+    if (force)
+    {
+	xcb_client_message_event_t msg = {
+	    .response_type = XCB_CLIENT_MESSAGE,
+	    .format = 32,
+	    .sequence = 0,
+	    .window = w->w,
+	    .type = A(_NET_RESTACK_WINDOW),
+	    .data = { .data32 = { 2, 0, above, 0, 0 } }
+	};
+	CHECK(xcb_send_event(c, 0, X11Adapter_screen()->root,
+		    XCB_EVENT_MASK_SUBSTRUCTURE_NOTIFY |
+		    XCB_EVENT_MASK_SUBSTRUCTURE_REDIRECT, (const char *)&msg),
+		"Cannot request raising window 0x%x", (unsigned)w->w);
+    }
+    CHECK(xcb_configure_window(c, w->w,
+		XCB_CONFIG_WINDOW_STACK_MODE, &above),
+	    "Cannot raise window for 0x%x", (unsigned)w->w);
+}
+
+void Window_expose(void *self)
+{
+    Window_raise(self, 1);
+}

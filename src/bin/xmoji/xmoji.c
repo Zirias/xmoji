@@ -51,6 +51,7 @@ typedef struct Xmoji
     Translator *emojitexts;
     Font *emojiFont;
     Font *scaledEmojiFont;
+    Window *mainWindow;
     Window *aboutDialog;
     Window *settingsDialog;
     TabBox *tabs;
@@ -73,6 +74,15 @@ static void destroy(void *app)
     Config_destroy(self->config);
     SingleInstance_destroy(self->instance);
     free(self);
+}
+
+static void onsecondary(void *receiver, void *sender, void *args)
+{
+    (void)sender;
+    (void)args;
+
+    Xmoji *self = receiver;
+    Window_expose(self->mainWindow);
 }
 
 static void onabout(void *receiver, void *sender, void *args)
@@ -379,6 +389,8 @@ static int startup(void *app)
 	    onsearchmodechanged, 0);
 
     self->instance = SingleInstance_create();
+    PSC_Event_register(SingleInstance_secondary(self->instance), self,
+	    onsecondary, 0);
     if (!SingleInstance_start(self->instance)) return -1;
 
     /* Load translations */
@@ -567,6 +579,8 @@ static int startup(void *app)
     Widget_show(tabs);
     Window_setMainWidget(win, tabs);
     Command_attach(quitCommand, win, Window_closed);
+
+    self->mainWindow = win;
 
     /* Create "About" dialog */
     Window *aboutDlg = Window_create("aboutDialog",

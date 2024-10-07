@@ -112,4 +112,10 @@ void Window_invalidateHover(void *self)
 void Window_showWaitCursor(void *self)
     CMETHOD;
 
+void Window_raise(void *self, int force)
+    CMETHOD;
+
+void Window_expose(void *self)
+    CMETHOD;
+
 #endif
