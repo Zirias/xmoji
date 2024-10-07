@@ -33,7 +33,9 @@ typedef enum XGlitch
     X(WM_STATE) \
     X(WM_TAKE_FOCUS) \
     X(_MOTIF_WM_HINTS) \
+    X(_NET_CURRENT_DESKTOP) \
     X(_NET_RESTACK_WINDOW) \
+    X(_NET_WM_DESKTOP) \
     X(_NET_WM_ICON) \
     X(_NET_WM_ICON_NAME) \
     X(_NET_WM_NAME) \

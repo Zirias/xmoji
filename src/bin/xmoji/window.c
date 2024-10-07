@@ -1338,7 +1338,42 @@ void Window_raise(void *self, int force)
 	    "Cannot raise window for 0x%x", (unsigned)w->w);
 }
 
+static void doexpose(void *obj, unsigned sequence,
+	void *reply, xcb_generic_error_t *error)
+{
+    (void)sequence;
+
+    Window *self = obj;
+    if (error || !reply) goto doraise;
+    xcb_get_property_reply_t *prop = reply;
+    if (prop->type != XCB_ATOM_CARDINAL) goto doraise;
+    uint32_t len = xcb_get_property_value_length(prop);
+    if (len != 4) goto doraise;
+
+    uint32_t *desktop = xcb_get_property_value(prop);
+    xcb_client_message_event_t msg = {
+	.response_type = XCB_CLIENT_MESSAGE,
+	.format = 32,
+	.sequence = 0,
+	.window = self->w,
+	.type = A(_NET_WM_DESKTOP),
+	.data = { .data32 = { *desktop, 2, 0, 0, 0 } }
+    };
+    CHECK(xcb_send_event(X11Adapter_connection(), 0, X11Adapter_screen()->root,
+		XCB_EVENT_MASK_SUBSTRUCTURE_NOTIFY |
+		XCB_EVENT_MASK_SUBSTRUCTURE_REDIRECT, (const char *)&msg),
+	    "Cannot move 0x%x to current desktop", (unsigned)self->w);
+
+doraise:
+    Window_raise(self, 1);
+}
+
 void Window_expose(void *self)
 {
-    Window_raise(self, 1);
+    Window *w = Object_instance(self);
+    map(w);
+    AWAIT(xcb_get_property(X11Adapter_connection(), 0,
+		X11Adapter_screen()->root,
+		A(_NET_CURRENT_DESKTOP), XCB_ATOM_CARDINAL, 0, 1),
+	    self, doexpose);
 }
