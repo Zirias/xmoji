@@ -55,6 +55,7 @@ struct Window
     WindowState hideState;
     XCursor cursor;
     xcb_window_t w;
+    xcb_window_t deco;
     xcb_pixmap_t p;
     xcb_render_picture_t src;
     xcb_render_picture_t dst;
@@ -1338,12 +1339,58 @@ void Window_raise(void *self, int force)
 	    "Cannot raise window for 0x%x", (unsigned)w->w);
 }
 
-static void doexpose(void *obj, unsigned sequence,
+static void exposeCheckPosition(void *obj, unsigned sequence,
 	void *reply, xcb_generic_error_t *error)
 {
     (void)sequence;
 
     Window *self = obj;
+    if (error || !reply) return;
+    xcb_get_geometry_reply_t *geom = reply;
+    xcb_screen_t *s = X11Adapter_screen();
+    uint32_t pos[] = {
+	geom->x < 0
+	    ? s->width_in_pixels - (-geom->x) % s->width_in_pixels
+	    : geom->x % s->width_in_pixels,
+	geom->y < 0
+	    ? s->height_in_pixels - (-geom->y) % s->height_in_pixels
+	    : geom->y % s->height_in_pixels
+    };
+    if (pos[0] != (uint32_t)geom->x || pos[1] != (uint32_t)geom->y)
+    {
+	CHECK(xcb_configure_window(X11Adapter_connection(), self->w,
+		    XCB_CONFIG_WINDOW_X | XCB_CONFIG_WINDOW_Y, pos),
+		"Cannot move window 0x%x", (unsigned)self->w);
+    }
+}
+
+static void exposeCheckParent(void *obj, unsigned sequence,
+	void *reply, xcb_generic_error_t *error)
+{
+    (void)sequence;
+
+    Window *self = obj;
+    if (error || !reply) return;
+    xcb_connection_t *c = X11Adapter_connection();
+    xcb_query_tree_reply_t *tree = reply;
+    if (tree->parent == tree->root)
+    {
+	AWAIT(xcb_get_geometry(c, self->deco), self, exposeCheckPosition);
+    }
+    else
+    {
+	self->deco = tree->parent;
+	AWAIT(xcb_query_tree(c, self->deco), self, exposeCheckParent);
+    }
+}
+
+static void exposeCheckDesktop(void *obj, unsigned sequence,
+	void *reply, xcb_generic_error_t *error)
+{
+    (void)sequence;
+
+    Window *self = obj;
+    xcb_connection_t *c = X11Adapter_connection();
     if (error || !reply) goto doraise;
     xcb_get_property_reply_t *prop = reply;
     if (prop->type != XCB_ATOM_CARDINAL) goto doraise;
@@ -1359,13 +1406,16 @@ static void doexpose(void *obj, unsigned sequence,
 	.type = A(_NET_WM_DESKTOP),
 	.data = { .data32 = { *desktop, 2, 0, 0, 0 } }
     };
-    CHECK(xcb_send_event(X11Adapter_connection(), 0, X11Adapter_screen()->root,
+    CHECK(xcb_send_event(c, 0, X11Adapter_screen()->root,
 		XCB_EVENT_MASK_SUBSTRUCTURE_NOTIFY |
 		XCB_EVENT_MASK_SUBSTRUCTURE_REDIRECT, (const char *)&msg),
 	    "Cannot move 0x%x to current desktop", (unsigned)self->w);
 
 doraise:
     Window_raise(self, 1);
+
+    self->deco = self->w;
+    AWAIT(xcb_query_tree(c, self->deco), self, exposeCheckParent);
 }
 
 void Window_expose(void *self)
@@ -1375,5 +1425,5 @@ void Window_expose(void *self)
     AWAIT(xcb_get_property(X11Adapter_connection(), 0,
 		X11Adapter_screen()->root,
 		A(_NET_CURRENT_DESKTOP), XCB_ATOM_CARDINAL, 0, 1),
-	    self, doexpose);
+	    self, exposeCheckDesktop);
 }
