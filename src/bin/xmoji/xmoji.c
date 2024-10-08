@@ -36,10 +36,12 @@
 #define MAXSEARCHRESULTS 100
 #define SEARCHRESULTSZ 1024
 
+static int prestartup(void *app);
 static int startup(void *app);
 static void destroy(void *app);
 
-static MetaX11App mo = MetaX11App_init(startup, 0, "Xmoji", destroy);
+static MetaX11App mo = MetaX11App_init(prestartup, startup, 0,
+	"Xmoji", destroy);
 
 typedef struct Xmoji
 {
@@ -405,7 +407,7 @@ static void onsearchmodeboxchanged(void *receiver, void *sender, void *args)
     Config_setEmojiSearchMode(self->config, *val + (*val > 2) + 1);
 }
 
-static int startup(void *app)
+static int prestartup(void *app)
 {
     Xmoji *self = Object_instance(app);
 
@@ -428,15 +430,27 @@ static int startup(void *app)
     PSC_Event_register(SingleInstance_secondary(self->instance), self,
 	    onsecondary, 0);
     if (Config_singleInstance(self->config)
-	    && !SingleInstance_start(self->instance)) return -1;
+	    && !SingleInstance_start(self->instance))
+    {
+	PSC_Log_setMaxLogLevel(PSC_L_INFO);
+	PSC_Log_msg(PSC_L_INFO, "Found running instance, quitting.");
+	return -1;
+    }
 
     /* Load translations */
-    Translator *tr = Translator_create("xmoji-ui",
+    self->uitexts = Translator_create("xmoji-ui",
 	    X11App_lcMessages(), XMU_get);
-    self->uitexts = tr;
-    Translator *etr = Translator_create("xmoji-emojis",
+    self->emojitexts = Translator_create("xmoji-emojis",
 	    X11App_lcMessages(), XME_get);
-    self->emojitexts = etr;
+
+    return 0;
+}
+
+static int startup(void *app)
+{
+    Xmoji *self = Object_instance(app);
+    Translator *tr = self->uitexts;
+    Translator *etr = self->emojitexts;
 
     /* Initialize commands */
     Command *aboutCommand = Command_create(

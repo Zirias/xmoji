@@ -21,7 +21,7 @@
 static void destroy(void *obj);
 
 static X11App *instance;
-static MetaX11App mo = MetaX11App_init(0, 0, "X11App", destroy);
+static MetaX11App mo = MetaX11App_init(0, 0, 0, "X11App", destroy);
 
 typedef struct AppLocale
 {
@@ -58,20 +58,33 @@ struct X11Error
 
 static void svprestartup(void *receiver, void *sender, void *args)
 {
-    (void)receiver;
     (void)sender;
 
+    X11App *self = receiver;
     PSC_Service_setTickInterval(0);
     PSC_EAStartup *ea = args;
-    PSC_EAStartup_return(ea, X11Adapter_init(instance->argc, instance->argv,
+    int rc = 0;
+    Object_vcall(rc, X11App, prestartup, instance);
+    if (rc == EXIT_FAILURE) PSC_EAStartup_return(ea, EXIT_FAILURE);
+    else if (rc != 0) self->quitting = 1;
+    else PSC_EAStartup_return(ea,
+	    X11Adapter_init(instance->argc, instance->argv,
 		instance->locale.lc_ctype, instance->name,
-		Object_className(instance)) ? EXIT_FAILURE : EXIT_SUCCESS);
+		Object_className(instance))
+	    ? EXIT_FAILURE : EXIT_SUCCESS);
 }
 
 static void svstartup(void *receiver, void *sender, void *args)
 {
-    (void)receiver;
     (void)sender;
+
+    X11App *self = receiver;
+    if (self->quitting)
+    {
+	self->quitting = 0;
+	PSC_Service_quit();
+	return;
+    }
 
 #ifndef DEBUG
     PSC_Log_setAsync(1);

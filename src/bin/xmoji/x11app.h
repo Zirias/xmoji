@@ -14,12 +14,14 @@ C_CLASS_DECL(X11App);
 typedef struct MetaX11App
 {
     MetaObject base;
+    int (*prestartup)(void *app);
     int (*startup)(void *app);
     void (*shutdown)(void *app);
 } MetaX11App;
 
-#define MetaX11App_init(mstartup, mshutdown, ...) { \
+#define MetaX11App_init(mprestartup, mstartup, mshutdown, ...) { \
     .base = MetaObject_init(__VA_ARGS__), \
+    .prestartup = mprestartup, \
     .startup = mstartup, \
     .shutdown = mshutdown, \
 }
