@@ -130,7 +130,7 @@ xmoji_PRECFLAGS+=	-I./poser/include
 xmoji_LIBS+=		posercore
 xmoji_LDFLAGS+=		-pthread
 else
-xmoji_PKGDEPS+=		posercore >= 1.2
+xmoji_PKGDEPS+=		posercore >= 1.2.2
 endif
 
 ifeq ($(WITH_NLS),1)
