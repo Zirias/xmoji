@@ -13,7 +13,15 @@
 
 #define TMPSUFX ".tmp"
 
-static char buf[8192];
+typedef struct ReadContext
+{
+    ConfigFile *configFile;
+    PSC_ThreadJob *job;
+    int rc;
+    int checkchanges;
+    char buf[8192];
+    char *vals[];
+} ReadContext;
 
 struct ConfigFile
 {
@@ -21,6 +29,7 @@ struct ConfigFile
     FileWatcher *watcher;
     PSC_Event *changed;
     const char **keys;
+    ReadContext *readContext;
     size_t nkeys;
     int dirty;
     char *vals[];
@@ -36,7 +45,7 @@ static size_t keyidx(const ConfigFile *self, const char *key)
     return i;
 }
 
-static int parseline(const char **key, const char **val)
+static int parseline(char *buf, const char **key, const char **val)
 {
     char *p = buf;
     while (*p == ' ' || *p == '\t') ++p;
@@ -55,62 +64,107 @@ static int parseline(const char **key, const char **val)
     return 1;
 }
 
-static int doread(ConfigFile *self, int checkchanges)
+static void readjob(void *arg)
 {
-    int rc = -1;
-    FILE *f = fopen(self->path, "r");
-    if (!f) return rc;
-    char **newvals = PSC_malloc(self->nkeys * sizeof *newvals);
-    memset(newvals, 0, self->nkeys * sizeof *newvals);
-    while (fgets(buf, sizeof buf, f))
+    ReadContext *ctx = arg;
+    FILE *f = fopen(ctx->configFile->path, "r");
+    if (!f || (ctx->job && PSC_ThreadJob_canceled())) goto done;
+    while (fgets(ctx->buf, sizeof ctx->buf, f))
     {
+	if (ctx->job && PSC_ThreadJob_canceled()) goto done;
 	const char *key;
 	const char *val;
-	if (parseline(&key, &val))
+	if (parseline(ctx->buf, &key, &val))
 	{
-	    size_t i = keyidx(self, key);
-	    if (i < self->nkeys)
+	    size_t i = keyidx(ctx->configFile, key);
+	    if (i < ctx->configFile->nkeys)
 	    {
-		free(newvals[i]);
-		newvals[i] = PSC_copystr(val);
+		free(ctx->vals[i]);
+		ctx->vals[i] = PSC_copystr(val);
 	    }
 	}
     }
+    if (ctx->job && PSC_ThreadJob_canceled()) goto done;
     if (ferror(f)) goto done;
-    rc = 0;
-    for (size_t i = 0; i < self->nkeys; ++i)
+    ctx->rc = 0;
+done:
+    fclose(f);
+}
+
+static void readjobfinished(void *receiver, void *sender, void *args)
+{
+    ConfigFile *self = receiver;
+    PSC_ThreadJob *job = sender;
+    ReadContext *ctx = args;
+
+    if ((!job || PSC_ThreadJob_hasCompleted(job)) && ctx->rc == 0)
     {
-	int changed = 0;
-	if (newvals[i])
+	for (size_t i = 0; i < self->nkeys; ++i)
 	{
-	    if (!self->vals[i])
+	    int changed = 0;
+	    if (ctx->vals[i])
 	    {
-		self->vals[i] = newvals[i];
-		changed = 1;
+		if (!self->vals[i])
+		{
+		    self->vals[i] = ctx->vals[i];
+		    ctx->vals[i] = 0;
+		    changed = 1;
+		}
+		else if (strcmp(ctx->vals[i], self->vals[i]))
+		{
+		    free(self->vals[i]);
+		    self->vals[i] = ctx->vals[i];
+		    ctx->vals[i] = 0;
+		    changed = 1;
+		}
 	    }
-	    else if (strcmp(newvals[i], self->vals[i]))
+	    else if (self->vals[i])
 	    {
 		free(self->vals[i]);
-		self->vals[i] = newvals[i];
+		self->vals[i] = 0;
 		changed = 1;
 	    }
-	    else free(newvals[i]);
-	}
-	else if (self->vals[i])
-	{
-	    free(self->vals[i]);
-	    self->vals[i] = 0;
-	    changed = 1;
-	}
-	if (checkchanges && changed)
-	{
-	    ConfigFileChangedEventArgs args = { self->keys[i] };
-	    PSC_Event_raise(self->changed, 0, &args);
+	    if (ctx->checkchanges && changed)
+	    {
+		ConfigFileChangedEventArgs ea = { self->keys[i] };
+		PSC_Event_raise(self->changed, 0, &ea);
+	    }
 	}
     }
-done:
-    free(newvals);
-    fclose(f);
+
+    if (self->readContext == ctx) self->readContext = 0;
+    for (size_t i = 0; i < self->nkeys; ++i) free(ctx->vals[i]);
+    free(ctx);
+}
+
+static int doread(ConfigFile *self, int checkchanges)
+{
+    if (self->readContext)
+    {
+	PSC_ThreadPool_cancel(self->readContext->job);
+    }
+
+    self->readContext = PSC_malloc(sizeof *self->readContext
+	    + self->nkeys * sizeof *self->readContext->vals);
+    memset(self->readContext, 0, sizeof *self->readContext
+	    + self->nkeys * sizeof *self->readContext->vals);
+    self->readContext->configFile = self;
+    self->readContext->rc = -1;
+    self->readContext->checkchanges = checkchanges;
+
+    if (checkchanges && PSC_ThreadPool_active())
+    {
+	self->readContext->job = PSC_ThreadJob_create(readjob,
+		self->readContext, 0);
+	PSC_Event_register(PSC_ThreadJob_finished(self->readContext->job),
+		self, readjobfinished, 0);
+	PSC_ThreadPool_enqueue(self->readContext->job);
+	return 0;
+    }
+
+    readjob(self->readContext);
+    int rc = self->readContext->rc;
+    readjobfinished(self, 0, self->readContext);
     return rc;
 }
 
@@ -161,6 +215,7 @@ ConfigFile *ConfigFile_create(const char *path, size_t nkeys,
     self->watcher = FileWatcher_create(path);
     self->changed = PSC_Event_create(self);
     self->keys = keys;
+    self->readContext = 0;
     self->nkeys = nkeys;
     memset(self->vals, 0, nkeys * sizeof *self->vals);
     PSC_Event_register(FileWatcher_changed(self->watcher), self,
