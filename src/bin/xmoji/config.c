@@ -16,6 +16,7 @@
 #define CFGDEFNAME "/xmoji.cfg"
 #define CFGDEFPATH "/.config"
 
+#define DEF_SINGLEINSTANCE  1
 #define DEF_SCALE	    EF_MEDIUM
 #define DEF_INJECTORFLAGS   IF_NONE
 #define DEF_WAITBEFORE	    50
@@ -24,6 +25,7 @@
 
 enum ConfigKey
 {
+    CFG_SINGLEINSTANCE,
     CFG_SCALE,
     CFG_INJECTORFLAGS,
     CFG_WAITBEFORE,
@@ -33,6 +35,7 @@ enum ConfigKey
 };
 
 static const char *keys[] = {
+    "singleInstance",
     "scale",
     "injectorFlags",
     "waitBefore",
@@ -41,6 +44,7 @@ static const char *keys[] = {
     "history"
 };
 
+static void readSingleInstance(Config *self);
 static void readScale(Config *self);
 static void readHistory(Config *self);
 static void readInjectorFlags(Config *self);
@@ -49,6 +53,7 @@ static void readWaitAfter(Config *self);
 static void readSearchMode(Config *self);
 
 static void (*const readers[])(Config *) = {
+    readSingleInstance,
     readScale,
     readInjectorFlags,
     readWaitBefore,
@@ -64,6 +69,7 @@ struct Config
     PSC_Event *changed[sizeof keys / sizeof *keys - 1];
     EmojiHistory *history;
     int reading;
+    int singleInstance;
     EmojiFont scale;
     InjectorFlags injectorFlags;
     unsigned waitBefore;
@@ -94,6 +100,26 @@ static void writeNum(Config *self, enum ConfigKey key, long val)
     snprintf(buf, 32, "%ld", val);
     ConfigFile_set(self->cfg, keys[key], PSC_copystr(buf));
     ConfigFile_write(self->cfg);
+}
+
+static void readSingleInstance(Config *self)
+{
+    int singleInstance = DEF_SINGLEINSTANCE;
+    long singleval;
+    if (tryParseNum(&singleval,
+		ConfigFile_get(self->cfg, keys[CFG_SINGLEINSTANCE])))
+    {
+	singleInstance = !!singleval;
+    }
+    if (self->reading == 2 || singleInstance != self->singleInstance)
+    {
+	self->singleInstance = singleInstance;
+	if (self->reading < 2)
+	{
+	    ConfigChangedEventArgs ea = { 1 };
+	    PSC_Event_raise(self->changed[CFG_SINGLEINSTANCE], 0, &ea);
+	}
+    }
 }
 
 static void readScale(Config *self)
@@ -376,6 +402,26 @@ Config *Config_create(const char *path)
 EmojiHistory *Config_history(Config *self)
 {
     return self->history;
+}
+
+int Config_singleInstance(const Config *self)
+{
+    return self->singleInstance;
+}
+
+void Config_setSingleInstance(Config *self, int singleInstance)
+{
+    singleInstance = !!singleInstance;
+    if (self->singleInstance == singleInstance) return;
+    writeNum(self, CFG_SINGLEINSTANCE, singleInstance);
+    self->singleInstance = singleInstance;
+    ConfigChangedEventArgs ea = { 0 };
+    PSC_Event_raise(self->changed[CFG_SINGLEINSTANCE], 0, &ea);
+}
+
+PSC_Event *Config_singleInstanceChanged(Config *self)
+{
+    return self->changed[CFG_SINGLEINSTANCE];
 }
 
 EmojiFont Config_scale(const Config *self)
