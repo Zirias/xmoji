@@ -99,7 +99,7 @@ static void writeNum(Config *self, enum ConfigKey key, long val)
     char buf[32];
     snprintf(buf, 32, "%ld", val);
     ConfigFile_set(self->cfg, keys[key], PSC_copystr(buf));
-    ConfigFile_write(self->cfg);
+    ConfigFile_write(self->cfg, 0);
 }
 
 static void readSingleInstance(Config *self)
@@ -255,7 +255,7 @@ static void historychanged(void *receiver, void *sender, void *args)
     if (self->reading) return;
     ConfigFile_set(self->cfg, keys[CFG_HISTORY],
 	    EmojiHistory_serialize(self->history));
-    ConfigFile_write(self->cfg);
+    ConfigFile_write(self->cfg, 0);
 }
 
 static char *canonicalpath(const char *path)
@@ -384,7 +384,7 @@ Config *Config_create(const char *path)
 	readers[i](self);
     }
     self->reading = 0;
-    if (ConfigFile_write(self->cfg) >= 0)
+    if (ConfigFile_write(self->cfg, 1) >= 0)
     {
 	PSC_Event_register(ConfigFile_changed(self->cfg), self,
 		filechanged, 0);

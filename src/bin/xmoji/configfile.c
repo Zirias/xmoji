@@ -23,6 +23,15 @@ typedef struct ReadContext
     char *vals[];
 } ReadContext;
 
+typedef struct WriteContext
+{
+    ConfigFile *configFile;
+    char *tmppath;
+    PSC_ThreadJob *job;
+    int rc;
+    char *vals[];
+} WriteContext;
+
 struct ConfigFile
 {
     const char *path;
@@ -30,6 +39,7 @@ struct ConfigFile
     PSC_Event *changed;
     const char **keys;
     ReadContext *readContext;
+    WriteContext *writeContext;
     size_t nkeys;
     int dirty;
     char *vals[];
@@ -216,6 +226,7 @@ ConfigFile *ConfigFile_create(const char *path, size_t nkeys,
     self->changed = PSC_Event_create(self);
     self->keys = keys;
     self->readContext = 0;
+    self->writeContext = 0;
     self->nkeys = nkeys;
     memset(self->vals, 0, nkeys * sizeof *self->vals);
     PSC_Event_register(FileWatcher_changed(self->watcher), self,
@@ -265,34 +276,113 @@ done:
     return rc;
 }
 
-int ConfigFile_write(ConfigFile *self)
+static void movejobfinished(void *receiver, void *sender, void *args)
 {
-    int rc = -1;
-    size_t nmlen = strlen(self->path);
-    char *tmpnm = PSC_malloc(nmlen + sizeof TMPSUFX);
-    memcpy(tmpnm, self->path, nmlen);
-    memcpy(tmpnm+nmlen, TMPSUFX, sizeof TMPSUFX);
-    if (ensurepath(tmpnm) < 0) goto done;
-    FILE *f = fopen(tmpnm, "w");
-    if (!f) goto done;
+    (void)sender;
+
+    ConfigFile *self = receiver;
+    WriteContext *ctx = args;
+
+    FileWatcher_watch(self->watcher);
+    if (self->writeContext == ctx) self->writeContext = 0;
+    free(ctx->tmppath);
     for (size_t i = 0; i < self->nkeys; ++i)
     {
-	if (!self->vals[i]) continue;
-	if (fprintf(f, "%s = %s\n", self->keys[i], self->vals[i]) < 1)
-	{
-	    fclose(f);
-	    unlink(tmpnm);
-	    goto done;
-	}
+	free(ctx->vals[i]);
     }
-    fclose(f);
-    FileWatcher_unwatch(self->watcher);
-    if (rename(tmpnm, self->path) < 0) goto done;
-    rc = 0;
-    FileWatcher_watch(self->watcher);
+    free(ctx);
+}
+
+static void movejob(void *arg)
+{
+    WriteContext *ctx = arg;
+    if (rename(ctx->tmppath, ctx->configFile->path) >= 0) ctx->rc = 0;
+}
+
+static void writejobfinished(void *receiver, void *sender, void *args)
+{
+    ConfigFile *self = receiver;
+    PSC_ThreadJob *job = sender;
+    WriteContext *ctx = args;
+
+    if (ctx->rc == -1 && (!job || PSC_ThreadJob_hasCompleted(job)))
+    {
+	FileWatcher_unwatch(self->watcher);
+	if (job)
+	{
+	    ctx->job = PSC_ThreadJob_create(movejob, ctx, 0);
+	    PSC_Event_register(PSC_ThreadJob_finished(ctx->job),
+		    self, movejobfinished, 0);
+	    PSC_ThreadPool_enqueue(ctx->job);
+	}
+	else movejob(ctx);
+	return;
+    }
+
+    if (job) movejobfinished(self, job, ctx);
+}
+
+static void writejob(void *arg)
+{
+    WriteContext *ctx = arg;
+    FILE *f = 0;
+    if (ensurepath(ctx->tmppath) < 0) goto done;
+    if (ctx->job && PSC_ThreadJob_canceled()) goto done;
+    f = fopen(ctx->tmppath, "w");
+    if (!f || (ctx->job && PSC_ThreadJob_canceled())) goto done;
+    for (size_t i = 0; i < ctx->configFile->nkeys; ++i)
+    {
+	if (!ctx->vals[i]) continue;
+	if (fprintf(f, "%s = %s\n",
+		    ctx->configFile->keys[i], ctx->vals[i]) < 1) goto done;
+	if (ctx->job && PSC_ThreadJob_canceled()) goto done;
+    }
+    ctx->rc = -1;
 
 done:
-    free(tmpnm);
+    if (f)
+    {
+	fclose(f);
+	if (ctx->rc < -1) unlink(ctx->tmppath);
+    }
+    if (!ctx->job) writejobfinished(ctx->configFile, 0, ctx);
+}
+
+int ConfigFile_write(ConfigFile *self, int sync)
+{
+    if (self->writeContext)
+    {
+	PSC_ThreadPool_cancel(self->writeContext->job);
+    }
+
+    self->writeContext = PSC_malloc(sizeof *self->writeContext
+	    + self->nkeys * sizeof *self->writeContext->vals);
+    self->writeContext->configFile = self;
+    size_t nmlen = strlen(self->path);
+    self->writeContext->tmppath = PSC_malloc(nmlen + sizeof TMPSUFX);
+    memcpy(self->writeContext->tmppath, self->path, nmlen);
+    memcpy(self->writeContext->tmppath+nmlen, TMPSUFX, sizeof TMPSUFX);
+    self->writeContext->rc = -2;
+    for (size_t i = 0; i < self->nkeys; ++i)
+    {
+	self->writeContext->vals[i] = self->vals[i]
+	    ? PSC_copystr(self->vals[i]) : 0;
+    }
+
+    if (!sync && PSC_ThreadPool_active())
+    {
+	self->writeContext->job = PSC_ThreadJob_create(writejob,
+		self->writeContext, 0);
+	PSC_Event_register(PSC_ThreadJob_finished(self->writeContext->job),
+		self, writejobfinished, 0);
+	PSC_ThreadPool_enqueue(self->writeContext->job);
+	return 0;
+    }
+
+    self->writeContext->job = 0;
+    writejob(self->writeContext);
+    int rc = self->writeContext->rc;
+    movejobfinished(self, 0, self->writeContext);
     return rc;
 }
 

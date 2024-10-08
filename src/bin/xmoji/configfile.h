@@ -20,7 +20,7 @@ const char *ConfigFile_get(const ConfigFile *self, const char *key)
     CMETHOD ATTR_NONNULL((2));
 PSC_Event *ConfigFile_changed(ConfigFile *self)
     CMETHOD;
-int ConfigFile_write(ConfigFile *self)
+int ConfigFile_write(ConfigFile *self, int sync)
     CMETHOD;
 void ConfigFile_destroy(ConfigFile *self);
 
