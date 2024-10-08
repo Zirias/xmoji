@@ -61,11 +61,20 @@
 #define WATCHING_EVENTS	2
 #define WATCHING_EVDIR	3
 
+typedef struct StatJobData
+{
+    const char *path;
+    struct timespec modified;
+    int exists;
+} StatJobData;
+
 struct FileWatcher
 {
     const char *path;
     char *dirpath;
     PSC_Event *changed;
+    PSC_ThreadJob *statJob;
+    StatJobData statJobData;
     struct timespec modified;
     int exists;
     int watching;
@@ -92,15 +101,31 @@ FileWatcher *FileWatcher_create(const char *path)
     return self;
 }
 
-static void dostat(void *receiver, void *sender, void *args)
+static void dostatjob(void *data)
+{
+    StatJobData *job = data;
+
+    struct stat st;
+    if (stat(job->path, &st) < 0)
+    {
+	job->exists = 0;
+    }
+    else
+    {
+	job->exists = 1;
+	job->modified = st.st_mtim;
+    }
+}
+
+static void finishstat(void *receiver, void *sender, void *args)
 {
     (void)sender;
     (void)args;
 
-    struct stat st;
     FileWatcher *self = receiver;
+    self->statJob = 0;
 
-    if (stat(self->path, &st) < 0)
+    if (!self->statJobData.exists)
     {
 	if (!self->exists) return;
 	self->exists = 0;
@@ -111,18 +136,42 @@ static void dostat(void *receiver, void *sender, void *args)
 
     if (!self->exists)
     {
-	self->modified = st.st_mtim;
+	self->modified = self->statJobData.modified;
 	self->exists = 1;
 	FileChange ea = FC_CREATED;
 	PSC_Event_raise(self->changed, 0, &ea);
 	return;
     }
 
-    if (memcmp(&self->modified, &st.st_mtim, sizeof self->modified))
+    if (memcmp(&self->modified, &self->statJobData.modified,
+		sizeof self->modified))
     {
-	self->modified = st.st_mtim;
+	self->modified = self->statJobData.modified;
 	FileChange ea = FC_MODIFIED;
 	PSC_Event_raise(self->changed, 0, &ea);
+    }
+}
+
+static void dostat(void *receiver, void *sender, void *args)
+{
+    (void)sender;
+    (void)args;
+
+    FileWatcher *self = receiver;
+    if (self->statJob) return;
+    self->statJobData.path = self->path;
+
+    if (PSC_ThreadPool_active())
+    {
+	self->statJob = PSC_ThreadJob_create(dostatjob, &self->statJobData, 0);
+	PSC_Event_register(PSC_ThreadJob_finished(self->statJob),
+		self, finishstat, 0);
+	PSC_ThreadPool_enqueue(self->statJob);
+    }
+    else
+    {
+	dostatjob(&self->statJobData);
+	finishstat(self, 0, 0);
     }
 }
 
