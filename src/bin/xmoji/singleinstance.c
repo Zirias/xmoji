@@ -97,7 +97,9 @@ int SingleInstance_start(SingleInstance *self)
 		tmpdir, basename, hash);
     }
     PSC_UnixServerOpts *opts = PSC_UnixServerOpts_create(self->sockname);
+    PSC_Log_setSilent(1);
     self->server = PSC_Server_createUnix(opts);
+    PSC_Log_setSilent(0);
     PSC_UnixServerOpts_destroy(opts);
     if (self->server)
     {

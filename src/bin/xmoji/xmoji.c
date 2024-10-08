@@ -433,7 +433,8 @@ static int prestartup(void *app)
 	    && !SingleInstance_start(self->instance))
     {
 	PSC_Log_setMaxLogLevel(PSC_L_INFO);
-	PSC_Log_msg(PSC_L_INFO, "Found running instance, quitting.");
+	PSC_Log_msg(PSC_L_INFO, "Cannot create instance socket. "
+		"Most likely, another instance is already running.");
 	return -1;
     }
 
