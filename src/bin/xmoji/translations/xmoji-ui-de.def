@@ -142,6 +142,39 @@ Xmoji settings
 Xmoji Einstellungen
 .
 
+$w$instanceDesc
+This allows to enforce running only one instance of Xmoji.
+In "Single" mode, trying to run a second instance as the same
+user on the same machine will bring the already running
+instance to the top of the current desktop.
+In "Multi" mode, many instance can run at the same time.
+.
+Mit dieser Einstellung kann erzwungen werden, dass nur eine
+Instanz von Xmoji läuft.
+Im "Einzeln" Modus wird die bereits laufende Instanz in den
+Vordergrund gebracht, wenn der gleiche Benutzer auf der gleichen
+Maschine versucht, eine weitere Instanz zu starten.
+Im "Beliebig" Modus können viele Instanzen gleichzeitig laufen.
+.
+
+$w$instance
+Instance mode:
+.
+Instanzmodus:
+.
+
+$w$instanceSingle
+Single
+.
+Einzeln
+.
+
+$w$instanceMulti
+Multi
+.
+Beliebig
+.
+
 $w$scaleDesc
 Scale factor for the size of the emoji font.
 Tiny means the default text character size.

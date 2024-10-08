@@ -57,6 +57,7 @@ typedef struct Xmoji
     TabBox *tabs;
     FlowGrid *searchGrid;
     FlowGrid *recentGrid;
+    Dropdown *instanceBox;
     Dropdown *scaleBox;
     Dropdown *injectFlagsBox;
     SpinBox *waitBeforeBox;
@@ -203,6 +204,39 @@ static void onhistorychanged(void *receiver, void *sender, void *args)
 	else Widget_hide(button);
     }
     Widget_invalidate(self->recentGrid);
+}
+
+static void onsingleinstancechanged(void *receiver, void *sender, void *args)
+{
+    (void)sender;
+
+    Xmoji *self = receiver;
+
+    int singleInstance = Config_singleInstance(self->config);
+    if (singleInstance)
+    {
+	if (!SingleInstance_start(self->instance))
+	{
+	    onquit(self, 0, 0);
+	    return;
+	}
+    }
+    else SingleInstance_stop(self->instance);
+
+    ConfigChangedEventArgs *ea = args;
+    if (ea->external)
+    {
+	Dropdown_select(self->instanceBox, !singleInstance);
+    }
+}
+
+static void oninstanceboxchanged(void *receiver, void *sender, void *args)
+{
+    (void)sender;
+
+    Xmoji *self = receiver;
+    unsigned *val = args;
+    Config_setSingleInstance(self->config, !*val);
 }
 
 static void onscalechanged(void *receiver, void *sender, void *args)
@@ -377,6 +411,8 @@ static int startup(void *app)
 
     /* Initialize runtime configuration */
     self->config = Config_create(self->cfgfile);
+    PSC_Event_register(Config_singleInstanceChanged(self->config), self,
+	    onsingleinstancechanged, 0);
     PSC_Event_register(Config_scaleChanged(self->config), self,
 	    onscalechanged, 0);
     PSC_Event_register(Config_injectorFlagsChanged(self->config), self,
@@ -391,7 +427,8 @@ static int startup(void *app)
     self->instance = SingleInstance_create();
     PSC_Event_register(SingleInstance_secondary(self->instance), self,
 	    onsecondary, 0);
-    if (!SingleInstance_start(self->instance)) return -1;
+    if (Config_singleInstance(self->config)
+	    && !SingleInstance_start(self->instance)) return -1;
 
     /* Load translations */
     Translator *tr = Translator_create("xmoji-ui",
@@ -701,13 +738,30 @@ static int startup(void *app)
     table = Table_create(settingsDlg);
 
     row = TableRow_create(table);
+    Widget_setTooltip(row, TR(tr, XMU_txt_instanceDesc), 0);
+    label = TextLabel_create("instanceLabel", row);
+    TextLabel_setText(label, TR(tr, XMU_txt_instance));
+    Widget_setAlign(label, AH_RIGHT|AV_MIDDLE);
+    Widget_show(label);
+    HBox_addWidget(row, label);
+    Dropdown *dd = Dropdown_create("instanceBox", row);
+    Dropdown_addOption(dd, TR(tr, XMU_txt_instanceSingle));
+    Dropdown_addOption(dd, TR(tr, XMU_txt_instanceMulti));
+    Dropdown_select(dd, !Config_singleInstance(self->config));
+    Widget_show(dd);
+    HBox_addWidget(row, dd);
+    self->instanceBox = dd;
+    PSC_Event_register(Dropdown_selected(dd), self, oninstanceboxchanged, 0);
+    Widget_show(row);
+    Table_addRow(table, row);
+    row = TableRow_create(table);
     Widget_setTooltip(row, TR(tr, XMU_txt_scaleDesc), 0);
     label = TextLabel_create("scaleLabel", row);
     TextLabel_setText(label, TR(tr, XMU_txt_scale));
     Widget_setAlign(label, AH_RIGHT|AV_MIDDLE);
     Widget_show(label);
     HBox_addWidget(row, label);
-    Dropdown *dd = Dropdown_create("scaleBox", row);
+    dd = Dropdown_create("scaleBox", row);
     Dropdown_addOption(dd, TR(tr, XMU_txt_scaleTiny));
     Dropdown_addOption(dd, TR(tr, XMU_txt_scaleSmall));
     Dropdown_addOption(dd, TR(tr, XMU_txt_scaleMedium));

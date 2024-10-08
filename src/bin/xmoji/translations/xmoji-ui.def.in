@@ -73,6 +73,30 @@ $c$settingsDlgTitle
 Xmoji settings
 .
 
+$w$instanceDesc
+.
+This allows to enforce running only one instance of Xmoji.
+In "Single" mode, trying to run a second instance as the same
+user on the same machine will bring the already running
+instance to the top of the current desktop.
+In "Multi" mode, many instance can run at the same time.
+.
+
+$w$instance
+.
+Instance mode:
+.
+
+$w$instanceSingle
+.
+Single
+.
+
+$w$instanceMulti
+.
+Multi
+.
+
 $w$scaleDesc
 .
 Scale factor for the size of the emoji font.
