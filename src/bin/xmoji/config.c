@@ -14,6 +14,7 @@
 #include <sys/types.h>
 #include <unistd.h>
 
+#define CFGDEFNAME "xmoji"
 #define CFGDEFPATH "/.config"
 
 #define DEF_SINGLEINSTANCE  1
@@ -335,8 +336,13 @@ static char *canonicalpath(const char *path)
 
 static char *defname(void)
 {
-    const char *parts[] = { 0, 0, "/", X11App_name(), ".cfg" };
-    size_t lens[] = { 0, 0, 1, strlen(parts[3]), sizeof ".cfg" - 1 };
+    const char *parts[] = { 0, 0, "/", 0, X11App_name(), ".cfg" };
+    size_t lens[] = { 0, 0, 1, 0, strlen(parts[4]), sizeof ".cfg" - 1 };
+    if (strcmp(parts[4], CFGDEFNAME))
+    {
+	parts[3] = CFGDEFNAME "-";
+	lens[3] = sizeof CFGDEFNAME;
+    }
     const char *home = getenv("XDG_CONFIG_HOME");
     if (home)
     {
