@@ -4,6 +4,7 @@
 
 #include "configfile.h"
 #include "emojihistory.h"
+#include "x11app.h"
 
 #include <errno.h>
 #include <poser/core.h>
@@ -13,7 +14,6 @@
 #include <sys/types.h>
 #include <unistd.h>
 
-#define CFGDEFNAME "/xmoji.cfg"
 #define CFGDEFPATH "/.config"
 
 #define DEF_SINGLEINSTANCE  1
@@ -333,36 +333,56 @@ static char *canonicalpath(const char *path)
     return canon;
 }
 
+static char *defname(void)
+{
+    const char *parts[] = { 0, 0, "/", X11App_name(), ".cfg" };
+    size_t lens[] = { 0, 0, 1, strlen(parts[3]), sizeof ".cfg" - 1 };
+    const char *home = getenv("XDG_CONFIG_HOME");
+    if (home)
+    {
+	parts[1] = home;
+	lens[1] = strlen(home);
+    }
+    else
+    {
+	parts[1] = CFGDEFPATH;
+	lens[1] = sizeof CFGDEFPATH - 1;
+	home = getenv("HOME");
+	if (!home)
+	{
+	    struct passwd *pw = getpwuid(getuid());
+	    home = pw->pw_dir;
+	}
+	if (home)
+	{
+	    parts[0] = home;
+	    lens[0] = strlen(home);
+	}
+	else
+	{
+	    parts[0] = "/tmp";
+	    lens[0] = sizeof "/tmp" - 1;
+	}
+    }
+    size_t namelen = 0;
+    for (size_t i = 0; i < sizeof lens / sizeof *lens; ++i) namelen += lens[i];
+    char *name = PSC_malloc(namelen + 1);
+    for (size_t i = 0, pos = 0; i < sizeof lens / sizeof *lens;
+	    pos += lens[i], ++i)
+    {
+	if (lens[i]) memcpy(name+pos, parts[i], lens[i]);
+    }
+    name[namelen] = 0;
+    return name;
+}
+
 Config *Config_create(const char *path)
 {
     Config *self = PSC_malloc(sizeof *self);
     self->cfgfile = path ? canonicalpath(path) : 0;
     if (!self->cfgfile)
     {
-	const char *home = getenv("XDG_CONFIG_HOME");
-	if (home)
-	{
-	    size_t homelen = strlen(home);
-	    self->cfgfile = PSC_malloc(homelen + sizeof CFGDEFNAME);
-	    memcpy(self->cfgfile, home, homelen);
-	    memcpy(self->cfgfile+homelen, CFGDEFNAME, sizeof CFGDEFNAME);
-	}
-	else
-	{
-	    home = getenv("HOME");
-	    if (!home)
-	    {
-		struct passwd *pw = getpwuid(getuid());
-		home = pw->pw_dir;
-	    }
-	    size_t homelen = strlen(home);
-	    self->cfgfile = PSC_malloc(homelen + sizeof CFGDEFPATH
-		    + sizeof CFGDEFNAME - 1);
-	    memcpy(self->cfgfile, home, homelen);
-	    memcpy(self->cfgfile+homelen, CFGDEFPATH, sizeof CFGDEFPATH - 1);
-	    memcpy(self->cfgfile+homelen + sizeof CFGDEFPATH - 1,
-		    CFGDEFNAME, sizeof CFGDEFNAME);
-	}
+	self->cfgfile = defname();
 	char *canon = canonicalpath(self->cfgfile);
 	if (canon)
 	{
