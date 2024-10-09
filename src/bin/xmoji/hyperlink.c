@@ -44,7 +44,7 @@ static int clicked(void *obj, const ClickEvent *event)
     if (event->button != MB_LEFT) return 0;
     HyperLink *self = Object_instance(obj);
     if (!self->link) return 0;
-    xdgOpen(self->link);
+    xdgOpen(self->link, 0, 0);
     return 1;
 }
 
