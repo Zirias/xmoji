@@ -205,7 +205,7 @@ static char *getName(int argc, char **argv)
     {
 	if (!strcmp(argv[i], "-name"))
 	{
-	    return argv[++i];
+	    return PSC_copystr(argv[++i]);
 	}
     }
     char *nm = getenv("RESOURCE_NAME");
