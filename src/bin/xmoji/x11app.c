@@ -35,6 +35,7 @@ struct X11App
     PSC_List *windows;
     PSC_Event *error;
     AppLocale locale;
+    const char *classname;
     char *name;
     char **argv;
     char *hostprop;
@@ -70,7 +71,8 @@ static void svprestartup(void *receiver, void *sender, void *args)
     else PSC_EAStartup_return(ea,
 	    X11Adapter_init(instance->argc, instance->argv,
 		instance->locale.lc_ctype, instance->name,
-		Object_className(instance))
+		instance->classname ? instance->classname
+		: Object_className(instance))
 	    ? EXIT_FAILURE : EXIT_SUCCESS);
 }
 
@@ -199,18 +201,22 @@ static void initPoser(int argc, char **argv)
     PSC_Log_setMaxLogLevel(loglevel);
 }
 
-static char *getName(int argc, char **argv)
+static char *getName(const char **classname, int argc, char **argv)
 {
+    char *nm = 0;
     for (int i = 1; i < argc-1; ++i)
     {
 	if (!strcmp(argv[i], "-name"))
 	{
-	    return PSC_copystr(argv[++i]);
+	    nm = argv[++i];
+	}
+	else if (!strcmp(argv[i], "-class"))
+	{
+	    *classname = argv[++i];
 	}
     }
-    char *nm = getenv("RESOURCE_NAME");
-    if (nm) return nm;
-    if (argv[0] && *argv[0])
+    if (!nm) nm = getenv("RESOURCE_NAME");
+    if (!nm && argv[0] && *argv[0])
     {
 	char *lastslash = strrchr(argv[0], '/');
 	if (lastslash) nm = lastslash+1;
@@ -268,7 +274,8 @@ X11App *X11App_createBase(void *derived, int argc, char **argv)
     self->windows = PSC_List_create();
     self->error = PSC_Event_create(self);
     self->locale = locale;
-    self->name = getName(argc, argv);
+    self->classname = 0;
+    self->name = getName(&self->classname, argc, argv);
     self->argv = argv;
     self->hostprop = 0;
     self->cmdprop = 0;
