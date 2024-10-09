@@ -3,6 +3,8 @@
 
 #include "xdgopen.h"
 
+#include "suppress.h"
+
 #include <fcntl.h>
 #include <limits.h>
 #include <poser/core.h>
@@ -83,7 +85,10 @@ static void doopen(void *arg)
 	    close(pfd[0]);
 	    execl(tool, "xdg-open", openJob->url, NULL);
 	    char err = XOE_EXEC;
+	    SUPPRESS(unused-result)
+	    /* dummy write to newly created pipe */
 	    write(pfd[1], &err, 1);
+	    ENDSUPPRESS
 	    exit(XOE_EXEC);
 	}
 
