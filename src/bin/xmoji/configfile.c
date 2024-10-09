@@ -98,7 +98,7 @@ static void readjob(void *arg)
     if (ferror(f)) goto done;
     ctx->rc = 0;
 done:
-    fclose(f);
+    if (f) fclose(f);
 }
 
 static void readjobfinished(void *receiver, void *sender, void *args)
