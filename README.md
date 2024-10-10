@@ -32,19 +32,44 @@ https://repology.org/project/xmoji/versions)
 * The history tab shows the most recently used emojis and is automatically
   persisted.
 
-## XResources
+## Commandline arguments
+
+Xmoji uses the traditional commandline syntax of X11 clients: Options start
+with a single dash (`-`), can have more than one character and can't be
+combined into a single option.
+
+* `-cfg <file>`: Override the runtime configuration file. Note that an attempt
+  is made to create this file and all directories as necessary. Default: See
+  the section about runtime configuration.
+* `-class <class>`: Override the class name. This is used for the `WM_CLASS`
+  window property and for matching Xresources. Default: `Xmoji`.
+* `-f`: Run in foreground. If not given, Xmoji detaches from the terminal
+  after successful startup.
+* `-name <name>`: Override the instance name. This is used for the `WM_CLASS`
+  window property, for the default configuration file name, for matching
+  Xresources and for checking for a running instance in "single instance
+  mode". Default: The value of the `RESOURCE_NAME` environment variable, or
+  the base name of the executable, which should be `xmoji`.
+* `-v`: Enable *verbose* output. You also need `-f` if you want to see
+  messages after startup.
+* `-vv`: Enable *very verbose* output, which includes debugging messages. When
+  Xmoji is built with the `TRACE` option, this also prints every single X11
+  request. You also need `-f` if you want to see messages after startup.
+* `-<name> <value>`: Override an Xresource value, where `<name>` is the
+  instance name of the last component.
+
+## Xresources
 
 Everything concerning appearance and rendering is configured in the
 traditional X11 way, using X resources. Xmoji only looks for them on the
 root window of the running X session, so make sure you upload them with
 the `xrdb` tool.
 
-The application class name is `Xmoji`, the instance name defaults to the
-name of the executable (`xmoji`), but can be overridden with the `-name`
-commandline argument. Most resources can also be overridden on the
-commandline by giving the instance name of their last component, so e.g.
-running `xmoji -emojiFont emoji-24` will set the emoji font to that
-font.
+The application class defaults to `Xmoji`, the instance name defaults to the
+name of the executable (`xmoji`), both can be overridden on the commandline.
+Most resources can also be overridden on the commandline by giving the
+instance name of their last component, so e.g.  running `xmoji -emojiFont
+emoji-24` will set the emoji font to that font.
 
 ### Fonts
 
@@ -160,13 +185,19 @@ automatically monitored for external changes.
 
 By default, Xmoji will use a configuration file in these places:
 
-* `${XDG_CONFIG_HOME}/xmoji.cfg`, if `XDG_CONFIG_HOME` is set.
-* `${HOME}/.config/xmoji.cfg`, if `HOME` is set.
-* `~/.config/xmoji.cfg`, with `~` refering to the home directory obtained
+* `${XDG_CONFIG_HOME}/<name>.cfg`, if `XDG_CONFIG_HOME` is set.
+* `${HOME}/.config/<name>.cfg`, if `HOME` is set.
+* `~/.config/<name>.cfg`, with `~` refering to the home directory obtained
   from the passwd database.
 
-The location of the configuration file can be overridden from the command line
-with `-cfg`, e.g.
+The default `<name>` of the configuration file is based on the instance name,
+see also the `-name` commandline option. If the instance name is **not**
+`xmoji`, `xmoji-` is automatically prepended to avoid accidental name clashes
+with other configuration files. So if you'd e.g. run `xmoji -name foobar`, it
+will use a file named `xmoji-foobar.cfg`.
+
+The full path of the configuration file can be overridden from the command
+line with `-cfg`, e.g.
 
     xmoji -cfg /tmp/xmoji.cfg
 
