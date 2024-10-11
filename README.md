@@ -88,6 +88,8 @@ individual widgets.
 * `backingStore` (no class): Use an offscreen pixmap for window contents
   and contents of scrollable areas. Disable this to save X server memory
   at the cost of visible flicker. Default: `1`.
+* `dpi` (no class): Use this resolution for calculating font sizes that are
+  not given in pixels. Default: obtained from the primary screen.
 * `scrollBarWidth` (no class): Width in pixels for scroll bars.
   Default: `10`.
 * `scrollBarMinHeight` (no class): Minimum height in pixels for scroll
