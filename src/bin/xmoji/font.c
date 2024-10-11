@@ -60,6 +60,8 @@ static int Font_init(void)
 	goto error;
     }
     defaultpat = FcNameParse((FcChar8 *)"sans");
+    FcPatternDel(defaultpat, FC_DPI);
+    FcPatternAddDouble(defaultpat, FC_DPI, X11Adapter_dpi());
     FcConfigSubstitute(0, defaultpat, FcMatchPattern);
     FcDefaultSubstitute(defaultpat);
     FcPatternGetDouble(defaultpat, FC_PIXEL_SIZE, 0, &defaultpixelsize);
@@ -327,6 +329,8 @@ Font *Font_create(const char *pattern, const FontOptions *options)
 #ifndef FT_CONFIG_OPTION_USE_PNG
 	    FcPatternAddBool(fcpat, FC_COLOR, FcFalse);
 #endif
+	    FcPatternDel(fcpat, FC_DPI);
+	    FcPatternAddDouble(fcpat, FC_DPI, X11Adapter_dpi());
 	    double reqsize = 0;
 	    double reqpxsize = 0;
 	    FcPatternGetDouble(fcpat, FC_SIZE, 0, &reqsize);
