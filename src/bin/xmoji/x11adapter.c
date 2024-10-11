@@ -921,6 +921,8 @@ int X11Adapter_init(int argc, char **argv, const char *locale,
     double resdpi = XRdb_float(rdb, XRdbKey("dpi"), XRQF_OVERRIDES,
 	    0., 72., 512.);
     if (resdpi) dpi = resdpi;
+    PSC_Log_fmt(PSC_L_INFO, "Screen resolution%s: %.2f dpi",
+	    resdpi ? " (overridden)" : "", dpi);
 
     if (xcb_cursor_context_new(c, s, &cctx) < 0)
     {
