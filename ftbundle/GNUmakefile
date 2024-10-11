@@ -9,6 +9,7 @@ FT_CONFIGFLAGS=	--disable-shared \
 		--with-zlib=yes
 FT_DESTDIR=	$(CURDIR)/root
 
+ifneq ($(filter all,$(or $(MAKECMDGOALS),all)),)
 DISTFILES=	$(wildcard freetype-2.*.?z)
 ifeq ($(strip $(DISTFILES)),)
 define MISSING_DISTFILE
@@ -41,6 +42,7 @@ EXTRACT_.xz=	xzcat
 EXTRACT_CMD=	$(EXTRACT_$(suffix $(DISTFILES))) $(DISTFILES) | tar xf -
 
 all:	$(FT_BUILDSTAMP)
+endif
 
 wipedirs:
 	@find . -type d -name freetype-2.\* -exec rm -fr \{\} \+
