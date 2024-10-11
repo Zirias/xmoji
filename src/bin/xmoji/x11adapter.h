@@ -297,6 +297,7 @@ PSC_Event *X11Adapter_requestError(void) ATTR_RETNONNULL;
 PSC_Event *X11Adapter_eventsDone(void) ATTR_RETNONNULL;
 const char *X11Adapter_wmClass(size_t *sz) ATTR_RETNONNULL;
 xcb_cursor_t X11Adapter_cursor(XCursor id);
+double X11Adapter_dpi(void);
 
 unsigned X11Adapter_await(X11RequestId reqid, void *ctx,
 	X11ReplyHandler handler) ATTR_NONNULL((3));

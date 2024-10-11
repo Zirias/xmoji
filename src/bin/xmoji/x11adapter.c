@@ -122,6 +122,7 @@ static xcb_cursor_t cursors[sizeof cursornames / sizeof *cursornames];
 
 static char wmclass[512];
 static size_t wmclasssz;
+static double dpi = 96.;
 
 static xcb_connection_t *c;
 static xcb_screen_t *s;
@@ -676,6 +677,9 @@ int X11Adapter_init(int argc, char **argv, const char *locale,
     }
 
     s = xcb_setup_roots_iterator(xcb_get_setup(c)).data;
+    dpi = (((double) s->height_in_pixels) * 25.4) /
+	((double) s->height_in_millimeters);
+
     maxRequestSize = xcb_get_maximum_request_length(c) << 2;
     PSC_Log_fmt(PSC_L_DEBUG, "maximum request size is %zu bytes",
 	    maxRequestSize);
@@ -914,6 +918,9 @@ int X11Adapter_init(int argc, char **argv, const char *locale,
     }
     if (!rdb) rdb = XRdb_create(0, 0, classname, name);
     XRdb_setOverrides(rdb, argc, argv);
+    double resdpi = XRdb_float(rdb, XRdbKey("dpi"), XRQF_OVERRIDES,
+	    0., 72., 512.);
+    if (resdpi) dpi = resdpi;
 
     if (xcb_cursor_context_new(c, s, &cctx) < 0)
     {
@@ -1119,6 +1126,11 @@ xcb_cursor_t X11Adapter_cursor(XCursor id)
 	return 0;
     }
     return cursors[id];
+}
+
+double X11Adapter_dpi(void)
+{
+    return dpi;
 }
 
 static unsigned await(X11RequestId reqid, int replytype, void *ctx,
@@ -1343,6 +1355,7 @@ void X11Adapter_done(void)
     kbdctx = 0;
     xcb_disconnect(c);
     maxRequestSize = 0;
+    dpi = 96.;
     s = 0;
     c = 0;
     memset(atoms, 0, sizeof atoms);
