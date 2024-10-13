@@ -501,7 +501,13 @@ static int startup(void *app)
 	    Config_injectorFlags(self->config));
 
     /* Create emoji font */
-    self->emojiFont = Widget_createFontResName(win, "emojiFont", "emoji", 0);
+    FontOptions options = {
+	.classname = "EmojiFont",
+	.maxUnscaledDeviation = 0,
+	.pixelFractionBits = (uint8_t)-1
+    };
+    self->emojiFont = Widget_createFontResName(win,
+	    "emojiFont", "emoji", &options);
     ConfigChangedEventArgs ea = { 0 };
     onscalechanged(self, 0, &ea);
 

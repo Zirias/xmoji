@@ -80,7 +80,9 @@ individual widgets.
 
 * `font` (class `Font`): The font for display of normal text. Default:
   `sans`.
-* `emojiFont` (class `Font`): The font for display of emojis. Default:
+* `tooltipFont` (class `Font`): The font for display of tooltips. Default:
+  `sans`.
+* `emojiFont` (class `EmojiFont`): The font for display of emojis. Default:
   `emoji`.
 
 ### Generic rendering options
@@ -156,10 +158,12 @@ names. The following colors are available:
 
 ### Example
 
-The following X resources configure a different emoji font, a slightly larger
-scroll bar, a dark color scheme and a shorter delay before displaying emoji
-names (by scoping the value only to EmojiButton):
+The following X resources configure a slightly smaller default font (for
+normal text and tooltips by specifying the class name), a different emoji
+font, a slightly larger scroll bar, a dark color scheme and a shorter delay
+before displaying emoji names (by scoping the value only to EmojiButton):
 
+    Xmoji*Font: sans-10
     Xmoji*emojiFont: Twitter Color Emoji
     Xmoji*Foreground: #c8c6c5
     Xmoji*Background: #211f1d

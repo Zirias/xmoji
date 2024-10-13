@@ -260,7 +260,8 @@ Font *Widget_createFontResName(void *self, const char *name,
 {
     if (!name) name = "font";
     XRdb *rdb = X11Adapter_resources();
-    XRdb_register(rdb, "Font", name);
+    XRdb_register(rdb, options && options->classname
+	    ? options->classname : "Font", name);
     const char *pattern = XRdb_value(rdb,
 	    XRdbKey(Widget_resname(self), name), XRQF_OVERRIDES);
     char *reqpat = 0;

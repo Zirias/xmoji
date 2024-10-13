@@ -27,6 +27,7 @@ typedef enum FontGlyphType
 
 typedef struct FontOptions
 {
+    const char *classname;
     float maxUnscaledDeviation;
     uint8_t pixelFractionBits;
 } FontOptions;
