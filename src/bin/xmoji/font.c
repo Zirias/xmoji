@@ -59,7 +59,10 @@ static int Font_init(void)
 	PSC_Log_msg(PSC_L_ERROR, "Could not initialize fontconfig");
 	goto error;
     }
-    defaultpat = FcNameParse((FcChar8 *)"sans");
+    const char *defpatstr = XRdb_value(X11Adapter_resources(),
+	    XRdbKey("Font"), 0);
+    if (!defpatstr) defpatstr = "sans";
+    defaultpat = FcNameParse((FcChar8 *)defpatstr);
     FcPatternDel(defaultpat, FC_DPI);
     FcPatternAddDouble(defaultpat, FC_DPI, X11Adapter_dpi());
     FcConfigSubstitute(0, defaultpat, FcMatchPattern);

@@ -85,6 +85,11 @@ individual widgets.
 * `emojiFont` (class `EmojiFont`): The font for display of emojis. Default:
   `emoji`.
 
+Setting the `Font` resource (the class) also sets what Xmoji considers the
+"system default font", which is used for the default font size for all fonts
+that don't have an explicit size specified. This is for example relevant for
+scaling of the emoji font offered in runtime settings.
+
 ### Generic rendering options
 
 * `backingStore` (no class): Use an offscreen pixmap for window contents
