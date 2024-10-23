@@ -536,7 +536,7 @@ static int startup(void *app)
     Widget_setPadding(grid, (Box){0, 0, 0, 0});
     for (unsigned i = 0; i < MAXSEARCHRESULTS; ++i)
     {
-	EmojiButton *emojiButton = EmojiButton_create(0, etr, grid);
+	EmojiButton *emojiButton = EmojiButton_create(0, etr, 1, grid);
 	PSC_Event_register(EmojiButton_injected(emojiButton),
 		self, oninjected, 0);
 	PSC_Event_register(EmojiButton_pasted(emojiButton),
@@ -569,7 +569,7 @@ static int startup(void *app)
     for (unsigned i = 0; i < HISTSIZE; ++i)
     {
 	const Emoji *emoji = EmojiHistory_at(history, i);
-	EmojiButton *emojiButton = EmojiButton_create(0, 0, grid);
+	EmojiButton *emojiButton = EmojiButton_create(0, 0, 0, grid);
 	if (emoji)
 	{
 	    havehistory = 1;
@@ -610,7 +610,8 @@ static int startup(void *app)
 	    const Emoji *emoji = EmojiGroup_emojiAt(group, idx);
 	    if (Emoji_variants(emoji))
 	    {
-		EmojiButton *emojiButton = EmojiButton_create(0, etr, grid);
+		EmojiButton *emojiButton = EmojiButton_create(0, etr,
+			Emoji_variants(emoji) > 1, grid);
 		EmojiButton_setEmoji(emojiButton, emoji);
 		Widget_show(emojiButton);
 		PSC_Event_register(EmojiButton_injected(emojiButton),

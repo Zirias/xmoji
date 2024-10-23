@@ -18,7 +18,7 @@ C_CLASS_DECL(PSC_Event);
 C_CLASS_DECL(Translator);
 
 EmojiButton *EmojiButton_createBase(void *derived,
-	const char *name, const Translator *tr, void *parent);
+	const char *name, const Translator *tr, int variants, void *parent);
 #define EmojiButton_create(...) EmojiButton_createBase(0, __VA_ARGS__)
 PSC_Event *EmojiButton_injected(void *self)
     CMETHOD;

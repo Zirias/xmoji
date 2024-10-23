@@ -37,10 +37,10 @@ struct EmojiButton
     Flyout *flyout;
     Shape *triangle;
     Pen *pen;
-    EmojiButton *variants[MAXEMOJIVARIANTS];
     Size trianglesize;
     int selected;
-    unsigned nvariants;
+    int nvariants;
+    EmojiButton *variants[];
 };
 
 static void destroy(void *obj)
@@ -139,7 +139,7 @@ static xcb_render_picture_t renderTriangle(void *obj,
 
 static void prerender(EmojiButton *self, Size newSize)
 {
-    if (self->nvariants && newSize.width && newSize.height
+    if (self->nvariants > 0 && newSize.width && newSize.height
 	    && newSize.width != self->trianglesize.width
 	    && newSize.height != self->trianglesize.height)
     {
@@ -157,7 +157,7 @@ static int draw(void *obj, xcb_render_picture_t picture)
     EmojiButton *self = Object_instance(obj);
     int rc = 0;
     Object_bcall(rc, Widget, draw, self, picture);
-    if (rc == 0 && picture && self->nvariants)
+    if (rc == 0 && picture && self->nvariants > 0)
     {
 	xcb_connection_t *c = X11Adapter_connection();
 	if (!self->pen) self->pen = Pen_create();
@@ -203,7 +203,7 @@ static int clicked(void *obj, const ClickEvent *event)
 	Widget_invalidate(self);
 	return 1;
     }
-    if (self->nvariants && event->button == MB_RIGHT)
+    if (self->nvariants > 0 && event->button == MB_RIGHT)
     {
 	Widget_show(self->flowgrid);
 	Flyout_popup(self->flyout, self);
@@ -244,15 +244,17 @@ static void sizeChanged(void *receiver, void *sender, void *args)
     prerender(self, ea->newSize);
 }
 
-EmojiButton *EmojiButton_createBase(void *derived,
+static EmojiButton *create(size_t maxvariants, void *derived,
 	const char *name, const Translator *tr, void *parent)
 {
-    EmojiButton *self = PSC_malloc(sizeof *self);
-    memset(self, 0, sizeof *self);
+    EmojiButton *self = PSC_malloc(sizeof *self
+	    + maxvariants * sizeof *self->variants);
+    memset(self, 0, sizeof *self + maxvariants * sizeof *self->variants);
     CREATEBASE(Button, name, parent);
     self->injected = PSC_Event_create(self);
     self->pasted = PSC_Event_create(self);
     self->tr = tr;
+    if (!maxvariants) self->nvariants = -1;
 
     Button_setBorderWidth(self, 0);
     Button_setLabelPadding(self, (Box){1, 1, 1, 1});
@@ -268,6 +270,12 @@ EmojiButton *EmojiButton_createBase(void *derived,
     PSC_Event_register(Widget_sizeChanged(self), self, sizeChanged, 0);
 
     return self;
+}
+
+EmojiButton *EmojiButton_createBase(void *derived,
+	const char *name, const Translator *tr, int variants, void *parent)
+{
+    return create(variants ? MAXEMOJIVARIANTS : 0, derived, name, tr, parent);
 }
 
 PSC_Event *EmojiButton_injected(void *self)
@@ -294,7 +302,7 @@ void EmojiButton_setEmoji(void *self, const Emoji *emoji)
 void EmojiButton_addVariant(void *self, const Emoji *variant)
 {
     EmojiButton *b = Object_instance(self);
-    if (b->nvariants == MAXEMOJIVARIANTS) return;
+    if (b->nvariants < 0 || b->nvariants == MAXEMOJIVARIANTS) return;
     if (!b->flyout)
     {
 	b->flyout = Flyout_create(0, b);
@@ -310,7 +318,7 @@ void EmojiButton_addVariant(void *self, const Emoji *variant)
     EmojiButton *vb = b->variants[b->nvariants];
     if (!vb)
     {
-	vb = EmojiButton_create(0, b->tr, b);
+	vb = create(0, 0, 0, b->tr, b);
 	PSC_Event_register(Button_clicked(vb), self, onclicked, 0);
 	PSC_Event_register(Widget_pasted(vb), self, onpasted, 0);
 	b->variants[b->nvariants] = vb;
@@ -324,8 +332,8 @@ void EmojiButton_addVariant(void *self, const Emoji *variant)
 void EmojiButton_clearVariants(void *self)
 {
     EmojiButton *b = Object_instance(self);
-    if (!b->nvariants) return;
-    for (unsigned i = 0; i < b->nvariants; ++i)
+    if (b->nvariants <= 0) return;
+    for (int i = 0; i < b->nvariants; ++i)
     {
 	Widget_hide(b->variants[i]);
     }
