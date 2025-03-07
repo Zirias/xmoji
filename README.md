@@ -305,3 +305,42 @@ Even when one of them is enabled, Xmoji will try to detect whether the
 configuration file is stored on NFS and in that case silently fall back to
 periodically calling `stat()` on it.
 
+### Advanced build configuration
+
+Xmoji uses a custom build system called `zimk`, which is included as a git
+submodule. This offers a lot of generic build configuration possibilities.
+
+For a list of all configuration variables, most of which can be overridden and
+saved with `make config` as described above, type
+
+    make showconfig
+
+This will also show the fully expanded value of all available variables.
+
+There are also a few special variables which are not saved with the
+configuration:
+
+* `DESTDIR` (string): Only used during `make install`, the value of `DESTDIR`
+  is prepended to the path of every installed file.
+* `PREFIX` (string): Convenience equivalent to the configuration variable
+  `prefix` (defaulting to `/usr/local`), for compatibility with other build
+  systems.
+* `V` (0/1) and `COLORS` (0/1): These override *verbose* and *colored*
+  output of the build. By default, verbose output is chosen when the output
+  doesn't go to a terminal, colored output is only chosen when the output goes
+  to a terminal with color support.
+
+### For packagers
+
+Xmoji's build system picks up variables from both the `make` command line and
+the environment, which includes "standard" variables like `CC`, `CFLAGS`,
+`LDFLAGS` and so on. Packagers should make sure that `prefix` (or `PREFIX`) is
+set as necessary (e.g. when the runtime prefix should be `/usr` for your
+typical Linux package) and `DESTDIR` is set to the location where your package
+contents should be staged. Given that, the build should play nicely with
+typical packaging tools.
+
+Setting `BUNDLED_POSER` to `no` might be considered for packaging, so this
+library can be packaged separately. If your target environment doesn't come
+with a *freetype* package meeting the requirements (like PNG support), setting
+`BUNDLED_FREETYPE` to `yes` can help.
