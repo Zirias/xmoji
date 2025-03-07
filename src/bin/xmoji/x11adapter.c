@@ -620,6 +620,77 @@ static void flushandsync(void *receiver, void *sender, void *args)
     } while (xcb_total_read(c) != rdpos);
 }
 
+/* Detect glyph rendering glitch leading to wrong positioning of the
+ * source picture used for compositing. Under some circumstances, the
+ * source coordinates for XRender CompositeGlyphs* requests are ignored
+ * and the source picture is aligned to the same origin as the destination
+ * picture and also repeated in both dimensions.
+ *
+ * I have a few reports from users affected by the glitch and they all use
+ * "glamor" acceleration, so this might actually be a bug in the XRender
+ * implementation for glamor.
+ */
+static int probeGlyphRenderSourcePositionGlitch(void)
+{
+    /* Create a dummy alpha mask glyph set */
+    xcb_render_glyphset_t probeset = xcb_generate_id(c);
+    xcb_render_create_glyph_set(c, probeset, formats[PICTFORMAT_ALPHA]);
+
+    /* Add one single-pixel fully opaque glyph */
+    xcb_render_glyphinfo_t probeglyph = { 1, 1, 0, 0, 0, 0 };
+    uint8_t probebitmap[] = { 0xff, 0xff, 0xff, 0xff };
+    uint32_t probegid = 0;
+    xcb_render_add_glyphs(c, probeset, 1, &probegid, &probeglyph,
+	    4, probebitmap);
+
+    /* Create a dummy single-pixel alpha mask XRender picture
+     * for composite source, fill it fully opaque */
+    xcb_pixmap_t probepixmap = xcb_generate_id(c);
+    xcb_create_pixmap(c, 8, probepixmap, s->root, 1, 1);
+    xcb_render_picture_t probesrc = xcb_generate_id(c);
+    xcb_render_create_picture(c, probesrc, probepixmap,
+	    formats[PICTFORMAT_ALPHA], 0, 0);
+    xcb_free_pixmap(c, probepixmap);
+    xcb_rectangle_t proberect = { 0, 0, 1, 1 };
+    Color probecolor = 0xffffffff;
+    xcb_render_fill_rectangles(c, XCB_RENDER_PICT_OP_SRC, probesrc,
+	    Color_xcb(probecolor), 1, &proberect);
+
+    /* Create another dummy single-pixel alpha mask XRender picture
+     * for composite destination, fill it fully transparent */
+    probepixmap = xcb_generate_id(c);
+    xcb_create_pixmap(c, 8, probepixmap, s->root, 1, 1);
+    xcb_render_picture_t probedst = xcb_generate_id(c);
+    xcb_render_create_picture(c, probedst, probepixmap,
+	    formats[PICTFORMAT_ALPHA], 0, 0);
+    probecolor = 0;
+    xcb_render_fill_rectangles(c, XCB_RENDER_PICT_OP_SRC, probedst,
+	    Color_xcb(probecolor), 1, &proberect);
+
+    /* Composite the dummy source to the dummy destination using the
+     * dummy glyph as the alpha mask, with a source y coordinate of 1.
+     * This *should* be a no-op, because it's outside our 1-pixel
+     * destination picture. */
+    GlyphRenderInfo proberender =  { 1, { 0, 0, 0 }, 0, 0, 0 };
+    xcb_render_composite_glyphs_32(c, XCB_RENDER_PICT_OP_OVER, probesrc,
+	    probedst, 0, probeset, 0, 1, sizeof proberender,
+	    (const uint8_t *)&proberender);
+    xcb_render_free_picture(c, probedst);
+    xcb_render_free_picture(c, probesrc);
+    xcb_render_free_glyph_set(c, probeset);
+
+    /* Read the underlying pixmap of the destination picture from the
+     * X server */
+    xcb_image_t *probeimg = xcb_image_get(c, probepixmap, 0, 0, 1, 1,
+	    0xffffffff, XCB_IMAGE_FORMAT_Z_PIXMAP);
+    xcb_free_pixmap(c, probepixmap);
+
+    /* If it isn't fully transparent any more, we detected our glitch. */
+    int haveGlitch = !!probeimg->data[0];
+    xcb_image_destroy(probeimg);
+    return haveGlitch;
+}
+
 int X11Adapter_init(int argc, char **argv, const char *locale,
 	const char *name, const char *classname)
 {
@@ -774,48 +845,12 @@ int X11Adapter_init(int argc, char **argv, const char *locale,
     }
 
     glitches = 0;
-    xcb_render_glyphset_t probeset = xcb_generate_id(c);
-    xcb_render_create_glyph_set(c, probeset, formats[PICTFORMAT_ALPHA]);
-    xcb_render_glyphinfo_t probeglyph = { 1, 1, 0, 0, 0, 0 };
-    uint8_t probebitmap[] = { 0xff, 0xff, 0xff, 0xff };
-    uint32_t probegid = 0;
-    xcb_render_add_glyphs(c, probeset, 1, &probegid, &probeglyph,
-	    4, probebitmap);
-    xcb_pixmap_t probepixmap = xcb_generate_id(c);
-    xcb_create_pixmap(c, 8, probepixmap, s->root, 1, 1);
-    xcb_render_picture_t probesrc = xcb_generate_id(c);
-    xcb_render_create_picture(c, probesrc, probepixmap,
-	    formats[PICTFORMAT_ALPHA], 0, 0);
-    xcb_free_pixmap(c, probepixmap);
-    xcb_rectangle_t proberect = { 0, 0, 1, 1 };
-    Color probecolor = 0xffffffff;
-    xcb_render_fill_rectangles(c, XCB_RENDER_PICT_OP_SRC, probesrc,
-	    Color_xcb(probecolor), 1, &proberect);
-    probepixmap = xcb_generate_id(c);
-    xcb_create_pixmap(c, 8, probepixmap, s->root, 1, 1);
-    xcb_render_picture_t probedst = xcb_generate_id(c);
-    xcb_render_create_picture(c, probedst, probepixmap,
-	    formats[PICTFORMAT_ALPHA], 0, 0);
-    probecolor = 0;
-    xcb_render_fill_rectangles(c, XCB_RENDER_PICT_OP_SRC, probedst,
-	    Color_xcb(probecolor), 1, &proberect);
-    GlyphRenderInfo proberender =  { 1, { 0, 0, 0 }, 0, 0, 0 };
-    xcb_render_composite_glyphs_32(c, XCB_RENDER_PICT_OP_OVER, probesrc,
-	    probedst, 0, probeset, 0, 1, sizeof proberender,
-	    (const uint8_t *)&proberender);
-    xcb_render_free_picture(c, probedst);
-    xcb_render_free_picture(c, probesrc);
-    xcb_render_free_glyph_set(c, probeset);
-    xcb_image_t *probeimg = xcb_image_get(c, probepixmap, 0, 0, 1, 1,
-	    0xffffffff, XCB_IMAGE_FORMAT_Z_PIXMAP);
-    xcb_free_pixmap(c, probepixmap);
-    if (probeimg->data[0])
+    if (probeGlyphRenderSourcePositionGlitch())
     {
 	PSC_Log_msg(PSC_L_INFO,
 		"Detected glyph rendering glitch, enabling workaround.");
 	glitches |= XG_RENDER_SRC_OFFSET;
     }
-    xcb_image_destroy(probeimg);
 
     uint16_t xkbmaj;
     uint16_t xkbmin;
