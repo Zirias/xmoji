@@ -14,6 +14,17 @@ GEN_TRANS_tool=		$(XTC_TARGET)
 GEN_TRANS_args=		compile $(dir $1) \
 			$(lastword $(subst -, ,$(basename $1))) $2
 
+xmoji_PRECHECK=		CHAR32_T INOTIFY KQUEUE
+
+CHAR32_T_TYPE=		char32_t
+CHAR32_T_HEADERS=	uchar.h
+INOTIFY_FUNC=		inotify_init
+INOTIFY_HEADERS=	sys/inotify.h
+INOTIFY_ARGS=		void
+KQUEUE_FUNC=		kqueue
+KQUEUE_HEADERS=		sys/event.h
+KQUEUE_ARGS=		void
+
 xmoji_VERSION=		0.8
 xmoji_DEFINES=		-DLOCALEDIR=\"$(localedir)\" \
 			-DVERSION=\"$(xmoji_VERSION)\"
@@ -155,21 +166,6 @@ ifeq ($(WITH_SVG),1)
 xmoji_MODULES+=		nanosvg \
 			svghooks
 xmoji_DEFINES+=		-DWITH_SVG
-endif
-
-ifeq ($(WITH_KQUEUE),1)
-ifeq ($(WITH_INOTIFY),1)
-$(error Cannot enable both WITH_KQUEUE and WITH_INOTIFY)
-endif
-xmoji_DEFINES+=		-DWITH_KQUEUE
-endif
-
-ifeq ($(WITH_INOTIFY),1)
-xmoji_DEFINES+=		-DWITH_INOTIFY
-endif
-
-ifeq ($(HAVE_CHAR32_T),1)
-xmoji_DEFINES+=		-DHAVE_CHAR32_T
 endif
 
 $(call binrules,xmoji)

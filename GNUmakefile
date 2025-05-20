@@ -33,24 +33,6 @@ DISTCLEANDIRS=		tools/bin
 
 NODIST=			poser/zimk
 
-define checkfunc
-$(shell printf "#include <$1>\nint (*f)(void) = $2;" | \
-	$(or $(CC),cc) -xc -c -o/dev/null - 2>/dev/null && echo 1)
-endef
-define checktype
-$(shell printf "#include <$1>\nstatic $2 x;" | \
-	$(or $(CC),cc) -xc -c -o/dev/null - 2>/dev/null && echo 1)
-endef
-
-HAVE_KQUEUE=		$(call checkfunc,sys/event.h,kqueue)
-HAVE_INOTIFY=		$(call checkfunc,sys/inotify.h,inotify_init)
-BOOLCONFVARS_OFF+=	$(if $(HAVE_KQUEUE),,WITH_KQUEUE) \
-			$(if $(HAVE_INOTIFY),,WITH_INOTIFY)
-BOOLCONFVARS_ON+=	$(if $(HAVE_KQUEUE),WITH_KQUEUE,) \
-			$(if $(HAVE_INOTIFY),WITH_INOTIFY,)
-
-HAVE_CHAR32_T=		$(call checktype,uchar.h,char32_t)
-
 include zimk/zimk.mk
 
 ifeq ($(BUNDLED_POSER),1)
