@@ -86,6 +86,7 @@ struct FileWatcher
 };
 
 static unsigned timerref;
+static PSC_Timer *timer;
 
 FileWatcher *FileWatcher_create(const char *path)
 {
@@ -510,8 +511,13 @@ int FileWatcher_watch(FileWatcher *self)
     }
     if (rc == 0)
     {
-	if (!timerref++) PSC_Service_setTickInterval(1000);
-	PSC_Event_register(PSC_Service_tick(), self, dostat, 0);
+	if (!timerref++)
+	{
+	    timer = PSC_Timer_create();
+	    PSC_Timer_setMs(timer, 1000);
+	    PSC_Timer_start(timer, 1);
+	}
+	PSC_Event_register(PSC_Timer_expired(timer), self, dostat, 0);
 	self->watching = WATCHING_STAT;
     }
     return rc;
@@ -527,9 +533,13 @@ void FileWatcher_unwatch(FileWatcher *self)
 	return;
     }
 #endif
-    PSC_Event_unregister(PSC_Service_tick(), self, dostat, 0);
+    if (timer) PSC_Event_unregister(PSC_Timer_expired(timer), self, dostat, 0);
     self->watching = 0;
-    if (!--timerref) PSC_Service_setTickInterval(0);
+    if (!--timerref)
+    {
+	PSC_Timer_destroy(timer);
+	timer = 0;
+    }
 }
 
 void FileWatcher_destroy(FileWatcher *self)

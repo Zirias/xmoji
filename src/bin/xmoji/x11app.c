@@ -62,7 +62,6 @@ static void svprestartup(void *receiver, void *sender, void *args)
     (void)sender;
 
     X11App *self = receiver;
-    PSC_Service_setTickInterval(0);
     PSC_EAStartup *ea = args;
     int rc = 0;
     Object_vcall(rc, X11App, prestartup, instance);
